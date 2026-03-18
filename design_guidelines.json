@@ -1,0 +1,141 @@
+{
+  "identity": {
+    "name": "E1: The Anti-AI Designer",
+    "mission": "Create a distinct, professional, and RTL-native SaaS platform for the Arab market. Avoid generic 'Bootstrap' looks. Prioritize clarity, trust, and subtle 'AI' aesthetics.",
+    "tone": "Competent, Future-Proof, Trustworthy, Minimalist",
+    "theme_strategy": "Hybrid: High-Impact Dark Mode for Landing/Marketing (to sell the vision) + Clean Light Mode for Dashboard/Admin (to facilitate work).",
+    "rtl_strategy": "Native RTL. Use logical properties (ps-, pe-, ms-, me-) everywhere. No physical left/right."
+  },
+  "typography": {
+    "primary_font": "IBM Plex Sans Arabic",
+    "secondary_font": "IBM Plex Sans Arabic",
+    "font_import_url": "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@100;200;300;400;500;600;700&display=swap",
+    "weights": {
+      "light": 300,
+      "regular": 400,
+      "medium": 500,
+      "bold": 700
+    },
+    "scale": {
+      "h1": "text-4xl md:text-6xl font-bold tracking-tight leading-tight",
+      "h2": "text-3xl md:text-5xl font-semibold tracking-tight",
+      "h3": "text-2xl md:text-3xl font-medium",
+      "body": "text-base md:text-lg leading-relaxed text-muted-foreground",
+      "small": "text-sm text-muted-foreground/80",
+      "nav": "text-sm font-medium hover:text-primary transition-colors"
+    }
+  },
+  "colors": {
+    "palette_name": "The Intelligent Slate (Archetype 5 + Swiss)",
+    "description": "A sophisticated blend of deep slate blues for authority and electric accents for innovation.",
+    "background": {
+      "default": "#f8fafc",
+      "paper": "#ffffff",
+      "dark": "#0f172a",
+      "dark_paper": "#1e293b"
+    },
+    "primary": {
+      "DEFAULT": "#0f172a",
+      "foreground": "#f8fafc",
+      "hover": "#1e293b"
+    },
+    "secondary": {
+      "DEFAULT": "#f1f5f9",
+      "foreground": "#0f172a",
+      "hover": "#e2e8f0"
+    },
+    "accent": {
+      "DEFAULT": "#3b82f6",
+      "foreground": "#ffffff",
+      "glow": "0 0 20px rgba(59, 130, 246, 0.5)"
+    },
+    "muted": {
+      "DEFAULT": "#f1f5f9",
+      "foreground": "#64748b"
+    },
+    "border": "#e2e8f0",
+    "destructive": "#ef4444"
+  },
+  "layout_strategy": {
+    "container": "container mx-auto px-4 md:px-8 max-w-7xl",
+    "section_spacing": "py-16 md:py-24",
+    "grid_system": "grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-8",
+    "bento_grid": {
+      "wrapper": "grid grid-cols-1 md:grid-cols-3 gap-4 auto-rows-[300px]",
+      "large_card": "md:col-span-2 md:row-span-2",
+      "tall_card": "md:col-span-1 md:row-span-2",
+      "standard_card": "md:col-span-1 md:row-span-1"
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-primary text-primary-foreground hover:bg-primary/90 h-11 px-8 rounded-md font-medium transition-all duration-300 shadow-sm hover:shadow-md active:scale-95",
+      "secondary": "bg-secondary text-secondary-foreground hover:bg-secondary/80 h-11 px-8 rounded-md font-medium transition-all duration-300",
+      "outline": "border border-input bg-background hover:bg-accent hover:text-accent-foreground h-11 px-8 rounded-md font-medium transition-all",
+      "ghost": "hover:bg-accent hover:text-accent-foreground h-10 px-4 rounded-md font-medium transition-colors"
+    },
+    "cards": {
+      "base": "rounded-xl border border-border bg-card text-card-foreground shadow-sm hover:shadow-md transition-shadow duration-300",
+      "glass": "backdrop-blur-xl bg-background/70 border border-white/20 shadow-lg",
+      "hover_effect": "hover:-translate-y-1 hover:shadow-lg transition-all duration-300"
+    },
+    "inputs": {
+      "base": "flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+    }
+  },
+  "visual_enhancers": {
+    "gradients": {
+      "hero_glow": "bg-gradient-to-tr from-blue-500/20 via-purple-500/10 to-transparent",
+      "card_hover": "hover:bg-gradient-to-br hover:from-slate-50 hover:to-slate-100 dark:hover:from-slate-800 dark:hover:to-slate-900"
+    },
+    "shadows": {
+      "soft": "shadow-[0_2px_10px_rgba(0,0,0,0.05)]",
+      "glow": "shadow-[0_0_20px_rgba(59,130,246,0.3)]"
+    },
+    "borders": {
+      "subtle": "border border-slate-200 dark:border-slate-800",
+      "active": "border-blue-500"
+    }
+  },
+  "motion": {
+    "fade_in": {
+      "initial": { "opacity": 0, "y": 20 },
+      "animate": { "opacity": 1, "y": 0 },
+      "transition": { "duration": 0.5, "ease": "easeOut" }
+    },
+    "stagger_children": {
+      "animate": { "transition": { "staggerChildren": 0.1 } }
+    }
+  },
+  "image_urls": {
+    "hero_bg": "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=2000",
+    "office_meeting": "https://images.unsplash.com/photo-1600880292203-757bb62b4baf?auto=format&fit=crop&q=80&w=1000",
+    "modern_workspace": "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=1000",
+    "arab_professional": "https://images.unsplash.com/photo-1556157382-97eda2d62296?auto=format&fit=crop&q=80&w=1000",
+    "web_design_mockup": "https://images.unsplash.com/photo-1581291518633-83b4ebd1d83e?auto=format&fit=crop&q=80&w=1000",
+    "ai_abstract": "https://images.unsplash.com/photo-1620712943543-bcc4688e7485?auto=format&fit=crop&q=80&w=1000",
+    "logo_placeholder": "https://placehold.co/200x60?text=BrandLogo",
+    "payment_proof_placeholder": "https://placehold.co/400x600?text=Payment+Proof+Example"
+  },
+  "instructions_to_main_agent": [
+    "CRITICAL: Add 'dir=\"rtl\"' to the <html> tag in index.html.",
+    "CRITICAL: Use logical spacing properties (ps-*, pe-*, ms-*, me-*) instead of pl-*, pr-*, ml-*, mr-* to ensure RTL compatibility.",
+    "Install 'lucide-react' for icons.",
+    "Install 'framer-motion' for animations.",
+    "Install 'clsx' and 'tailwind-merge' for class handling.",
+    "Use the provided IBM Plex Sans Arabic font. Add the import to index.css.",
+    "Ensure all text is readable. Use high contrast in Light Mode.",
+    "For the Landing Page, use a Dark Mode aesthetics (set dark class on wrapper) to convey 'High Tech/AI', but keep the Dashboard in Light Mode for 'Productivity/Clarity'.",
+    "Implement the 'Glassmorphism' effect for the Navigation Bar and Modal backgrounds.",
+    "Use 'Sonner' for toast notifications (install it).",
+    "For the 'New Website Request' form, use a multi-step wizard layout to make it feel like an AI conversation."
+  ],
+  "universal_guidelines": [
+    "Do not use gradients for text unless it is a very large headline.",
+    "Avoid centered layouts for long text blocks; use right-align (RTL default) for readability.",
+    "Add 'data-testid' to all interactive elements.",
+    "Use 'rem' units for font sizes and spacing.",
+    "Ensure all images have 'alt' tags for accessibility.",
+    "Validate all forms using 'zod' and 'react-hook-form'."
+  ]
+}
