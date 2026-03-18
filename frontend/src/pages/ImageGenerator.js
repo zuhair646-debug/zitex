@@ -4,17 +4,19 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { Image, Loader2, Download, Sparkles } from 'lucide-react';
+import { Image, Loader2, Download, Sparkles, Gift } from 'lucide-react';
 
 const ImageGenerator = ({ user }) => {
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [generatedImage, setGeneratedImage] = useState(null);
   const [history, setHistory] = useState([]);
+  const [freeRemaining, setFreeRemaining] = useState(user?.free_images || 0);
 
   useEffect(() => {
     fetchHistory();
-  }, []);
+    setFreeRemaining(user?.free_images || 0);
+  }, [user]);
 
   const fetchHistory = async () => {
     try {
@@ -47,7 +49,12 @@ const ImageGenerator = ({ user }) => {
 
       if (res.ok && data.image_url) {
         setGeneratedImage(data.image_url);
-        toast.success('تم توليد الصورة بنجاح!');
+        setFreeRemaining(data.free_images_remaining || 0);
+        if (data.was_free) {
+          toast.success(`تم توليد الصورة مجاناً! متبقي ${data.free_images_remaining} صور مجانية`);
+        } else {
+          toast.success('تم توليد الصورة بنجاح!');
+        }
         fetchHistory();
       } else {
         toast.error(data.detail || 'فشل توليد الصورة');
@@ -69,6 +76,7 @@ const ImageGenerator = ({ user }) => {
   };
 
   const hasSubscription = user?.subscription_type === 'images' || user?.is_owner;
+  const canGenerate = hasSubscription || freeRemaining > 0;
 
   return (
     <div className="min-h-screen bg-slate-900" data-testid="image-generator-page">
@@ -83,10 +91,25 @@ const ImageGenerator = ({ user }) => {
           <p className="text-gray-400">أنشئ صوراً إبداعية من وصفك النصي</p>
         </div>
 
-        {!hasSubscription && (
+        {/* Free Trial Banner */}
+        {!hasSubscription && freeRemaining > 0 && (
+          <Card className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 border-green-500/30 mb-6">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Gift className="w-8 h-8 text-green-400" />
+                <div>
+                  <p className="text-green-300 font-semibold">لديك {freeRemaining} صور مجانية!</p>
+                  <p className="text-green-400/70 text-sm">جرّب الخدمة مجاناً قبل الاشتراك</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {!canGenerate && (
           <Card className="bg-yellow-500/10 border-yellow-500/30 mb-6">
             <CardContent className="p-4 flex items-center justify-between">
-              <p className="text-yellow-300">يرجى الاشتراك في باقة الصور للاستفادة من هذه الخدمة</p>
+              <p className="text-yellow-300">انتهت تجاربك المجانية. اشترك للاستمرار في توليد الصور</p>
               <Button onClick={() => window.location.href = '/pricing'} variant="outline" className="border-yellow-500 text-yellow-300">
                 عرض الأسعار
               </Button>
@@ -101,6 +124,11 @@ const ImageGenerator = ({ user }) => {
               <CardTitle className="text-white flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-purple-400" />
                 إنشاء صورة جديدة
+                {!hasSubscription && freeRemaining > 0 && (
+                  <span className="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded-full ms-2">
+                    مجاني
+                  </span>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -114,7 +142,7 @@ const ImageGenerator = ({ user }) => {
               />
               <Button 
                 onClick={generateImage} 
-                disabled={loading || !hasSubscription}
+                disabled={loading || !canGenerate}
                 className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
                 data-testid="generate-btn"
               >
@@ -126,7 +154,7 @@ const ImageGenerator = ({ user }) => {
                 ) : (
                   <>
                     <Sparkles className="w-4 h-4 me-2" />
-                    توليد الصورة
+                    توليد الصورة {!hasSubscription && freeRemaining > 0 && '(مجاني)'}
                   </>
                 )}
               </Button>
@@ -165,6 +193,7 @@ const ImageGenerator = ({ user }) => {
                 <div className="text-center py-12">
                   <Image className="w-16 h-16 text-gray-600 mx-auto mb-4" />
                   <p className="text-gray-400">لا توجد صور بعد</p>
+                  <p className="text-gray-500 text-sm mt-2">جرّب توليد صورتك الأولى مجاناً!</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-4 max-h-[500px] overflow-y-auto">
@@ -184,6 +213,11 @@ const ImageGenerator = ({ user }) => {
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-end p-2">
                         <p className="text-white text-xs line-clamp-2">{item.prompt}</p>
                       </div>
+                      {item.is_free && (
+                        <span className="absolute top-2 right-2 text-xs bg-green-500 text-white px-2 py-0.5 rounded-full">
+                          مجاني
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>

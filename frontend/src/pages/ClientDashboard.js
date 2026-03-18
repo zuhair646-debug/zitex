@@ -3,7 +3,7 @@ import { Navbar } from '@/components/Navbar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useNavigate } from 'react-router-dom';
-import { PlusCircle, FileText, Globe, Image, Video, Coins, Crown } from 'lucide-react';
+import { PlusCircle, FileText, Globe, Image, Video, Coins, Crown, Gift, Sparkles } from 'lucide-react';
 
 const ClientDashboard = ({ user, setUser }) => {
   const navigate = useNavigate();
@@ -53,8 +53,8 @@ const ClientDashboard = ({ user, setUser }) => {
 
   const quickActions = [
     { title: 'طلب موقع جديد', desc: 'أنشئ موقعك بالذكاء الاصطناعي', icon: <PlusCircle className="w-6 h-6" />, path: '/dashboard/new-request', color: 'from-blue-500 to-cyan-500' },
-    { title: 'توليد الصور', desc: 'أنشئ صوراً إبداعية', icon: <Image className="w-6 h-6" />, path: '/dashboard/images', color: 'from-purple-500 to-pink-500' },
-    { title: 'إنشاء الفيديو', desc: 'فيديوهات بتقنية AI', icon: <Video className="w-6 h-6" />, path: '/dashboard/videos', color: 'from-orange-500 to-red-500' },
+    { title: 'توليد الصور', desc: user?.free_images > 0 ? `${user.free_images} صور مجانية` : 'أنشئ صوراً إبداعية', icon: <Image className="w-6 h-6" />, path: '/dashboard/images', color: 'from-purple-500 to-pink-500', badge: user?.free_images > 0 ? 'مجاني' : null },
+    { title: 'إنشاء الفيديو', desc: user?.free_videos > 0 ? `${user.free_videos} فيديوهات مجانية` : 'فيديوهات بتقنية AI', icon: <Video className="w-6 h-6" />, path: '/dashboard/videos', color: 'from-orange-500 to-red-500', badge: user?.free_videos > 0 ? 'مجاني' : null },
     { title: 'طلباتي', desc: 'عرض وإدارة طلباتك', icon: <FileText className="w-6 h-6" />, path: '/dashboard/requests', color: 'from-green-500 to-emerald-500' },
     { title: 'مواقعي', desc: 'عرض المواقع المنجزة', icon: <Globe className="w-6 h-6" />, path: '/dashboard/websites', color: 'from-indigo-500 to-purple-500' },
   ];
@@ -82,6 +82,38 @@ const ClientDashboard = ({ user, setUser }) => {
           <div className="text-center py-12 text-white">جاري التحميل...</div>
         ) : (
           <>
+            {/* Free Trials Banner */}
+            {(user?.free_images > 0 || user?.free_videos > 0 || user?.free_website_trial) && (
+              <Card className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 border-green-500/30 mb-8">
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-4 mb-4">
+                    <Gift className="w-10 h-10 text-green-400" />
+                    <div>
+                      <h3 className="text-xl font-semibold text-white">تجاربك المجانية</h3>
+                      <p className="text-green-400/70">جرّب خدماتنا مجاناً قبل الاشتراك!</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="p-4 bg-white/5 rounded-lg text-center">
+                      <Image className="w-8 h-8 text-purple-400 mx-auto mb-2" />
+                      <p className="text-2xl font-bold text-white">{user?.free_images || 0}</p>
+                      <p className="text-sm text-gray-400">صور مجانية</p>
+                    </div>
+                    <div className="p-4 bg-white/5 rounded-lg text-center">
+                      <Video className="w-8 h-8 text-orange-400 mx-auto mb-2" />
+                      <p className="text-2xl font-bold text-white">{user?.free_videos || 0}</p>
+                      <p className="text-sm text-gray-400">فيديوهات مجانية</p>
+                    </div>
+                    <div className="p-4 bg-white/5 rounded-lg text-center">
+                      <Sparkles className="w-8 h-8 text-blue-400 mx-auto mb-2" />
+                      <p className="text-2xl font-bold text-white">{user?.free_website_trial ? '1' : '0'}</p>
+                      <p className="text-sm text-gray-400">تجربة موقع</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Stats Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
               <Card className="bg-slate-800 border-slate-700">
@@ -135,9 +167,14 @@ const ClientDashboard = ({ user, setUser }) => {
                     <button
                       key={idx}
                       onClick={() => navigate(action.path)}
-                      className="p-6 rounded-xl bg-slate-700/50 hover:bg-slate-700 transition-all text-right group border border-slate-600 hover:border-slate-500"
+                      className="p-6 rounded-xl bg-slate-700/50 hover:bg-slate-700 transition-all text-right group border border-slate-600 hover:border-slate-500 relative"
                       data-testid={`action-${idx}`}
                     >
+                      {action.badge && (
+                        <span className="absolute top-3 left-3 text-xs bg-green-500 text-white px-2 py-1 rounded-full">
+                          {action.badge}
+                        </span>
+                      )}
                       <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${action.color} flex items-center justify-center text-white mb-4 group-hover:scale-110 transition-transform`}>
                         {action.icon}
                       </div>

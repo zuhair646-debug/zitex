@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Settings, Building2, CreditCard, Save } from 'lucide-react';
+import { Settings, Building2, CreditCard, Save, MessageCircle } from 'lucide-react';
 
 const AdminSettings = ({ user }) => {
   const [loading, setLoading] = useState(false);
@@ -13,7 +13,8 @@ const AdminSettings = ({ user }) => {
     bank_name: '',
     bank_iban: '',
     bank_account_name: '',
-    paypal_email: ''
+    paypal_email: '',
+    owner_whatsapp: ''
   });
 
   useEffect(() => {
@@ -28,7 +29,8 @@ const AdminSettings = ({ user }) => {
         bank_name: data.bank_name || '',
         bank_iban: data.bank_iban || '',
         bank_account_name: data.bank_account_name || '',
-        paypal_email: data.paypal_email || ''
+        paypal_email: data.paypal_email || '',
+        owner_whatsapp: data.owner_whatsapp || '966507374438'
       });
     } catch (error) {
       console.error('Error:', error);
@@ -72,10 +74,39 @@ const AdminSettings = ({ user }) => {
             <Settings className="w-8 h-8 inline me-3 text-blue-400" />
             إعدادات الموقع
           </h1>
-          <p className="text-gray-400">إدارة معلومات الدفع والإعدادات العامة</p>
+          <p className="text-gray-400">إدارة معلومات الدفع والإشعارات</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* WhatsApp Notifications */}
+          <Card className="bg-slate-800 border-slate-700">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <MessageCircle className="w-5 h-5 text-green-400" />
+                إشعارات الواتساب
+              </CardTitle>
+              <CardDescription className="text-gray-400">
+                سيتم إرسال إشعار عند كل دفعة جديدة
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <Label className="text-gray-300">رقم الواتساب (بدون +)</Label>
+                <Input
+                  placeholder="966507374438"
+                  value={settings.owner_whatsapp}
+                  onChange={(e) => setSettings({ ...settings, owner_whatsapp: e.target.value })}
+                  className="bg-slate-700 border-slate-600 text-white placeholder:text-gray-400 font-mono"
+                  dir="ltr"
+                  data-testid="whatsapp-input"
+                />
+                <p className="text-xs text-gray-500">
+                  ملاحظة: للتفعيل، أرسل "I allow callmebot to send me messages" إلى الرقم +34 644 71 99 22 على الواتساب
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Saudi Bank Info */}
           <Card className="bg-slate-800 border-slate-700">
             <CardHeader>

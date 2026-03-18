@@ -190,35 +190,94 @@ class ZitexAPITester:
         )
         return success, response
 
-    def test_image_generation_without_subscription(self):
-        """Test image generation without subscription (should fail)"""
+    def test_image_generation_with_free_trial(self):
+        """Test image generation using free trial"""
         if not self.token:
             print("❌ No user token available for image generation test")
             return False, None
             
-        # Use query parameter instead of JSON body
         success, response = self.run_test(
-            "Image Generation (No Subscription)",
+            "Image Generation (Free Trial)",
             "POST",
             "generate/image?prompt=A beautiful sunset",
-            403,  # Should fail with 403
+            200,  # Should work with free trial
             headers={"Authorization": f"Bearer {self.token}"}
         )
+        
+        if success:
+            print(f"✅ Free images remaining: {response.get('free_images_remaining', 'N/A')}")
+            print(f"✅ Was free: {response.get('was_free', 'N/A')}")
+        
         return success, response
 
-    def test_video_generation_without_subscription(self):
-        """Test video generation without subscription (should fail)"""
+    def test_video_generation_with_free_trial(self):
+        """Test video generation using free trial"""
         if not self.token:
             print("❌ No user token available for video generation test")
             return False, None
             
-        # Use query parameter instead of JSON body
         success, response = self.run_test(
-            "Video Generation (No Subscription)",
+            "Video Generation (Free Trial)",
             "POST",
             "generate/video?prompt=A short animation",
-            403,  # Should fail with 403
+            200,  # Should work with free trial
             headers={"Authorization": f"Bearer {self.token}"}
+        )
+        
+        if success:
+            print(f"✅ Free videos remaining: {response.get('free_videos_remaining', 'N/A')}")
+            print(f"✅ Was free: {response.get('was_free', 'N/A')}")
+        
+        return success, response
+    
+    def test_free_website_trial(self):
+        """Test creating a free website trial"""
+        if not self.token:
+            print("❌ No user token available for website trial test")
+            return False, None
+            
+        success, response = self.run_test(
+            "Free Website Trial",
+            "POST",
+            "requests/create",
+            200,
+            data={
+                "title": "Free Trial Website",
+                "description": "موقع تجربة مجانية",
+                "requirements": "موقع بسيط للتجربة",
+                "business_type": "تجريبي",
+                "target_audience": "عام",
+                "preferred_colors": "أزرق وأبيض",
+                "is_trial": True
+            },
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        
+        if success:
+            print(f"✅ Website trial created: {response.get('id', 'N/A')}")
+            print(f"✅ Is trial: {response.get('is_trial', 'N/A')}")
+        
+        return success, response
+
+    def test_admin_settings_update(self):
+        """Test updating admin settings including WhatsApp"""
+        if not self.admin_token:
+            print("❌ No admin token available for settings update test")
+            return False, None
+            
+        success, response = self.run_test(
+            "Update Admin Settings",
+            "PUT",
+            "admin/settings/payment",
+            200,
+            data={
+                "bank_name": "Test Bank",
+                "bank_iban": "SA1234567890123456789012",
+                "bank_account_name": "Test Account",
+                "paypal_email": "test@paypal.com",
+                "owner_whatsapp": "966507374438"
+            },
+            headers={"Authorization": f"Bearer {self.admin_token}"}
         )
         return success, response
 
@@ -253,10 +312,24 @@ def main():
         tester.test_admin_stats()
         tester.test_admin_users()
 
-    # Test user features
-    print("\n=== TESTING USER FEATURES ===")
+    # Test user features with free trials
+    print("\n=== TESTING FREE TRIALS FUNCTIONALITY ===")
     if reg_success:
-        # Add credits to user first if admin login was successful
+        # Test that new user has free trials
+        user_me_success, user_me_data = tester.test_get_me("user")
+        if user_me_success:
+            print(f"✅ User free images: {user_me_data.get('free_images', 'N/A')}")
+            print(f"✅ User free videos: {user_me_data.get('free_videos', 'N/A')}")
+            print(f"✅ User free website trial: {user_me_data.get('free_website_trial', 'N/A')}")
+        
+        # Test free website trial
+        tester.test_free_website_trial()
+        
+        # Test image/video generation with free trials
+        tester.test_image_generation_with_free_trial()
+        tester.test_video_generation_with_free_trial()
+        
+        # Add credits to user if admin login was successful for further testing
         if admin_success and user_data:
             user_id = user_data.get('id')
             if user_id:
@@ -264,12 +337,13 @@ def main():
                 if credit_success:
                     print("✅ Credits added to user")
         
-        # Test website request 
+        # Test full website request with credits
         req_success, req_data = tester.test_create_website_request()
-        
-        # Test image/video generation (should fail without subscription)
-        tester.test_image_generation_without_subscription()
-        tester.test_video_generation_without_subscription()
+
+    # Test admin settings functionality
+    print("\n=== TESTING ADMIN SETTINGS ===")
+    if admin_success:
+        tester.test_admin_settings_update()
 
     # Print final results
     print(f"\n📊 Final Results:")

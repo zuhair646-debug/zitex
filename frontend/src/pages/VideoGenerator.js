@@ -4,16 +4,18 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { Video, Loader2, Play, Sparkles, Clock } from 'lucide-react';
+import { Video, Loader2, Play, Sparkles, Clock, Gift } from 'lucide-react';
 
 const VideoGenerator = ({ user }) => {
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState([]);
+  const [freeRemaining, setFreeRemaining] = useState(user?.free_videos || 0);
 
   useEffect(() => {
     fetchHistory();
-  }, []);
+    setFreeRemaining(user?.free_videos || 0);
+  }, [user]);
 
   const fetchHistory = async () => {
     try {
@@ -45,7 +47,12 @@ const VideoGenerator = ({ user }) => {
       const data = await res.json();
 
       if (res.ok) {
-        toast.success('تم إرسال طلب التوليد! سيتم إشعارك عند الانتهاء');
+        setFreeRemaining(data.free_videos_remaining || 0);
+        if (data.was_free) {
+          toast.success(`تم إرسال الطلب مجاناً! متبقي ${data.free_videos_remaining} فيديوهات مجانية`);
+        } else {
+          toast.success('تم إرسال طلب التوليد! سيتم إشعارك عند الانتهاء');
+        }
         setPrompt('');
         fetchHistory();
       } else {
@@ -59,6 +66,7 @@ const VideoGenerator = ({ user }) => {
   };
 
   const hasSubscription = user?.subscription_type === 'videos' || user?.is_owner;
+  const canGenerate = hasSubscription || freeRemaining > 0;
 
   return (
     <div className="min-h-screen bg-slate-900" data-testid="video-generator-page">
@@ -73,10 +81,25 @@ const VideoGenerator = ({ user }) => {
           <p className="text-gray-400">حوّل أفكارك إلى فيديوهات احترافية</p>
         </div>
 
-        {!hasSubscription && (
+        {/* Free Trial Banner */}
+        {!hasSubscription && freeRemaining > 0 && (
+          <Card className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 border-green-500/30 mb-6">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Gift className="w-8 h-8 text-green-400" />
+                <div>
+                  <p className="text-green-300 font-semibold">لديك {freeRemaining} فيديوهات مجانية!</p>
+                  <p className="text-green-400/70 text-sm">جرّب الخدمة مجاناً قبل الاشتراك</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {!canGenerate && (
           <Card className="bg-yellow-500/10 border-yellow-500/30 mb-6">
             <CardContent className="p-4 flex items-center justify-between">
-              <p className="text-yellow-300">يرجى الاشتراك في باقة الفيديو للاستفادة من هذه الخدمة</p>
+              <p className="text-yellow-300">انتهت تجاربك المجانية. اشترك للاستمرار في إنشاء الفيديوهات</p>
               <Button onClick={() => window.location.href = '/pricing'} variant="outline" className="border-yellow-500 text-yellow-300">
                 عرض الأسعار
               </Button>
@@ -91,6 +114,11 @@ const VideoGenerator = ({ user }) => {
               <CardTitle className="text-white flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-orange-400" />
                 إنشاء فيديو جديد
+                {!hasSubscription && freeRemaining > 0 && (
+                  <span className="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded-full ms-2">
+                    مجاني
+                  </span>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -104,7 +132,7 @@ const VideoGenerator = ({ user }) => {
               />
               <Button 
                 onClick={generateVideo} 
-                disabled={loading || !hasSubscription}
+                disabled={loading || !canGenerate}
                 className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
                 data-testid="generate-btn"
               >
@@ -116,7 +144,7 @@ const VideoGenerator = ({ user }) => {
                 ) : (
                   <>
                     <Video className="w-4 h-4 me-2" />
-                    توليد الفيديو
+                    توليد الفيديو {!hasSubscription && freeRemaining > 0 && '(مجاني)'}
                   </>
                 )}
               </Button>
@@ -140,6 +168,7 @@ const VideoGenerator = ({ user }) => {
                 <div className="text-center py-12">
                   <Video className="w-16 h-16 text-gray-600 mx-auto mb-4" />
                   <p className="text-gray-400">لا توجد فيديوهات بعد</p>
+                  <p className="text-gray-500 text-sm mt-2">جرّب إنشاء فيديوك الأول مجاناً!</p>
                 </div>
               ) : (
                 <div className="space-y-4 max-h-[500px] overflow-y-auto">
@@ -156,6 +185,11 @@ const VideoGenerator = ({ user }) => {
                             }`}>
                               {item.status === 'completed' ? 'مكتمل' : item.status === 'processing' ? 'قيد التوليد' : 'فشل'}
                             </span>
+                            {item.is_free && (
+                              <span className="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded-full">
+                                مجاني
+                              </span>
+                            )}
                             <span className="text-xs text-gray-500">
                               {new Date(item.created_at).toLocaleDateString('ar-SA')}
                             </span>

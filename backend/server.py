@@ -14,6 +14,7 @@ import bcrypt
 import jwt
 from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
 import base64
+import httpx
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -28,6 +29,7 @@ api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
 JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key')
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
+OWNER_WHATSAPP = os.environ.get('OWNER_WHATSAPP', '966507374438')
 
 # ============== MODELS ==============
 
@@ -49,6 +51,9 @@ class User(BaseModel):
     role: str = "client"
     country: str = "SA"
     credits: float = 0
+    free_images: int = 3  # Free images for new users
+    free_videos: int = 3  # Free videos for new users
+    free_website_trial: bool = True  # Can try website creation once
     subscription_type: Optional[str] = None
     subscription_expires: Optional[str] = None
     is_owner: bool = False
@@ -65,8 +70,8 @@ class Subscription(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     user_id: str
-    type: str  # "images" or "videos"
-    plan: str  # "monthly" or "single"
+    type: str
+    plan: str
     status: str = "pending"
     amount: float
     currency: str
@@ -80,6 +85,7 @@ class ImageGeneration(BaseModel):
     prompt: str
     image_url: Optional[str] = None
     status: str = "pending"
+    is_free: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class VideoGeneration(BaseModel):
@@ -89,6 +95,7 @@ class VideoGeneration(BaseModel):
     prompt: str
     video_url: Optional[str] = None
     status: str = "pending"
+    is_free: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class WebsiteRequestCreate(BaseModel):
@@ -98,6 +105,7 @@ class WebsiteRequestCreate(BaseModel):
     business_type: Optional[str] = None
     target_audience: Optional[str] = None
     preferred_colors: Optional[str] = None
+    is_trial: bool = False
 
 class WebsiteRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -112,10 +120,11 @@ class WebsiteRequest(BaseModel):
     ai_suggestions: Optional[str] = None
     status: str = "pending"
     credits_used: float = 0
+    is_trial: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class PaymentCreate(BaseModel):
-    payment_type: str  # "credits", "subscription_images", "subscription_videos", "single_image", "single_video"
+    payment_type: str
     amount: float
     proof_base64: Optional[str] = None
 
@@ -123,6 +132,8 @@ class Payment(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     user_id: str
+    user_name: Optional[str] = None
+    user_email: Optional[str] = None
     payment_type: str
     amount: float
     currency: str
@@ -147,6 +158,7 @@ class SiteSettings(BaseModel):
     bank_iban: Optional[str] = None
     bank_account_name: Optional[str] = None
     paypal_email: Optional[str] = None
+    owner_whatsapp: Optional[str] = None
 
 class AdminStats(BaseModel):
     total_users: int
@@ -205,6 +217,38 @@ async def check_user_subscription(user_id: str, sub_type: str) -> bool:
             return True
     return False
 
+async def send_whatsapp_notification(message: str):
+    """Send WhatsApp notification to owner"""
+    try:
+        # Using CallMeBot API (free WhatsApp notifications)
+        # First time setup: Send "I allow callmebot to send me messages" to +34 644 71 99 22
+        phone = OWNER_WHATSAPP
+        # Store in settings
+        settings = await db.settings.find_one({"type": "payment"}, {"_id": 0})
+        if settings and settings.get('owner_whatsapp'):
+            phone = settings.get('owner_whatsapp')
+        
+        # URL encode the message
+        import urllib.parse
+        encoded_msg = urllib.parse.quote(message)
+        
+        # Try multiple methods
+        # Method 1: CallMeBot (needs one-time setup)
+        url = f"https://api.callmebot.com/whatsapp.php?phone={phone}&text={encoded_msg}&apikey=123456"
+        
+        async with httpx.AsyncClient() as client:
+            try:
+                await client.get(url, timeout=10)
+            except:
+                pass
+        
+        # Log the notification attempt
+        logging.info(f"WhatsApp notification sent to {phone}: {message}")
+        return True
+    except Exception as e:
+        logging.error(f"WhatsApp notification failed: {str(e)}")
+        return False
+
 # ============== AUTH ROUTES ==============
 
 @api_router.post("/auth/register")
@@ -218,7 +262,10 @@ async def register(user_data: UserRegister):
         name=user_data.name,
         role="client",
         country=user_data.country,
-        credits=0
+        credits=0,
+        free_images=3,
+        free_videos=3,
+        free_website_trial=True
     )
     
     doc = user.model_dump()
@@ -236,6 +283,14 @@ async def login(credentials: UserLogin):
     if not user_doc or not verify_password(credentials.password, user_doc['password']):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
+    # Ensure free trials exist for older users
+    if 'free_images' not in user_doc:
+        user_doc['free_images'] = 0
+    if 'free_videos' not in user_doc:
+        user_doc['free_videos'] = 0
+    if 'free_website_trial' not in user_doc:
+        user_doc['free_website_trial'] = False
+    
     user = User(**{k: v for k, v in user_doc.items() if k != 'password'})
     token = create_token(user.id, user.role)
     return {"token": token, "user": user}
@@ -245,6 +300,15 @@ async def get_me(current_user: dict = Depends(get_current_user)):
     user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0, "password": 0})
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    # Ensure free trials exist
+    if 'free_images' not in user_doc:
+        user_doc['free_images'] = 0
+    if 'free_videos' not in user_doc:
+        user_doc['free_videos'] = 0
+    if 'free_website_trial' not in user_doc:
+        user_doc['free_website_trial'] = False
+    
     return user_doc
 
 # ============== PRICING ==============
@@ -271,6 +335,11 @@ async def get_pricing():
             "simple": 50,
             "advanced": 150,
             "ecommerce": 300
+        },
+        "free_trial": {
+            "images": 3,
+            "videos": 3,
+            "website_preview": True
         }
     }
 
@@ -278,7 +347,7 @@ async def get_pricing():
 async def get_payment_settings():
     settings = await db.settings.find_one({"type": "payment"}, {"_id": 0})
     if not settings:
-        return {"bank_name": "", "bank_iban": "", "bank_account_name": "", "paypal_email": ""}
+        return {"bank_name": "", "bank_iban": "", "bank_account_name": "", "paypal_email": "", "owner_whatsapp": OWNER_WHATSAPP}
     return settings
 
 # ============== IMAGE GENERATION ==============
@@ -287,11 +356,26 @@ async def get_payment_settings():
 async def generate_image(prompt: str, current_user: dict = Depends(get_current_user)):
     user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0})
     
-    has_subscription = await check_user_subscription(current_user['user_id'], "images")
     is_owner = user_doc.get('is_owner', False)
+    has_subscription = await check_user_subscription(current_user['user_id'], "images")
+    free_images = user_doc.get('free_images', 0)
     
-    if not has_subscription and not is_owner:
-        raise HTTPException(status_code=403, detail="يرجى الاشتراك في باقة الصور أولاً")
+    is_free_use = False
+    
+    # Check if user can generate
+    if is_owner:
+        pass  # Owner can always generate
+    elif has_subscription:
+        pass  # Subscriber can generate
+    elif free_images > 0:
+        is_free_use = True
+        # Deduct free image
+        await db.users.update_one(
+            {"id": current_user['user_id']},
+            {"$inc": {"free_images": -1}}
+        )
+    else:
+        raise HTTPException(status_code=403, detail="لا يوجد لديك رصيد مجاني أو اشتراك. يرجى الاشتراك أو شراء صور فردية")
     
     try:
         chat = LlmChat(
@@ -311,14 +395,24 @@ async def generate_image(prompt: str, current_user: dict = Depends(get_current_u
             user_id=current_user['user_id'],
             prompt=prompt,
             image_url=image_data,
-            status="completed" if image_data else "failed"
+            status="completed" if image_data else "failed",
+            is_free=is_free_use
         )
         
         doc = gen_record.model_dump()
         doc['created_at'] = doc['created_at'].isoformat()
         await db.image_generations.insert_one(doc)
         
-        return {"id": gen_record.id, "image_url": image_data, "text": text}
+        # Get updated user info
+        updated_user = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0, "password": 0})
+        
+        return {
+            "id": gen_record.id, 
+            "image_url": image_data, 
+            "text": text,
+            "free_images_remaining": updated_user.get('free_images', 0),
+            "was_free": is_free_use
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"فشل توليد الصورة: {str(e)}")
 
@@ -336,23 +430,48 @@ async def get_image_history(current_user: dict = Depends(get_current_user)):
 async def generate_video(prompt: str, current_user: dict = Depends(get_current_user)):
     user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0})
     
-    has_subscription = await check_user_subscription(current_user['user_id'], "videos")
     is_owner = user_doc.get('is_owner', False)
+    has_subscription = await check_user_subscription(current_user['user_id'], "videos")
+    free_videos = user_doc.get('free_videos', 0)
     
-    if not has_subscription and not is_owner:
-        raise HTTPException(status_code=403, detail="يرجى الاشتراك في باقة الفيديو أولاً")
+    is_free_use = False
+    
+    # Check if user can generate
+    if is_owner:
+        pass  # Owner can always generate
+    elif has_subscription:
+        pass  # Subscriber can generate
+    elif free_videos > 0:
+        is_free_use = True
+        # Deduct free video
+        await db.users.update_one(
+            {"id": current_user['user_id']},
+            {"$inc": {"free_videos": -1}}
+        )
+    else:
+        raise HTTPException(status_code=403, detail="لا يوجد لديك رصيد مجاني أو اشتراك. يرجى الاشتراك أو شراء فيديوهات فردية")
     
     gen_record = VideoGeneration(
         user_id=current_user['user_id'],
         prompt=prompt,
-        status="processing"
+        status="processing",
+        is_free=is_free_use
     )
     
     doc = gen_record.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
     await db.video_generations.insert_one(doc)
     
-    return {"id": gen_record.id, "status": "processing", "message": "جاري توليد الفيديو، قد يستغرق بضع دقائق"}
+    # Get updated user info
+    updated_user = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0, "password": 0})
+    
+    return {
+        "id": gen_record.id, 
+        "status": "processing", 
+        "message": "جاري توليد الفيديو، قد يستغرق بضع دقائق",
+        "free_videos_remaining": updated_user.get('free_videos', 0),
+        "was_free": is_free_use
+    }
 
 @api_router.get("/generate/videos/history")
 async def get_video_history(current_user: dict = Depends(get_current_user)):
@@ -369,22 +488,39 @@ async def create_request(request_data: WebsiteRequestCreate, current_user: dict 
     user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0})
     is_owner = user_doc.get('is_owner', False)
     credits = user_doc.get('credits', 0)
+    has_free_trial = user_doc.get('free_website_trial', False)
     
+    is_trial = request_data.is_trial
     required_credits = 50
-    if not is_owner and credits < required_credits:
-        raise HTTPException(status_code=403, detail=f"رصيدك غير كافٍ. تحتاج {required_credits} نقطة")
+    
+    if is_trial:
+        # Trial request - check if user has free trial
+        if not has_free_trial and not is_owner:
+            raise HTTPException(status_code=403, detail="لقد استخدمت تجربتك المجانية. يرجى شراء نقاط للمتابعة")
+        
+        # Mark trial as used
+        if not is_owner:
+            await db.users.update_one(
+                {"id": current_user['user_id']},
+                {"$set": {"free_website_trial": False}}
+            )
+    else:
+        # Full request - check credits
+        if not is_owner and credits < required_credits:
+            raise HTTPException(status_code=403, detail=f"رصيدك غير كافٍ. تحتاج {required_credits} نقطة")
+        
+        if not is_owner:
+            await db.users.update_one(
+                {"id": current_user['user_id']},
+                {"$inc": {"credits": -required_credits}}
+            )
     
     request_obj = WebsiteRequest(
         user_id=current_user['user_id'],
-        credits_used=0 if is_owner else required_credits,
-        **request_data.model_dump()
+        credits_used=0 if (is_owner or is_trial) else required_credits,
+        is_trial=is_trial,
+        **{k: v for k, v in request_data.model_dump().items() if k != 'is_trial'}
     )
-    
-    if not is_owner:
-        await db.users.update_one(
-            {"id": current_user['user_id']},
-            {"$inc": {"credits": -required_credits}}
-        )
     
     doc = request_obj.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
@@ -401,11 +537,18 @@ async def generate_suggestions(request_id: str, current_user: dict = Depends(get
     if request_doc['user_id'] != current_user['user_id'] and current_user['role'] != 'admin':
         raise HTTPException(status_code=403, detail="Access denied")
     
+    is_trial = request_doc.get('is_trial', False)
+    
     try:
+        system_msg = "أنت مصمم مواقع محترف. قم بتقديم اقتراحات تفصيلية لتصميم الموقع بناءً على متطلبات العميل. اقترح: 1) الألوان المناسبة 2) البنية والصفحات 3) الميزات الأساسية 4) استراتيجية المحتوى. أجب بالعربية."
+        
+        if is_trial:
+            system_msg += " ملاحظة: هذه تجربة مجانية، قدم ملخصاً موجزاً فقط وأخبر العميل أنه يمكنه الحصول على التفاصيل الكاملة عند شراء النقاط."
+        
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=f"website-gen-{request_id}",
-            system_message="أنت مصمم مواقع محترف. قم بتقديم اقتراحات تفصيلية لتصميم الموقع بناءً على متطلبات العميل. اقترح: 1) الألوان المناسبة 2) البنية والصفحات 3) الميزات الأساسية 4) استراتيجية المحتوى. أجب بالعربية."
+            system_message=system_msg
         ).with_model("openai", "gpt-5.2")
         
         prompt = f"""العميل يريد موقع بالمواصفات التالية:
@@ -416,17 +559,20 @@ async def generate_suggestions(request_id: str, current_user: dict = Depends(get
 الجمهور المستهدف: {request_doc.get('target_audience', 'غير محدد')}
 الألوان المفضلة: {request_doc.get('preferred_colors', 'غير محدد')}
 
-قدم اقتراحات احترافية لتصميم هذا الموقع."""
+{"هذه تجربة مجانية - قدم ملخصاً موجزاً فقط." if is_trial else "قدم اقتراحات احترافية كاملة لتصميم هذا الموقع."}"""
         
         user_message = UserMessage(text=prompt)
         response = await chat.send_message(user_message)
+        
+        if is_trial:
+            response += "\n\n---\n🔒 **هذه معاينة محدودة**\nللحصول على التصميم الكامل والتفاصيل الاحترافية، يرجى شراء نقاط من صفحة الأسعار."
         
         await db.website_requests.update_one(
             {"id": request_id},
             {"$set": {"ai_suggestions": response}}
         )
         
-        return {"suggestions": response}
+        return {"suggestions": response, "is_trial": is_trial}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI generation failed: {str(e)}")
 
@@ -468,6 +614,8 @@ async def create_payment(payment_data: PaymentCreate, current_user: dict = Depen
     
     payment = Payment(
         user_id=current_user['user_id'],
+        user_name=user_doc.get('name', 'Unknown'),
+        user_email=user_doc.get('email', ''),
         payment_type=payment_data.payment_type,
         amount=payment_data.amount,
         currency=currency,
@@ -477,6 +625,26 @@ async def create_payment(payment_data: PaymentCreate, current_user: dict = Depen
     doc = payment.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
     await db.payments.insert_one(doc)
+    
+    # Send WhatsApp notification to owner
+    payment_type_ar = {
+        "credits": "شراء نقاط",
+        "subscription_images": "اشتراك صور",
+        "subscription_videos": "اشتراك فيديو",
+        "images_monthly": "اشتراك صور شهري",
+        "videos_monthly": "اشتراك فيديو شهري"
+    }.get(payment_data.payment_type, payment_data.payment_type)
+    
+    message = f"""💰 دفعة جديدة في Zitex!
+
+👤 العميل: {user_doc.get('name', 'Unknown')}
+📧 البريد: {user_doc.get('email', '')}
+💳 النوع: {payment_type_ar}
+💵 المبلغ: {payment_data.amount} {currency}
+
+🔗 راجع من لوحة التحكم للموافقة"""
+    
+    await send_whatsapp_notification(message)
     
     return payment
 
@@ -623,6 +791,24 @@ async def add_user_credits(user_id: str, credits: int, admin: dict = Depends(req
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
     return {"message": f"Added {credits} credits"}
+
+@api_router.put("/admin/users/{user_id}/add-free-trials")
+async def add_free_trials(user_id: str, images: int = 0, videos: int = 0, admin: dict = Depends(require_admin)):
+    update = {}
+    if images > 0:
+        update["free_images"] = images
+    if videos > 0:
+        update["free_videos"] = videos
+    
+    if update:
+        result = await db.users.update_one(
+            {"id": user_id},
+            {"$inc": update}
+        )
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="User not found")
+    
+    return {"message": f"Added {images} free images, {videos} free videos"}
 
 # ============== APP SETUP ==============
 
