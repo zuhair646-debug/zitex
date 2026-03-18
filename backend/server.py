@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -7,14 +7,18 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
-from typing import List, Optional
+from typing import List, Optional, Literal
 import uuid
 from datetime import datetime, timezone, timedelta
 import bcrypt
 import jwt
-from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+from emergentintegrations.llm.chat import LlmChat, UserMessage
+from elevenlabs import ElevenLabs
+from elevenlabs.types import VoiceSettings
 import base64
 import httpx
+from PIL import Image, ImageDraw, ImageFont
+import io
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -30,8 +34,20 @@ security = HTTPBearer()
 JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key')
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 OWNER_WHATSAPP = os.environ.get('OWNER_WHATSAPP', '966507374438')
+ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY')
+
+# Initialize ElevenLabs client
+eleven_client = ElevenLabs(api_key=ELEVENLABS_API_KEY) if ELEVENLABS_API_KEY else None
 
 # ============== MODELS ==============
+
+# Role levels: owner (100) > super_admin (80) > admin (50) > client (10)
+ROLE_LEVELS = {
+    "owner": 100,
+    "super_admin": 80,
+    "admin": 50,
+    "client": 10
+}
 
 class UserRegister(BaseModel):
     email: EmailStr
@@ -51,32 +67,48 @@ class User(BaseModel):
     role: str = "client"
     country: str = "SA"
     credits: float = 0
-    free_images: int = 3  # Free images for new users
-    free_videos: int = 3  # Free videos for new users
-    free_website_trial: bool = True  # Can try website creation once
+    free_images: int = 3
+    free_videos: int = 3
+    free_website_trial: bool = True
     subscription_type: Optional[str] = None
     subscription_expires: Optional[str] = None
     is_owner: bool = False
+    is_active: bool = True
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-class CreditsPackage(BaseModel):
-    id: str
-    name: str
-    credits: int
-    price_sar: float
-    price_usd: float
-
-class Subscription(BaseModel):
+class ActivityLog(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     user_id: str
-    type: str
-    plan: str
-    status: str = "pending"
-    amount: float
-    currency: str
+    user_name: str
+    user_email: str
+    action: str  # image_generated, video_generated, website_requested, payment_created, download, etc.
+    action_type: str  # create, download, edit, delete
+    details: Optional[str] = None
+    metadata: Optional[dict] = None
+    ip_address: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    expires_at: Optional[str] = None
+
+class VoiceInfo(BaseModel):
+    voice_id: str
+    name: str
+    category: str
+    gender: str
+    language: str
+    accent: str
+
+class TTSRequest(BaseModel):
+    text: str
+    voice_id: str
+    stability: float = 0.5
+    similarity_boost: float = 0.75
+
+class ImageEditRequest(BaseModel):
+    image_base64: str
+    text: Optional[str] = None
+    text_position: Optional[str] = "bottom"  # top, center, bottom
+    text_color: Optional[str] = "#FFFFFF"
+    font_size: Optional[int] = 40
 
 class ImageGeneration(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -84,8 +116,10 @@ class ImageGeneration(BaseModel):
     user_id: str
     prompt: str
     image_url: Optional[str] = None
+    edited_image_url: Optional[str] = None
     status: str = "pending"
     is_free: bool = False
+    is_edit: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class VideoGeneration(BaseModel):
@@ -94,6 +128,8 @@ class VideoGeneration(BaseModel):
     user_id: str
     prompt: str
     video_url: Optional[str] = None
+    audio_url: Optional[str] = None
+    voice_id: Optional[str] = None
     status: str = "pending"
     is_free: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -170,6 +206,7 @@ class AdminStats(BaseModel):
     total_websites: int
     total_images_generated: int
     total_videos_generated: int
+    total_activities: int
 
 # ============== HELPERS ==============
 
@@ -200,10 +237,29 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
+async def require_role(min_role: str, current_user: dict):
+    """Check if user has minimum required role level"""
+    user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    user_role = user_doc.get('role', 'client')
+    user_level = ROLE_LEVELS.get(user_role, 0)
+    required_level = ROLE_LEVELS.get(min_role, 0)
+    
+    if user_level < required_level:
+        raise HTTPException(status_code=403, detail=f"Requires {min_role} role or higher")
+    
+    return user_doc
+
 async def require_admin(current_user: dict = Depends(get_current_user)):
-    if current_user['role'] != 'admin':
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return current_user
+    return await require_role("admin", current_user)
+
+async def require_super_admin(current_user: dict = Depends(get_current_user)):
+    return await require_role("super_admin", current_user)
+
+async def require_owner(current_user: dict = Depends(get_current_user)):
+    return await require_role("owner", current_user)
 
 async def check_user_subscription(user_id: str, sub_type: str) -> bool:
     user_doc = await db.users.find_one({"id": user_id}, {"_id": 0})
@@ -217,23 +273,36 @@ async def check_user_subscription(user_id: str, sub_type: str) -> bool:
             return True
     return False
 
+async def log_activity(user_id: str, action: str, action_type: str, details: str = None, metadata: dict = None):
+    """Log user activity"""
+    user_doc = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not user_doc:
+        return
+    
+    log = ActivityLog(
+        user_id=user_id,
+        user_name=user_doc.get('name', 'Unknown'),
+        user_email=user_doc.get('email', ''),
+        action=action,
+        action_type=action_type,
+        details=details,
+        metadata=metadata
+    )
+    
+    doc = log.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.activity_logs.insert_one(doc)
+
 async def send_whatsapp_notification(message: str):
     """Send WhatsApp notification to owner"""
     try:
-        # Using CallMeBot API (free WhatsApp notifications)
-        # First time setup: Send "I allow callmebot to send me messages" to +34 644 71 99 22
         phone = OWNER_WHATSAPP
-        # Store in settings
         settings = await db.settings.find_one({"type": "payment"}, {"_id": 0})
         if settings and settings.get('owner_whatsapp'):
             phone = settings.get('owner_whatsapp')
         
-        # URL encode the message
         import urllib.parse
         encoded_msg = urllib.parse.quote(message)
-        
-        # Try multiple methods
-        # Method 1: CallMeBot (needs one-time setup)
         url = f"https://api.callmebot.com/whatsapp.php?phone={phone}&text={encoded_msg}&apikey=123456"
         
         async with httpx.AsyncClient() as client:
@@ -242,8 +311,7 @@ async def send_whatsapp_notification(message: str):
             except:
                 pass
         
-        # Log the notification attempt
-        logging.info(f"WhatsApp notification sent to {phone}: {message}")
+        logging.info(f"WhatsApp notification sent to {phone}")
         return True
     except Exception as e:
         logging.error(f"WhatsApp notification failed: {str(e)}")
@@ -273,6 +341,7 @@ async def register(user_data: UserRegister):
     doc['created_at'] = doc['created_at'].isoformat()
     
     await db.users.insert_one(doc)
+    await log_activity(user.id, "user_registered", "create", f"New user registered: {user.email}")
     
     token = create_token(user.id, user.role)
     return {"token": token, "user": user}
@@ -283,15 +352,16 @@ async def login(credentials: UserLogin):
     if not user_doc or not verify_password(credentials.password, user_doc['password']):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
-    # Ensure free trials exist for older users
-    if 'free_images' not in user_doc:
-        user_doc['free_images'] = 0
-    if 'free_videos' not in user_doc:
-        user_doc['free_videos'] = 0
-    if 'free_website_trial' not in user_doc:
-        user_doc['free_website_trial'] = False
+    if not user_doc.get('is_active', True):
+        raise HTTPException(status_code=403, detail="Account is deactivated")
+    
+    for field in ['free_images', 'free_videos', 'free_website_trial']:
+        if field not in user_doc:
+            user_doc[field] = 0 if field != 'free_website_trial' else False
     
     user = User(**{k: v for k, v in user_doc.items() if k != 'password'})
+    await log_activity(user.id, "user_login", "create", f"User logged in")
+    
     token = create_token(user.id, user.role)
     return {"token": token, "user": user}
 
@@ -301,56 +371,89 @@ async def get_me(current_user: dict = Depends(get_current_user)):
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
     
-    # Ensure free trials exist
-    if 'free_images' not in user_doc:
-        user_doc['free_images'] = 0
-    if 'free_videos' not in user_doc:
-        user_doc['free_videos'] = 0
-    if 'free_website_trial' not in user_doc:
-        user_doc['free_website_trial'] = False
+    for field in ['free_images', 'free_videos', 'free_website_trial']:
+        if field not in user_doc:
+            user_doc[field] = 0 if field != 'free_website_trial' else False
     
     return user_doc
 
-# ============== PRICING ==============
+# ============== VOICES ==============
 
-CREDITS_PACKAGES = [
-    {"id": "starter", "name": "باقة المبتدئ", "credits": 100, "price_sar": 50, "price_usd": 13},
-    {"id": "pro", "name": "باقة المحترف", "credits": 500, "price_sar": 200, "price_usd": 53},
-    {"id": "enterprise", "name": "باقة الأعمال", "credits": 2000, "price_sar": 700, "price_usd": 187},
+# Pre-defined voices for Arabic and English
+AVAILABLE_VOICES = [
+    {"voice_id": "21m00Tcm4TlvDq8ikWAM", "name": "Rachel", "category": "premade", "gender": "female", "language": "en", "accent": "American"},
+    {"voice_id": "AZnzlk1XvdvUeBnXmlld", "name": "Domi", "category": "premade", "gender": "female", "language": "en", "accent": "American"},
+    {"voice_id": "EXAVITQu4vr4xnSDxMaL", "name": "Bella", "category": "premade", "gender": "female", "language": "en", "accent": "American"},
+    {"voice_id": "ErXwobaYiN019PkySvjV", "name": "Antoni", "category": "premade", "gender": "male", "language": "en", "accent": "American"},
+    {"voice_id": "VR6AewLTigWG4xSOukaG", "name": "Arnold", "category": "premade", "gender": "male", "language": "en", "accent": "American"},
+    {"voice_id": "pNInz6obpgDQGcFmaJgB", "name": "Adam", "category": "premade", "gender": "male", "language": "en", "accent": "American"},
+    {"voice_id": "yoZ06aMxZJJ28mfd3POQ", "name": "Sam", "category": "premade", "gender": "male", "language": "en", "accent": "American"},
+    {"voice_id": "onwK4e9ZLuTAKqWW03F9", "name": "Daniel", "category": "premade", "gender": "male", "language": "en", "accent": "British"},
+    {"voice_id": "XB0fDUnXU5powFXDhCwa", "name": "Charlotte", "category": "premade", "gender": "female", "language": "en", "accent": "British"},
 ]
 
-SUBSCRIPTION_PRICES = {
-    "images_monthly": {"price_sar": 100, "price_usd": 27},
-    "images_single": {"price_sar": 10, "price_usd": 3},
-    "videos_monthly": {"price_sar": 150, "price_usd": 40},
-    "videos_single": {"price_sar": 20, "price_usd": 5},
-}
+@api_router.get("/voices")
+async def get_voices(current_user: dict = Depends(get_current_user)):
+    """Get available voices for TTS"""
+    try:
+        if eleven_client:
+            voices_response = eleven_client.voices.get_all()
+            voices = []
+            for voice in voices_response.voices:
+                voices.append({
+                    "voice_id": voice.voice_id,
+                    "name": voice.name,
+                    "category": voice.category or "premade",
+                    "gender": voice.labels.get("gender", "unknown") if voice.labels else "unknown",
+                    "language": voice.labels.get("language", "en") if voice.labels else "en",
+                    "accent": voice.labels.get("accent", "unknown") if voice.labels else "unknown",
+                    "preview_url": voice.preview_url
+                })
+            return {"voices": voices}
+    except Exception as e:
+        logging.error(f"Error fetching voices: {str(e)}")
+    
+    return {"voices": AVAILABLE_VOICES}
 
-@api_router.get("/pricing")
-async def get_pricing():
-    return {
-        "credits_packages": CREDITS_PACKAGES,
-        "subscriptions": SUBSCRIPTION_PRICES,
-        "website_credits": {
-            "simple": 50,
-            "advanced": 150,
-            "ecommerce": 300
-        },
-        "free_trial": {
-            "images": 3,
-            "videos": 3,
-            "website_preview": True
-        }
-    }
+@api_router.post("/tts/generate")
+async def generate_tts(request: TTSRequest, current_user: dict = Depends(get_current_user)):
+    """Generate text-to-speech audio"""
+    if not eleven_client:
+        raise HTTPException(status_code=503, detail="TTS service not available")
+    
+    try:
+        voice_settings = VoiceSettings(
+            stability=request.stability,
+            similarity_boost=request.similarity_boost
+        )
+        
+        audio_generator = eleven_client.text_to_speech.convert(
+            text=request.text,
+            voice_id=request.voice_id,
+            model_id="eleven_multilingual_v2",
+            voice_settings=voice_settings
+        )
+        
+        audio_data = b""
+        for chunk in audio_generator:
+            audio_data += chunk
+        
+        audio_b64 = base64.b64encode(audio_data).decode()
+        audio_url = f"data:audio/mpeg;base64,{audio_b64}"
+        
+        await log_activity(
+            current_user['user_id'], 
+            "tts_generated", 
+            "create", 
+            f"Generated TTS: {request.text[:50]}...",
+            {"voice_id": request.voice_id, "text_length": len(request.text)}
+        )
+        
+        return {"audio_url": audio_url, "text": request.text, "voice_id": request.voice_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating TTS: {str(e)}")
 
-@api_router.get("/settings/payment")
-async def get_payment_settings():
-    settings = await db.settings.find_one({"type": "payment"}, {"_id": 0})
-    if not settings:
-        return {"bank_name": "", "bank_iban": "", "bank_account_name": "", "paypal_email": "", "owner_whatsapp": OWNER_WHATSAPP}
-    return settings
-
-# ============== IMAGE GENERATION ==============
+# ============== IMAGE GENERATION & EDITING ==============
 
 @api_router.post("/generate/image")
 async def generate_image(prompt: str, current_user: dict = Depends(get_current_user)):
@@ -362,20 +465,18 @@ async def generate_image(prompt: str, current_user: dict = Depends(get_current_u
     
     is_free_use = False
     
-    # Check if user can generate
     if is_owner:
-        pass  # Owner can always generate
+        pass
     elif has_subscription:
-        pass  # Subscriber can generate
+        pass
     elif free_images > 0:
         is_free_use = True
-        # Deduct free image
         await db.users.update_one(
             {"id": current_user['user_id']},
             {"$inc": {"free_images": -1}}
         )
     else:
-        raise HTTPException(status_code=403, detail="لا يوجد لديك رصيد مجاني أو اشتراك. يرجى الاشتراك أو شراء صور فردية")
+        raise HTTPException(status_code=403, detail="لا يوجد لديك رصيد مجاني أو اشتراك")
     
     try:
         chat = LlmChat(
@@ -403,7 +504,14 @@ async def generate_image(prompt: str, current_user: dict = Depends(get_current_u
         doc['created_at'] = doc['created_at'].isoformat()
         await db.image_generations.insert_one(doc)
         
-        # Get updated user info
+        await log_activity(
+            current_user['user_id'],
+            "image_generated",
+            "create",
+            f"Generated image: {prompt[:50]}...",
+            {"is_free": is_free_use, "prompt": prompt}
+        )
+        
         updated_user = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0, "password": 0})
         
         return {
@@ -416,6 +524,116 @@ async def generate_image(prompt: str, current_user: dict = Depends(get_current_u
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"فشل توليد الصورة: {str(e)}")
 
+@api_router.post("/images/edit")
+async def edit_image(request: ImageEditRequest, current_user: dict = Depends(get_current_user)):
+    """Add text to an image"""
+    try:
+        # Decode base64 image
+        if request.image_base64.startswith('data:'):
+            header, data = request.image_base64.split(',', 1)
+        else:
+            data = request.image_base64
+        
+        image_bytes = base64.b64decode(data)
+        image = Image.open(io.BytesIO(image_bytes))
+        
+        if request.text:
+            draw = ImageDraw.Draw(image)
+            
+            # Try to use a font, fallback to default
+            try:
+                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", request.font_size)
+            except:
+                font = ImageFont.load_default()
+            
+            # Calculate text position
+            text_bbox = draw.textbbox((0, 0), request.text, font=font)
+            text_width = text_bbox[2] - text_bbox[0]
+            text_height = text_bbox[3] - text_bbox[1]
+            
+            img_width, img_height = image.size
+            x = (img_width - text_width) // 2
+            
+            if request.text_position == "top":
+                y = 20
+            elif request.text_position == "center":
+                y = (img_height - text_height) // 2
+            else:  # bottom
+                y = img_height - text_height - 20
+            
+            # Add text shadow for better visibility
+            shadow_color = "#000000"
+            draw.text((x+2, y+2), request.text, font=font, fill=shadow_color)
+            draw.text((x, y), request.text, font=font, fill=request.text_color)
+        
+        # Convert back to base64
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+        edited_b64 = base64.b64encode(buffer.getvalue()).decode()
+        edited_url = f"data:image/png;base64,{edited_b64}"
+        
+        # Save to database
+        edit_record = ImageGeneration(
+            user_id=current_user['user_id'],
+            prompt=f"Edited image with text: {request.text}",
+            image_url=request.image_base64,
+            edited_image_url=edited_url,
+            status="completed",
+            is_edit=True
+        )
+        
+        doc = edit_record.model_dump()
+        doc['created_at'] = doc['created_at'].isoformat()
+        await db.image_generations.insert_one(doc)
+        
+        await log_activity(
+            current_user['user_id'],
+            "image_edited",
+            "edit",
+            f"Added text to image: {request.text[:30]}...",
+            {"text": request.text, "position": request.text_position}
+        )
+        
+        return {"id": edit_record.id, "edited_image_url": edited_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error editing image: {str(e)}")
+
+@api_router.post("/images/upload-edit")
+async def upload_and_edit_image(
+    file: UploadFile = File(...),
+    text: str = Form(None),
+    text_position: str = Form("bottom"),
+    text_color: str = Form("#FFFFFF"),
+    font_size: int = Form(40),
+    current_user: dict = Depends(get_current_user)
+):
+    """Upload an image and optionally add text"""
+    try:
+        contents = await file.read()
+        image_b64 = base64.b64encode(contents).decode()
+        image_url = f"data:{file.content_type};base64,{image_b64}"
+        
+        if text:
+            request = ImageEditRequest(
+                image_base64=image_url,
+                text=text,
+                text_position=text_position,
+                text_color=text_color,
+                font_size=font_size
+            )
+            return await edit_image(request, current_user)
+        
+        await log_activity(
+            current_user['user_id'],
+            "image_uploaded",
+            "create",
+            f"Uploaded image: {file.filename}"
+        )
+        
+        return {"image_url": image_url, "filename": file.filename}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error uploading image: {str(e)}")
+
 @api_router.get("/generate/images/history")
 async def get_image_history(current_user: dict = Depends(get_current_user)):
     images = await db.image_generations.find(
@@ -424,10 +642,27 @@ async def get_image_history(current_user: dict = Depends(get_current_user)):
     ).sort("created_at", -1).to_list(100)
     return images
 
+@api_router.post("/download/log")
+async def log_download(item_type: str, item_id: str, current_user: dict = Depends(get_current_user)):
+    """Log when user downloads an image or video"""
+    await log_activity(
+        current_user['user_id'],
+        f"{item_type}_downloaded",
+        "download",
+        f"Downloaded {item_type}: {item_id}",
+        {"item_type": item_type, "item_id": item_id}
+    )
+    return {"message": "Download logged"}
+
 # ============== VIDEO GENERATION ==============
 
 @api_router.post("/generate/video")
-async def generate_video(prompt: str, current_user: dict = Depends(get_current_user)):
+async def generate_video(
+    prompt: str, 
+    voice_id: Optional[str] = None,
+    voice_text: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
     user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0})
     
     is_owner = user_doc.get('is_owner', False)
@@ -436,24 +671,44 @@ async def generate_video(prompt: str, current_user: dict = Depends(get_current_u
     
     is_free_use = False
     
-    # Check if user can generate
     if is_owner:
-        pass  # Owner can always generate
+        pass
     elif has_subscription:
-        pass  # Subscriber can generate
+        pass
     elif free_videos > 0:
         is_free_use = True
-        # Deduct free video
         await db.users.update_one(
             {"id": current_user['user_id']},
             {"$inc": {"free_videos": -1}}
         )
     else:
-        raise HTTPException(status_code=403, detail="لا يوجد لديك رصيد مجاني أو اشتراك. يرجى الاشتراك أو شراء فيديوهات فردية")
+        raise HTTPException(status_code=403, detail="لا يوجد لديك رصيد مجاني أو اشتراك")
+    
+    audio_url = None
+    if voice_id and voice_text and eleven_client:
+        try:
+            voice_settings = VoiceSettings(stability=0.5, similarity_boost=0.75)
+            audio_generator = eleven_client.text_to_speech.convert(
+                text=voice_text,
+                voice_id=voice_id,
+                model_id="eleven_multilingual_v2",
+                voice_settings=voice_settings
+            )
+            
+            audio_data = b""
+            for chunk in audio_generator:
+                audio_data += chunk
+            
+            audio_b64 = base64.b64encode(audio_data).decode()
+            audio_url = f"data:audio/mpeg;base64,{audio_b64}"
+        except Exception as e:
+            logging.error(f"Error generating audio for video: {str(e)}")
     
     gen_record = VideoGeneration(
         user_id=current_user['user_id'],
         prompt=prompt,
+        audio_url=audio_url,
+        voice_id=voice_id,
         status="processing",
         is_free=is_free_use
     )
@@ -462,16 +717,46 @@ async def generate_video(prompt: str, current_user: dict = Depends(get_current_u
     doc['created_at'] = doc['created_at'].isoformat()
     await db.video_generations.insert_one(doc)
     
-    # Get updated user info
+    await log_activity(
+        current_user['user_id'],
+        "video_generated",
+        "create",
+        f"Generated video: {prompt[:50]}...",
+        {"is_free": is_free_use, "has_voice": bool(voice_id), "prompt": prompt}
+    )
+    
     updated_user = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0, "password": 0})
     
     return {
         "id": gen_record.id, 
         "status": "processing", 
-        "message": "جاري توليد الفيديو، قد يستغرق بضع دقائق",
+        "message": "جاري توليد الفيديو",
+        "audio_url": audio_url,
         "free_videos_remaining": updated_user.get('free_videos', 0),
         "was_free": is_free_use
     }
+
+@api_router.post("/videos/upload")
+async def upload_video(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Upload a video for editing"""
+    try:
+        contents = await file.read()
+        video_b64 = base64.b64encode(contents).decode()
+        video_url = f"data:{file.content_type};base64,{video_b64}"
+        
+        await log_activity(
+            current_user['user_id'],
+            "video_uploaded",
+            "create",
+            f"Uploaded video: {file.filename}"
+        )
+        
+        return {"video_url": video_url, "filename": file.filename}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error uploading video: {str(e)}")
 
 @api_router.get("/generate/videos/history")
 async def get_video_history(current_user: dict = Depends(get_current_user)):
@@ -494,18 +779,15 @@ async def create_request(request_data: WebsiteRequestCreate, current_user: dict 
     required_credits = 50
     
     if is_trial:
-        # Trial request - check if user has free trial
         if not has_free_trial and not is_owner:
-            raise HTTPException(status_code=403, detail="لقد استخدمت تجربتك المجانية. يرجى شراء نقاط للمتابعة")
+            raise HTTPException(status_code=403, detail="لقد استخدمت تجربتك المجانية")
         
-        # Mark trial as used
         if not is_owner:
             await db.users.update_one(
                 {"id": current_user['user_id']},
                 {"$set": {"free_website_trial": False}}
             )
     else:
-        # Full request - check credits
         if not is_owner and credits < required_credits:
             raise HTTPException(status_code=403, detail=f"رصيدك غير كافٍ. تحتاج {required_credits} نقطة")
         
@@ -526,6 +808,14 @@ async def create_request(request_data: WebsiteRequestCreate, current_user: dict 
     doc['created_at'] = doc['created_at'].isoformat()
     await db.website_requests.insert_one(doc)
     
+    await log_activity(
+        current_user['user_id'],
+        "website_requested",
+        "create",
+        f"Website request: {request_data.title}",
+        {"is_trial": is_trial, "credits_used": request_obj.credits_used}
+    )
+    
     return request_obj
 
 @api_router.post("/requests/{request_id}/generate-suggestions")
@@ -534,16 +824,16 @@ async def generate_suggestions(request_id: str, current_user: dict = Depends(get
     if not request_doc:
         raise HTTPException(status_code=404, detail="Request not found")
     
-    if request_doc['user_id'] != current_user['user_id'] and current_user['role'] != 'admin':
+    if request_doc['user_id'] != current_user['user_id'] and current_user['role'] not in ['admin', 'super_admin', 'owner']:
         raise HTTPException(status_code=403, detail="Access denied")
     
     is_trial = request_doc.get('is_trial', False)
     
     try:
-        system_msg = "أنت مصمم مواقع محترف. قم بتقديم اقتراحات تفصيلية لتصميم الموقع بناءً على متطلبات العميل. اقترح: 1) الألوان المناسبة 2) البنية والصفحات 3) الميزات الأساسية 4) استراتيجية المحتوى. أجب بالعربية."
+        system_msg = "أنت مصمم مواقع محترف. قم بتقديم اقتراحات تفصيلية لتصميم الموقع بناءً على متطلبات العميل. أجب بالعربية."
         
         if is_trial:
-            system_msg += " ملاحظة: هذه تجربة مجانية، قدم ملخصاً موجزاً فقط وأخبر العميل أنه يمكنه الحصول على التفاصيل الكاملة عند شراء النقاط."
+            system_msg += " هذه تجربة مجانية، قدم ملخصاً موجزاً فقط."
         
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
@@ -559,13 +849,13 @@ async def generate_suggestions(request_id: str, current_user: dict = Depends(get
 الجمهور المستهدف: {request_doc.get('target_audience', 'غير محدد')}
 الألوان المفضلة: {request_doc.get('preferred_colors', 'غير محدد')}
 
-{"هذه تجربة مجانية - قدم ملخصاً موجزاً فقط." if is_trial else "قدم اقتراحات احترافية كاملة لتصميم هذا الموقع."}"""
+{"تجربة مجانية - ملخص موجز فقط." if is_trial else "قدم اقتراحات احترافية كاملة."}"""
         
         user_message = UserMessage(text=prompt)
         response = await chat.send_message(user_message)
         
         if is_trial:
-            response += "\n\n---\n🔒 **هذه معاينة محدودة**\nللحصول على التصميم الكامل والتفاصيل الاحترافية، يرجى شراء نقاط من صفحة الأسعار."
+            response += "\n\n---\n🔒 **معاينة محدودة**\nللحصول على التصميم الكامل، يرجى شراء نقاط."
         
         await db.website_requests.update_one(
             {"id": request_id},
@@ -578,7 +868,7 @@ async def generate_suggestions(request_id: str, current_user: dict = Depends(get
 
 @api_router.get("/requests")
 async def get_requests(current_user: dict = Depends(get_current_user)):
-    if current_user['role'] == 'admin':
+    if current_user['role'] in ['admin', 'super_admin', 'owner']:
         requests = await db.website_requests.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
     else:
         requests = await db.website_requests.find({"user_id": current_user['user_id']}, {"_id": 0}).sort("created_at", -1).to_list(1000)
@@ -590,7 +880,7 @@ async def get_request(request_id: str, current_user: dict = Depends(get_current_
     if not request_doc:
         raise HTTPException(status_code=404, detail="Request not found")
     
-    if request_doc['user_id'] != current_user['user_id'] and current_user['role'] != 'admin':
+    if request_doc['user_id'] != current_user['user_id'] and current_user['role'] not in ['admin', 'super_admin', 'owner']:
         raise HTTPException(status_code=403, detail="Access denied")
     
     return request_doc
@@ -626,7 +916,14 @@ async def create_payment(payment_data: PaymentCreate, current_user: dict = Depen
     doc['created_at'] = doc['created_at'].isoformat()
     await db.payments.insert_one(doc)
     
-    # Send WhatsApp notification to owner
+    await log_activity(
+        current_user['user_id'],
+        "payment_created",
+        "create",
+        f"Payment: {payment_data.payment_type} - {payment_data.amount} {currency}",
+        {"payment_type": payment_data.payment_type, "amount": payment_data.amount}
+    )
+    
     payment_type_ar = {
         "credits": "شراء نقاط",
         "subscription_images": "اشتراك صور",
@@ -650,11 +947,17 @@ async def create_payment(payment_data: PaymentCreate, current_user: dict = Depen
 
 @api_router.get("/payments")
 async def get_payments(current_user: dict = Depends(get_current_user)):
-    if current_user['role'] == 'admin':
+    if current_user['role'] in ['admin', 'super_admin', 'owner']:
         payments = await db.payments.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
     else:
         payments = await db.payments.find({"user_id": current_user['user_id']}, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return payments
+
+CREDITS_PACKAGES = [
+    {"id": "starter", "name": "باقة المبتدئ", "credits": 100, "price_sar": 50, "price_usd": 13},
+    {"id": "pro", "name": "باقة المحترف", "credits": 500, "price_sar": 200, "price_usd": 53},
+    {"id": "enterprise", "name": "باقة الأعمال", "credits": 2000, "price_sar": 700, "price_usd": 187},
+]
 
 @api_router.put("/payments/{payment_id}/approve")
 async def approve_payment(payment_id: str, admin_notes: Optional[str] = None, admin: dict = Depends(require_admin)):
@@ -691,6 +994,14 @@ async def approve_payment(payment_id: str, admin_notes: Optional[str] = None, ad
             {"$set": {"subscription_type": "videos", "subscription_expires": expires}}
         )
     
+    await log_activity(
+        admin['id'] if isinstance(admin, dict) and 'id' in admin else 'admin',
+        "payment_approved",
+        "edit",
+        f"Approved payment {payment_id}",
+        {"payment_id": payment_id, "user_id": user_id}
+    )
+    
     return {"message": "Payment approved"}
 
 @api_router.put("/payments/{payment_id}/reject")
@@ -726,7 +1037,7 @@ async def create_website(request_id: str, url: str, preview_image: Optional[str]
 
 @api_router.get("/websites")
 async def get_websites(current_user: dict = Depends(get_current_user)):
-    if current_user['role'] == 'admin':
+    if current_user['role'] in ['admin', 'super_admin', 'owner']:
         websites = await db.websites.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
     else:
         websites = await db.websites.find({"user_id": current_user['user_id']}, {"_id": 0}).sort("created_at", -1).to_list(1000)
@@ -742,6 +1053,29 @@ async def update_website_status(website_id: str, status: str, admin: dict = Depe
         raise HTTPException(status_code=404, detail="Website not found")
     return {"message": "Status updated"}
 
+# ============== PRICING ==============
+
+@api_router.get("/pricing")
+async def get_pricing():
+    return {
+        "credits_packages": CREDITS_PACKAGES,
+        "subscriptions": {
+            "images_monthly": {"price_sar": 100, "price_usd": 27},
+            "images_single": {"price_sar": 10, "price_usd": 3},
+            "videos_monthly": {"price_sar": 150, "price_usd": 40},
+            "videos_single": {"price_sar": 20, "price_usd": 5},
+        },
+        "website_credits": {"simple": 50, "advanced": 150, "ecommerce": 300},
+        "free_trial": {"images": 3, "videos": 3, "website_preview": True}
+    }
+
+@api_router.get("/settings/payment")
+async def get_payment_settings():
+    settings = await db.settings.find_one({"type": "payment"}, {"_id": 0})
+    if not settings:
+        return {"bank_name": "", "bank_iban": "", "bank_account_name": "", "paypal_email": "", "owner_whatsapp": OWNER_WHATSAPP}
+    return settings
+
 # ============== ADMIN ==============
 
 @api_router.get("/admin/stats")
@@ -755,13 +1089,32 @@ async def get_admin_stats(admin: dict = Depends(require_admin)):
         approved_payments=await db.payments.count_documents({"status": "approved"}),
         total_websites=await db.websites.count_documents({}),
         total_images_generated=await db.image_generations.count_documents({}),
-        total_videos_generated=await db.video_generations.count_documents({})
+        total_videos_generated=await db.video_generations.count_documents({}),
+        total_activities=await db.activity_logs.count_documents({})
     )
 
 @api_router.get("/admin/users")
 async def get_all_users(admin: dict = Depends(require_admin)):
     users = await db.users.find({}, {"_id": 0, "password": 0}).sort("created_at", -1).to_list(1000)
     return users
+
+@api_router.get("/admin/users/{user_id}/activity")
+async def get_user_activity(user_id: str, admin: dict = Depends(require_admin)):
+    """Get activity log for a specific user"""
+    activities = await db.activity_logs.find(
+        {"user_id": user_id},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(500)
+    return activities
+
+@api_router.get("/admin/activity")
+async def get_all_activity(limit: int = 100, admin: dict = Depends(require_admin)):
+    """Get all activity logs"""
+    activities = await db.activity_logs.find(
+        {},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(limit)
+    return activities
 
 @api_router.put("/admin/settings/payment")
 async def update_payment_settings(settings: SiteSettings, admin: dict = Depends(require_admin)):
@@ -772,14 +1125,99 @@ async def update_payment_settings(settings: SiteSettings, admin: dict = Depends(
     )
     return {"message": "Settings updated"}
 
-@api_router.put("/admin/users/{user_id}/make-owner")
-async def make_user_owner(user_id: str, admin: dict = Depends(require_admin)):
+@api_router.put("/admin/users/{user_id}/role")
+async def update_user_role(user_id: str, role: str, current_user: dict = Depends(get_current_user)):
+    """Update user role - only owner can promote to super_admin"""
+    user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0})
+    current_role = user_doc.get('role', 'client')
+    current_level = ROLE_LEVELS.get(current_role, 0)
+    
+    target_level = ROLE_LEVELS.get(role, 0)
+    
+    # Can only assign roles lower than your own
+    if target_level >= current_level:
+        raise HTTPException(status_code=403, detail="Cannot assign role equal or higher than your own")
+    
+    # Only owner can create super_admin
+    if role == "super_admin" and current_role != "owner":
+        raise HTTPException(status_code=403, detail="Only owner can create super admins")
+    
     result = await db.users.update_one(
         {"id": user_id},
-        {"$set": {"is_owner": True, "role": "admin"}}
+        {"$set": {"role": role}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    await log_activity(
+        current_user['user_id'],
+        "role_updated",
+        "edit",
+        f"Updated user {user_id} role to {role}"
+    )
+    
+    return {"message": f"User role updated to {role}"}
+
+@api_router.put("/admin/users/{user_id}/deactivate")
+async def deactivate_user(user_id: str, admin: dict = Depends(require_admin)):
+    """Deactivate a user account"""
+    target_user = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Cannot deactivate owner
+    if target_user.get('is_owner'):
+        raise HTTPException(status_code=403, detail="Cannot deactivate owner account")
+    
+    # Check role hierarchy
+    admin_level = ROLE_LEVELS.get(admin.get('role', 'admin'), 50)
+    target_level = ROLE_LEVELS.get(target_user.get('role', 'client'), 10)
+    
+    if target_level >= admin_level:
+        raise HTTPException(status_code=403, detail="Cannot deactivate user with equal or higher role")
+    
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"is_active": False}}
+    )
+    
+    await log_activity(
+        admin.get('id', 'admin'),
+        "user_deactivated",
+        "edit",
+        f"Deactivated user {user_id}"
+    )
+    
+    return {"message": "User deactivated"}
+
+@api_router.put("/admin/users/{user_id}/activate")
+async def activate_user(user_id: str, admin: dict = Depends(require_admin)):
+    """Activate a user account"""
+    result = await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"is_active": True}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {"message": "User activated"}
+
+@api_router.put("/admin/users/{user_id}/make-owner")
+async def make_user_owner(user_id: str, current_user: dict = Depends(get_current_user)):
+    """Make user an owner - only existing owner can do this"""
+    requester = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0})
+    if not requester.get('is_owner'):
+        raise HTTPException(status_code=403, detail="Only owner can transfer ownership")
+    
+    result = await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"is_owner": True, "role": "owner"}}
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
+    
     return {"message": "User is now owner"}
 
 @api_router.put("/admin/users/{user_id}/add-credits")
@@ -790,6 +1228,14 @@ async def add_user_credits(user_id: str, credits: int, admin: dict = Depends(req
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    await log_activity(
+        admin.get('id', 'admin'),
+        "credits_added",
+        "edit",
+        f"Added {credits} credits to user {user_id}"
+    )
+    
     return {"message": f"Added {credits} credits"}
 
 @api_router.put("/admin/users/{user_id}/add-free-trials")

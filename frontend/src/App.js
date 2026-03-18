@@ -18,6 +18,7 @@ import AdminPayments from '@/pages/AdminPayments';
 import AdminClients from '@/pages/AdminClients';
 import AdminWebsites from '@/pages/AdminWebsites';
 import AdminSettings from '@/pages/AdminSettings';
+import AdminActivity from '@/pages/AdminActivity';
 import '@/App.css';
 
 function App() {
@@ -51,7 +52,8 @@ function App() {
   const ProtectedRoute = ({ children, adminOnly = false }) => {
     if (loading) return <div className="flex items-center justify-center min-h-screen bg-slate-900 text-white">جاري التحميل...</div>;
     if (!user) return <Navigate to="/login" />;
-    if (adminOnly && user.role !== 'admin') return <Navigate to="/dashboard" />;
+    const isAdmin = user.role === 'admin' || user.role === 'super_admin' || user.role === 'owner' || user.is_owner;
+    if (adminOnly && !isAdmin) return <Navigate to="/dashboard" />;
     return children;
   };
 
@@ -78,6 +80,7 @@ function App() {
           <Route path="/admin/clients" element={<ProtectedRoute adminOnly><AdminClients user={user} /></ProtectedRoute>} />
           <Route path="/admin/websites" element={<ProtectedRoute adminOnly><AdminWebsites user={user} /></ProtectedRoute>} />
           <Route path="/admin/settings" element={<ProtectedRoute adminOnly><AdminSettings user={user} /></ProtectedRoute>} />
+          <Route path="/admin/activity" element={<ProtectedRoute adminOnly><AdminActivity user={user} /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
       <Toaster position="top-center" richColors />

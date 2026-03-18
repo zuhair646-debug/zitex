@@ -3,7 +3,7 @@ import { Navbar } from '@/components/Navbar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
-import { Users, FileText, CreditCard, Globe, Image, Video, Settings, Clock, CheckCircle } from 'lucide-react';
+import { Users, FileText, CreditCard, Globe, Image, Video, Settings, Clock, CheckCircle, Activity } from 'lucide-react';
 
 const AdminDashboard = ({ user }) => {
   const navigate = useNavigate();
@@ -36,6 +36,7 @@ const AdminDashboard = ({ user }) => {
     { title: 'مدفوعات معلقة', value: stats.pending_payments, icon: <CreditCard className="w-8 h-8" />, color: 'from-red-500 to-pink-500' },
     { title: 'صور تم توليدها', value: stats.total_images_generated, icon: <Image className="w-8 h-8" />, color: 'from-purple-500 to-pink-500' },
     { title: 'فيديوهات تم توليدها', value: stats.total_videos_generated, icon: <Video className="w-8 h-8" />, color: 'from-orange-500 to-red-500' },
+    { title: 'إجمالي الأنشطة', value: stats.total_activities, icon: <Activity className="w-8 h-8" />, color: 'from-cyan-500 to-blue-500' },
   ] : [];
 
   const quickActions = [
@@ -43,6 +44,7 @@ const AdminDashboard = ({ user }) => {
     { title: 'إدارة المدفوعات', desc: 'مراجعة والموافقة على المدفوعات', path: '/admin/payments', icon: <CreditCard className="w-6 h-6" />, color: 'from-green-500 to-emerald-500' },
     { title: 'إدارة العملاء', desc: 'عرض وإدارة قائمة العملاء', path: '/admin/clients', icon: <Users className="w-6 h-6" />, color: 'from-purple-500 to-pink-500' },
     { title: 'إدارة المواقع', desc: 'إضافة وتحديث المواقع', path: '/admin/websites', icon: <Globe className="w-6 h-6" />, color: 'from-orange-500 to-red-500' },
+    { title: 'سجل النشاط', desc: 'تتبع جميع الأنشطة على المنصة', path: '/admin/activity', icon: <Activity className="w-6 h-6" />, color: 'from-cyan-500 to-blue-500' },
     { title: 'الإعدادات', desc: 'إعدادات الموقع ومعلومات الدفع', path: '/admin/settings', icon: <Settings className="w-6 h-6" />, color: 'from-gray-500 to-slate-600' },
   ];
 

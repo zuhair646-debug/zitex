@@ -1,0 +1,219 @@
+<analysis>**original_problem_statement:**
+The user wants to create a professional, AI-powered platform for building websites for clients on a paid basis.
+
+**Initial Requirements:**
+- An integrated, user-friendly admin panel for managing orders and clients.
+- A system to manage websites created for clients.
+- AI-driven customization of designs and content.
+- A payment system based on bank transfers.
+- The platform should be scalable, fast, and offer a great user experience.
+
+**Evolved Product Requirements (PRD):**
+- The project name is **Zitex**, with a logo resembling the letter 'Z'.
+- The owner should have a special free account with unlimited access.
+- **Paid Services:**
+    - **Image Generation:** Subscription-based or per-image payment.
+    - **Video Generation:** Subscription-based or per-video payment.
+    - **Website Creation:** A points-based system where users buy credits for consumption.
+- **Free Tiers:**
+    - New users get 3 free image generations and 3 free video generations.
+    - A limited free trial for website creation.
+- **Advanced Features:**
+    - **Video:** Modify existing videos, create similar videos, and add multi-lingual, multi-gender voiceovers (especially Saudi dialects).
+    - **Image:** Add text to images and modify uploaded images.
+    - **Assets:** Users must be able to download generated images and videos.
+- **Admin Panel:**
+    - Implement role-based access control (admin levels) instead of a single admin.
+    - Detailed activity logging for each user.
+- **Payments & Notifications:**
+    - Support for Saudi bank accounts and PayPal for international users.
+    - WhatsApp notifications to an admin number upon successful payment for manual approval.
+- **Integrations:**
+    - Text-to-Speech with realistic voices (using ElevenLabs).
+    - Image and Video generation (using ).
+
+**User's preferred language**: Arabic (العربية). The next agent MUST respond in Arabic.
+
+**what currently exists?**
+A full-stack application named Zitex has been developed using React, FastAPI, and MongoDB. The application supports user authentication (JWT), role-based access (client, admin, owner), and has a right-to-left (RTL) UI tailored for Arabic.
+
+Core features implemented include:
+- Client and Admin dashboards.
+- AI-powered image and video generation via .
+- A pricing page.
+- Free trials for new users (3 images, 3 videos).
+- An owner account () with unlimited privileges.
+- An admin settings page for configuring bank details and a WhatsApp number for notifications.
+- The ElevenLabs Python SDK has been installed.
+
+**Last working item**:
+- **Last item agent was working:** The agent began a major feature upgrade to implement advanced creative tools and admin controls. This involved:
+    1.  Adding the user-provided  to the environment.
+    2.  Installing the  Python package.
+    3.  Completely overwriting the  file to include new backend logic for Text-to-Speech (TTS), advanced admin roles, and user activity logging.
+- **Status:** IN PROGRESS
+- **Agent Testing Done:** N
+- **Which testing method agent to use?** both. First, use  to test the newly added backend endpoints in . After that, once the frontend is updated, use the testing agent for a full end-to-end flow validation.
+- **User Testing Done:** N
+
+**All Pending/In progress Issue list**:
+- **Issue 1: Complete the Advanced Features Implementation (P0)**
+    - **Description:** The user requested a large set of new features including advanced video/image editing, Text-to-Speech (TTS) voice generation, downloadable assets, and a revamped admin system with granular user tracking and roles. The agent has only updated the backend code. The frontend UI and full integration are missing.
+    - **Status:** IN PROGRESS
+    - **Next debug checklist:**
+        1.  Restart the backend service (backend: stopped
+backend: started) and check logs for errors (==> /var/log/supervisor/backend.err.log <==
+
+==> /var/log/supervisor/backend.out.log <==) due to the recent wholesale replacement of .
+        2.  Test the new backend endpoints (e.g., , ) using  to ensure the logic is sound.
+        3.  Implement the required frontend changes:
+            - Update  and  to support file uploads for editing, UI for text overlays (images), and voice selection (videos).
+            - Add download buttons for all generated media.
+            - Create a new Admin UI component to display the detailed activity log for each user.
+            - Modify the admin user management section to support creating and managing different admin roles.
+        4.  Run the testing agent to perform comprehensive end-to-end testing of all new features.
+    - **Why fix this issue?** To deliver the core functionality requested by the user for a professional creative and management suite.
+    - **Should Test frontend/backend/both after fix?** Both.
+
+**In progress Task List**:
+- **Task 1: Implement Advanced Creative Suite & Admin Controls (P0)**
+    - **Where to resume:** The backend file  has been updated. The immediate next step is to restart the backend, verify its stability, and then proceed to build the corresponding frontend components for the new features.
+    - **What will be achieved:** The application will gain advanced video/image editing capabilities, TTS voice generation, and granular admin-level user activity tracking.
+    - **Status:** IN PROGRESS
+    - **Should Test frontend/backend/both after fix?** Both.
+    - **Blocked on something:** None.
+
+**Upcoming and Future Tasks**
+- **Upcoming Tasks:**
+    - **Implement PayPal Integration (P1):** Add PayPal as a payment option for international users. This will require backend and frontend work on the settings and payment flow.
+    - **Implement Credit/Points System (P1):** Rework the website creation flow from a simple request model to a points-based system where users purchase and spend credits.
+    - **Fix Minor Frontend Bugs (P2):** Address the low-priority issues identified in previous test reports:
+        - User token not being cleared on logout without a manual refresh.
+        - Failed login toast notification not appearing.
+- **Future Tasks:**
+    - **Full Internationalization (i18n) (P2):** Implement a robust i18n framework to support multiple languages beyond Arabic, as requested by the user (all languages).
+
+**Completed work in this session**
+- **Application Foundation:**
+    - Built a full-stack app with a React frontend and FastAPI backend.
+- **Branding and UI/UX:**
+    - Rebranded the application to Zitex.
+    - Implemented a custom, RTL-friendly design based on the design agent's guidelines.
+- **Core Features:**
+    - User authentication (registration and login).
+    - Separate dashboards for clients and administrators.
+    - Implemented AI image and video generation using .
+    - Created a public pricing page.
+- **User Engagement:**
+    - Implemented a free trial system (3 free images, 3 free videos) for new users.
+    - Created a privileged owner account with unlimited access.
+- **Admin & Configuration:**
+    - Developed an admin settings page to manage bank account information and a WhatsApp number for payment notifications.
+
+**Earlier issues found/mentioned but not fixed**
+- **Issue 1: Improper Session Logout**
+    - **Description:** A test report () noted that the user's authentication token is not cleared from the frontend on logout, requiring a manual page refresh to complete the session termination.
+    - **Debug checklist:**
+        - Check the  function in the frontend.
+        - Ensure  or equivalent is being called.
+        - Ensure the user is programmatically redirected after logout and the application state is cleared.
+    - **Why to solve this issue?** It is a security and usability flaw.
+    - **Should Test frontend/backend/both after fix:** Frontend.
+    - **Is recurring issue?** N
+- **Issue 2: Missing Login Error Notification**
+    - **Description:** A test report () noted that when a user enters incorrect login credentials, the failure toast notification does not appear, providing no feedback.
+    - **Debug checklist:**
+        - Review the  function in .
+        - Verify that the  block of the API call correctly triggers the  function from .
+        - Check the browser console for any errors when a failed login occurs.
+    - **Why to solve this issue?** Improves user experience by providing clear feedback on login failures.
+    - **Should Test frontend/backend/both after fix:** Frontend.
+    - **Is recurring issue?** N
+
+**Known issue recurrence from previous fork**
+- None.
+
+**Code Architecture**
+
+
+**Key Technical Concepts**
+- **Frontend:** React, Tailwind CSS, Shadcn UI,  for animations,  for toasts.
+- **Backend:** FastAPI, Pydantic, Motor (for async MongoDB).
+- **Database:** MongoDB.
+- **Authentication:** JSON Web Tokens (JWT).
+- **Architecture:** Monolithic backend () with a separate SPA frontend.
+
+**key DB schema**
+- **users:** 
+- **website_requests:** 
+- **payments:** 
+- **settings:** A single document containing 
+
+**changes in tech stack**
+-  Python library was added for Text-to-Speech integration.
+
+**All files of reference**
+- : The core backend file, recently overwritten to add new features.
+- : Contains environment variables, including the new .
+- : All page components, many of which will need updating for the new features.
+- : The main React router, defining application paths.
+- : The Product Requirements Document tracking completed and pending features.
+- : UI/UX rules for the project.
+
+**Areas that need refactoring**:
+The  file has become a large monolith containing all API logic, models, and database interactions. It should be refactored into a more structured package with separate modules for routes (e.g., ), models (), and services () to improve maintainability. The agent's practice of overwriting entire files is risky and should be stopped;  should be used for modifications.
+
+**key api endpoints**
+- , 
+- 
+- 
+- , 
+-  (New, needs testing)
+-  (CRUD for website requests)
+-  (Endpoints for admin operations)
+-  (New, needs testing)
+
+**Critical Info for New Agent**
+- The user's latest request is a major functionality expansion. The backend  has been completely rewritten to accommodate this, but it is **untested**. You must start by verifying the backend's stability and correctness.
+- The user has provided a valid API key for ElevenLabs, which is now in .
+- The frontend is not yet updated to reflect the new backend capabilities (TTS, file uploads for editing, activity logs). This is your primary implementation task.
+- The user wants a highly professional and feature-rich application. Prioritize robust implementation over quick hacks.
+- All responses to the user must be in **Arabic**.
+
+**documents and test reports created in this job**
+- 
+- 
+- 
+- 
+
+**Last 10 User Messages and any pending HUMAN messages**
+1.  **Request:** Modify video generation to allow editing, creating similar videos, adding multi-lingual voiceovers (especially Saudi). Allow users to download images/videos. Allow writing on images and editing uploaded images. Revamp admin panel for user activity tracking and granular roles. (In Progress)
+2.  **Confirmation:** User confirms they want realistic, multi-lingual (Arabic/English) voices and tiered admin levels. (Done)
+3.  **Agent Question:** Agent asks for ElevenLabs API key. (Done)
+4.  **User Question:** User asks what the ElevenLabs key looks like. (Done)
+5.  **Agent Response:** Agent provides an example format and instructions on how to get the key. (Done)
+6.  **User Action:** User provides the ElevenLabs API key. (Done)
+7.  **Request:** Modify the free trial to 3 images/videos per new client, add a limited free website trial, and implement WhatsApp notifications for payments. (Done)
+8.  **User Action:** User provides the WhatsApp number for notifications. (Done)
+9.  **Request:** Change the app name to something innovative in English with a 'Z' logo. Add paid image/video generation, a free owner account, a pricing page, and specific payment methods (Saudi bank/PayPal). (Done)
+10. **User Action:** User specifies the app name Zitex, sets prices for image/video generation, and asks for bank info to be in the admin panel. (Done)
+
+**Project Health Check:**
+- **Broken:** The new feature set (advanced editing, TTS, admin tracking) is broken. The backend is updated but untested, and the frontend is completely missing the required UI.
+- **Mocked:** The WhatsApp notification is likely a placeholder that logs a message or makes a basic, unauthenticated API call. It's not a robust integration.
+
+**3rd Party Integrations**
+- **OpenAI/Gemini/Sora:** For image and video generation, accessed via . (Uses Emergent LLM Key)
+- **ElevenLabs:** For Text-to-Speech voice generation. (Requires User API Key - Provided)
+
+**Testing status**
+- **Testing agent used after significant changes:** YES (for previous feature sets, but not for the latest major update).
+- **Troubleshoot agent used after agent stuck in loop:** NO
+- **Test files created:** None.
+- **Known regressions:** None confirmed, but the recent overwrite of  carries a high risk of regressions.
+
+**Credentials to test flow:**
+- **Owner/Admin Account:**
+    - **Email:** 
+    - **Password:** 
+- **Client Account:** Create a new user through the registration page to test the standard client and free trial flow.</analysis>

@@ -4,7 +4,7 @@ from datetime import datetime
 import time
 
 class ZitexAPITester:
-    def __init__(self, base_url="https://ai-website-builder-49.preview.emergentagent.com"):
+    def __init__(self, base_url="https://creative-suite-test.preview.emergentagent.com"):
         self.base_url = base_url
         self.token = None
         self.admin_token = None

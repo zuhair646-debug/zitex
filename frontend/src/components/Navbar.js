@@ -32,14 +32,20 @@ export const ZitexLogo = ({ size = 'md', light = false }) => {
   );
 };
 
-export const Navbar = ({ user, transparent = false }) => {
+export const Navbar = ({ user, transparent = false, setUser }) => {
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
-    window.location.href = '/';
+    if (setUser) {
+      setUser(null);
+    }
+    navigate('/');
+    window.location.reload();
   };
+
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'owner' || user?.is_owner;
 
   return (
     <nav className={`fixed top-0 left-0 right-0 z-50 ${transparent ? 'bg-slate-900/80 backdrop-blur-xl border-b border-white/10' : 'bg-white/95 backdrop-blur-md border-b border-gray-200'}`}>
@@ -59,12 +65,12 @@ export const Navbar = ({ user, transparent = false }) => {
               <>
                 <Button
                   variant={transparent ? "outline" : "ghost"}
-                  onClick={() => navigate(user.role === 'admin' ? '/admin' : '/dashboard')}
+                  onClick={() => navigate(isAdmin ? '/admin' : '/dashboard')}
                   data-testid="navbar-dashboard-btn"
                   className={transparent ? 'border-white/20 text-white hover:bg-white/10' : ''}
                 >
-                  {user.role === 'admin' ? <Shield className="w-4 h-4 me-2" /> : <LayoutDashboard className="w-4 h-4 me-2" />}
-                  {user.role === 'admin' ? 'لوحة الأدمن' : 'لوحة التحكم'}
+                  {isAdmin ? <Shield className="w-4 h-4 me-2" /> : <LayoutDashboard className="w-4 h-4 me-2" />}
+                  {isAdmin ? 'لوحة الأدمن' : 'لوحة التحكم'}
                 </Button>
                 <Button variant="outline" onClick={handleLogout} data-testid="navbar-logout-btn" className={transparent ? 'border-white/20 text-white hover:bg-white/10' : ''}>
                   <LogOut className="w-4 h-4 me-2" />
@@ -96,7 +102,7 @@ export const Navbar = ({ user, transparent = false }) => {
               <Link to="/pricing" className={`py-2 ${transparent ? 'text-white' : 'text-gray-900'}`}>الأسعار</Link>
               {user ? (
                 <>
-                  <Button variant="ghost" onClick={() => navigate(user.role === 'admin' ? '/admin' : '/dashboard')} className="justify-start">
+                  <Button variant="ghost" onClick={() => navigate(isAdmin ? '/admin' : '/dashboard')} className="justify-start">
                     لوحة التحكم
                   </Button>
                   <Button variant="ghost" onClick={handleLogout} className="justify-start">خروج</Button>

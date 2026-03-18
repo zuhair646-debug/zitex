@@ -29,7 +29,8 @@ const LoginPage = ({ setUser }) => {
         localStorage.setItem('token', data.token);
         setUser(data.user);
         toast.success('تم تسجيل الدخول بنجاح!');
-        navigate(data.user.role === 'admin' ? '/admin' : '/dashboard');
+        const isAdmin = data.user.role === 'admin' || data.user.role === 'super_admin' || data.user.role === 'owner' || data.user.is_owner;
+        navigate(isAdmin ? '/admin' : '/dashboard');
       } else {
         toast.error(data.detail || 'فشل تسجيل الدخول');
       }
