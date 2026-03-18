@@ -259,16 +259,16 @@ const VideoGenerator = ({ user }) => {
                     <Mic className="w-5 h-5 text-blue-400" />
                     إضافة تعليق صوتي
                   </Label>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={enableVoice}
-                      onChange={(e) => setEnableVoice(e.target.checked)}
-                      className="sr-only peer"
-                      data-testid="enable-voice-toggle"
+                  <button
+                    type="button"
+                    onClick={() => setEnableVoice(!enableVoice)}
+                    className={`relative w-11 h-6 rounded-full transition-colors ${enableVoice ? 'bg-blue-500' : 'bg-slate-600'}`}
+                    data-testid="enable-voice-toggle"
+                  >
+                    <span 
+                      className={`absolute top-[2px] w-5 h-5 bg-white rounded-full transition-transform ${enableVoice ? 'right-[2px]' : 'left-[2px]'}`}
                     />
-                    <div className="w-11 h-6 bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
-                  </label>
+                  </button>
                 </div>
 
                 {enableVoice && (
