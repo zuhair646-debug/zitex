@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo, lazy, Suspense } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -7,10 +7,91 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { 
   Send, Plus, MessageSquare, Image, Video, Globe, 
-  Loader2, Download, Trash2, Settings, Mic, Play, 
-  Pause, ChevronLeft, ChevronRight, Sparkles
+  Loader2, Download, Trash2, Mic, ChevronLeft, ChevronRight, Sparkles
 } from 'lucide-react';
 
+// ============== Loading Skeleton ==============
+const SkeletonPulse = ({ className }) => (
+  <div className={`animate-pulse bg-slate-700 rounded ${className}`} />
+);
+
+const SessionSkeleton = () => (
+  <div className="space-y-2 p-2">
+    {[1, 2, 3].map(i => (
+      <div key={i} className="flex items-center gap-2 p-3 rounded-lg bg-slate-700/30">
+        <SkeletonPulse className="w-10 h-10 rounded-lg" />
+        <div className="flex-1">
+          <SkeletonPulse className="h-4 w-3/4 mb-2" />
+          <SkeletonPulse className="h-3 w-1/2" />
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
+const MessageSkeleton = () => (
+  <div className="flex justify-end">
+    <div className="bg-slate-700 rounded-2xl rounded-tl-md p-4 max-w-[60%]">
+      <SkeletonPulse className="h-4 w-48 mb-2" />
+      <SkeletonPulse className="h-4 w-32" />
+    </div>
+  </div>
+);
+
+// ============== Memoized Components ==============
+const SessionItem = memo(({ session, isActive, onSelect, onDelete, getIcon }) => (
+  <div
+    className={`group flex items-center gap-2 p-3 rounded-lg cursor-pointer transition-all duration-200 ${
+      isActive ? 'bg-slate-700 shadow-lg' : 'hover:bg-slate-700/50'
+    }`}
+    onClick={() => onSelect(session.id)}
+    data-testid={`session-${session.id}`}
+  >
+    <div className={`p-2 rounded-lg transition-colors ${
+      session.session_type === 'image' ? 'bg-purple-500/20 text-purple-400' :
+      session.session_type === 'video' ? 'bg-orange-500/20 text-orange-400' :
+      session.session_type === 'website' ? 'bg-green-500/20 text-green-400' :
+      'bg-slate-600 text-gray-400'
+    }`}>
+      {getIcon(session.session_type)}
+    </div>
+    <div className="flex-1 min-w-0">
+      <p className="text-white text-sm truncate">{session.title}</p>
+      <p className="text-xs text-gray-500">{session.message_count || 0} رسالة</p>
+    </div>
+    <Button
+      size="icon"
+      variant="ghost"
+      onClick={(e) => { e.stopPropagation(); onDelete(session.id); }}
+      className="opacity-0 group-hover:opacity-100 h-8 w-8 text-gray-400 hover:text-red-400 transition-opacity"
+    >
+      <Trash2 className="w-4 h-4" />
+    </Button>
+  </div>
+));
+
+const ChatMessage = memo(({ msg, idx, renderAttachment }) => (
+  <div
+    className={`flex ${msg.role === 'user' ? 'justify-start' : 'justify-end'} animate-fadeIn`}
+    data-testid={`message-${idx}`}
+  >
+    <div className={`max-w-[80%] ${
+      msg.role === 'user' 
+        ? 'bg-blue-600 rounded-2xl rounded-tr-md' 
+        : 'bg-slate-700 rounded-2xl rounded-tl-md'
+    } p-4 shadow-lg`}>
+      <p className="text-white whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+      {msg.attachments?.map((attachment, aIdx) => (
+        <div key={aIdx}>{renderAttachment(attachment)}</div>
+      ))}
+      <p className="text-xs text-gray-400 mt-2 opacity-70">
+        {new Date(msg.created_at).toLocaleTimeString('ar-SA')}
+      </p>
+    </div>
+  </div>
+));
+
+// ============== Main Component ==============
 const AIChat = ({ user }) => {
   const [sessions, setSessions] = useState([]);
   const [currentSession, setCurrentSession] = useState(null);
@@ -19,6 +100,7 @@ const AIChat = ({ user }) => {
   const [loading, setLoading] = useState(false);
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isTyping, setIsTyping] = useState(false);
   const [generationSettings, setGenerationSettings] = useState({
     duration: 4,
     size: '1280x720',
@@ -34,30 +116,30 @@ const AIChat = ({ user }) => {
   }, []);
 
   useEffect(() => {
-    scrollToBottom();
+    if (messages.length > 0) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  const fetchSessions = async () => {
+  const fetchSessions = useCallback(async () => {
     setSessionsLoading(true);
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/chat/sessions`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      const data = await res.json();
-      setSessions(data);
+      if (res.ok) {
+        const data = await res.json();
+        setSessions(data);
+      }
     } catch (error) {
       console.error('Error fetching sessions:', error);
     } finally {
       setSessionsLoading(false);
     }
-  };
+  }, []);
 
-  const createSession = async (type = 'general') => {
+  const createSession = useCallback(async (type = 'general') => {
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/chat/sessions`, {
@@ -76,9 +158,9 @@ const AIChat = ({ user }) => {
     } catch (error) {
       toast.error('فشل إنشاء المحادثة');
     }
-  };
+  }, []);
 
-  const loadSession = async (sessionId) => {
+  const loadSession = useCallback(async (sessionId) => {
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/chat/sessions/${sessionId}`, {
@@ -90,17 +172,16 @@ const AIChat = ({ user }) => {
     } catch (error) {
       toast.error('فشل تحميل المحادثة');
     }
-  };
+  }, []);
 
-  const sendMessage = async () => {
-    if (!inputMessage.trim() || !currentSession) return;
-    if (loading) return;
+  const sendMessage = useCallback(async () => {
+    if (!inputMessage.trim() || !currentSession || loading) return;
 
     const userMessage = inputMessage;
     setInputMessage('');
     setLoading(true);
+    setIsTyping(true);
 
-    // إضافة رسالة المستخدم مؤقتاً
     const tempUserMsg = {
       id: Date.now().toString(),
       role: 'user',
@@ -131,13 +212,11 @@ const AIChat = ({ user }) => {
       const data = await res.json();
 
       if (res.ok) {
-        // تحديث الرسائل
         setMessages(prev => {
           const filtered = prev.filter(m => m.id !== tempUserMsg.id);
           return [...filtered, data.user_message, data.assistant_message];
         });
 
-        // تحديث عنوان الجلسة في القائمة
         if (sessions.find(s => s.id === currentSession.id)?.message_count === 0) {
           setSessions(prev => prev.map(s => 
             s.id === currentSession.id 
@@ -154,11 +233,12 @@ const AIChat = ({ user }) => {
       setMessages(prev => prev.filter(m => m.id !== tempUserMsg.id));
     } finally {
       setLoading(false);
+      setIsTyping(false);
       inputRef.current?.focus();
     }
-  };
+  }, [inputMessage, currentSession, loading, generationSettings, sessions]);
 
-  const deleteSession = async (sessionId) => {
+  const deleteSession = useCallback(async (sessionId) => {
     if (!window.confirm('هل تريد حذف هذه المحادثة؟')) return;
     
     try {
@@ -177,9 +257,9 @@ const AIChat = ({ user }) => {
     } catch (error) {
       toast.error('فشل حذف المحادثة');
     }
-  };
+  }, [currentSession]);
 
-  const downloadAsset = (url, filename) => {
+  const downloadAsset = useCallback((url, filename) => {
     const link = document.createElement('a');
     link.href = url;
     link.download = filename;
@@ -187,25 +267,25 @@ const AIChat = ({ user }) => {
     link.click();
     document.body.removeChild(link);
     toast.success('جاري التحميل...');
-  };
+  }, []);
 
-  const handleKeyPress = (e) => {
+  const handleKeyPress = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
-  };
+  }, [sendMessage]);
 
-  const getSessionIcon = (type) => {
+  const getSessionIcon = useCallback((type) => {
     switch (type) {
       case 'image': return <Image className="w-4 h-4" />;
       case 'video': return <Video className="w-4 h-4" />;
       case 'website': return <Globe className="w-4 h-4" />;
       default: return <MessageSquare className="w-4 h-4" />;
     }
-  };
+  }, []);
 
-  const renderAttachment = (attachment) => {
+  const renderAttachment = useCallback((attachment) => {
     switch (attachment.type) {
       case 'image':
         return (
@@ -214,6 +294,7 @@ const AIChat = ({ user }) => {
               src={attachment.url} 
               alt={attachment.prompt || 'Generated image'}
               className="max-w-md rounded-xl shadow-lg"
+              loading="lazy"
             />
             <Button
               size="sm"
@@ -233,6 +314,7 @@ const AIChat = ({ user }) => {
               src={attachment.url}
               controls
               className="max-w-lg rounded-xl shadow-lg"
+              preload="metadata"
             />
             <div className="mt-2 flex items-center gap-2 text-xs text-gray-400">
               <span>المدة: {attachment.duration} ثانية</span>
@@ -255,14 +337,13 @@ const AIChat = ({ user }) => {
           <div className="mt-3 p-4 bg-slate-700/50 rounded-xl">
             <div className="flex items-center gap-3">
               <Mic className="w-8 h-8 text-blue-400" />
-              <div className="flex-1">
-                <audio 
-                  ref={audioRef}
-                  src={attachment.url}
-                  controls
-                  className="w-full"
-                />
-              </div>
+              <audio 
+                ref={audioRef}
+                src={attachment.url}
+                controls
+                className="w-full"
+                preload="metadata"
+              />
             </div>
             <Button
               size="sm"
@@ -282,11 +363,11 @@ const AIChat = ({ user }) => {
               <Globe className="w-6 h-6 text-green-400" />
               <span className="text-white font-semibold">موقع جاهز للتحميل</span>
             </div>
-            <div className="space-y-2 text-sm text-gray-400">
+            <div className="space-y-1 text-sm text-gray-400 max-h-32 overflow-y-auto">
               {Object.keys(attachment.files || {}).map(filename => (
                 <div key={filename} className="flex items-center gap-2">
                   <span className="text-green-400">📄</span>
-                  <span>{filename}</span>
+                  <span className="truncate">{filename}</span>
                 </div>
               ))}
             </div>
@@ -309,7 +390,7 @@ const AIChat = ({ user }) => {
       default:
         return null;
     }
-  };
+  }, [downloadAsset]);
 
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col" data-testid="ai-chat-page">
@@ -321,37 +402,24 @@ const AIChat = ({ user }) => {
           <div className="p-4 border-b border-slate-700">
             <Button
               onClick={() => createSession('general')}
-              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 transition-all"
               data-testid="new-chat-btn"
             >
               <Plus className="w-4 h-4 me-2" />
               محادثة جديدة
             </Button>
             
-            {/* Quick create buttons */}
             <div className="flex gap-2 mt-3">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => createSession('image')}
-                className="flex-1 border-purple-500/50 text-purple-400 hover:bg-purple-500/20"
-              >
+              <Button size="sm" variant="outline" onClick={() => createSession('image')}
+                className="flex-1 border-purple-500/50 text-purple-400 hover:bg-purple-500/20 transition-colors">
                 <Image className="w-4 h-4" />
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => createSession('video')}
-                className="flex-1 border-orange-500/50 text-orange-400 hover:bg-orange-500/20"
-              >
+              <Button size="sm" variant="outline" onClick={() => createSession('video')}
+                className="flex-1 border-orange-500/50 text-orange-400 hover:bg-orange-500/20 transition-colors">
                 <Video className="w-4 h-4" />
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => createSession('website')}
-                className="flex-1 border-green-500/50 text-green-400 hover:bg-green-500/20"
-              >
+              <Button size="sm" variant="outline" onClick={() => createSession('website')}
+                className="flex-1 border-green-500/50 text-green-400 hover:bg-green-500/20 transition-colors">
                 <Globe className="w-4 h-4" />
               </Button>
             </div>
@@ -359,9 +427,7 @@ const AIChat = ({ user }) => {
           
           <ScrollArea className="flex-1 p-2">
             {sessionsLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-              </div>
+              <SessionSkeleton />
             ) : sessions.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-50" />
@@ -371,42 +437,14 @@ const AIChat = ({ user }) => {
             ) : (
               <div className="space-y-1">
                 {sessions.map(session => (
-                  <div
+                  <SessionItem
                     key={session.id}
-                    className={`group flex items-center gap-2 p-3 rounded-lg cursor-pointer transition-colors ${
-                      currentSession?.id === session.id 
-                        ? 'bg-slate-700' 
-                        : 'hover:bg-slate-700/50'
-                    }`}
-                    onClick={() => loadSession(session.id)}
-                    data-testid={`session-${session.id}`}
-                  >
-                    <div className={`p-2 rounded-lg ${
-                      session.session_type === 'image' ? 'bg-purple-500/20 text-purple-400' :
-                      session.session_type === 'video' ? 'bg-orange-500/20 text-orange-400' :
-                      session.session_type === 'website' ? 'bg-green-500/20 text-green-400' :
-                      'bg-slate-600 text-gray-400'
-                    }`}>
-                      {getSessionIcon(session.session_type)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-white text-sm truncate">{session.title}</p>
-                      <p className="text-xs text-gray-500">
-                        {session.message_count || 0} رسالة
-                      </p>
-                    </div>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteSession(session.id);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 h-8 w-8 text-gray-400 hover:text-red-400"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
+                    session={session}
+                    isActive={currentSession?.id === session.id}
+                    onSelect={loadSession}
+                    onDelete={deleteSession}
+                    getIcon={getSessionIcon}
+                  />
                 ))}
               </div>
             )}
@@ -418,7 +456,7 @@ const AIChat = ({ user }) => {
           size="icon"
           variant="ghost"
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="absolute right-0 top-1/2 transform -translate-y-1/2 z-10 bg-slate-700 rounded-r-none"
+          className="absolute right-0 top-1/2 transform -translate-y-1/2 z-10 bg-slate-700 rounded-r-none hover:bg-slate-600"
         >
           {sidebarOpen ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </Button>
@@ -428,8 +466,8 @@ const AIChat = ({ user }) => {
           {!currentSession ? (
             // Welcome screen
             <div className="flex-1 flex items-center justify-center p-8">
-              <div className="text-center max-w-2xl">
-                <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-purple-500 to-pink-500 rounded-3xl flex items-center justify-center">
+              <div className="text-center max-w-2xl animate-fadeIn">
+                <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-purple-500 to-pink-500 rounded-3xl flex items-center justify-center shadow-2xl">
                   <Sparkles className="w-12 h-12 text-white" />
                 </div>
                 <h1 className="text-4xl font-bold text-white mb-4">مرحباً بك في زيتكس</h1>
@@ -439,7 +477,7 @@ const AIChat = ({ user }) => {
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                   <Card 
-                    className="bg-slate-800 border-purple-500/30 cursor-pointer hover:bg-slate-700 transition-colors"
+                    className="bg-slate-800 border-purple-500/30 cursor-pointer hover:bg-slate-700 hover:scale-105 transition-all duration-300"
                     onClick={() => createSession('image')}
                   >
                     <CardContent className="p-6 text-center">
@@ -450,7 +488,7 @@ const AIChat = ({ user }) => {
                   </Card>
                   
                   <Card 
-                    className="bg-slate-800 border-orange-500/30 cursor-pointer hover:bg-slate-700 transition-colors"
+                    className="bg-slate-800 border-orange-500/30 cursor-pointer hover:bg-slate-700 hover:scale-105 transition-all duration-300"
                     onClick={() => createSession('video')}
                   >
                     <CardContent className="p-6 text-center">
@@ -461,7 +499,7 @@ const AIChat = ({ user }) => {
                   </Card>
                   
                   <Card 
-                    className="bg-slate-800 border-green-500/30 cursor-pointer hover:bg-slate-700 transition-colors"
+                    className="bg-slate-800 border-green-500/30 cursor-pointer hover:bg-slate-700 hover:scale-105 transition-all duration-300"
                     onClick={() => createSession('website')}
                   >
                     <CardContent className="p-6 text-center">
@@ -475,7 +513,7 @@ const AIChat = ({ user }) => {
                 <Button
                   size="lg"
                   onClick={() => createSession('general')}
-                  className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+                  className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 shadow-lg hover:shadow-xl transition-all"
                 >
                   <Plus className="w-5 h-5 me-2" />
                   ابدأ محادثة جديدة
@@ -488,7 +526,7 @@ const AIChat = ({ user }) => {
               <ScrollArea className="flex-1 p-4">
                 <div className="max-w-4xl mx-auto space-y-4">
                   {messages.length === 0 && (
-                    <div className="text-center py-12 text-gray-500">
+                    <div className="text-center py-12 text-gray-500 animate-fadeIn">
                       <MessageSquare className="w-16 h-16 mx-auto mb-4 opacity-50" />
                       <p className="text-lg">ابدأ المحادثة!</p>
                       <p className="text-sm mt-2">
@@ -501,37 +539,23 @@ const AIChat = ({ user }) => {
                   )}
                   
                   {messages.map((msg, idx) => (
-                    <div
-                      key={msg.id || idx}
-                      className={`flex ${msg.role === 'user' ? 'justify-start' : 'justify-end'}`}
-                      data-testid={`message-${idx}`}
-                    >
-                      <div className={`max-w-[80%] ${
-                        msg.role === 'user' 
-                          ? 'bg-blue-600 rounded-2xl rounded-tr-md' 
-                          : 'bg-slate-700 rounded-2xl rounded-tl-md'
-                      } p-4`}>
-                        <p className="text-white whitespace-pre-wrap">{msg.content}</p>
-                        
-                        {/* Attachments */}
-                        {msg.attachments?.map((attachment, aIdx) => (
-                          <div key={aIdx}>
-                            {renderAttachment(attachment)}
-                          </div>
-                        ))}
-                        
-                        <p className="text-xs text-gray-400 mt-2">
-                          {new Date(msg.created_at).toLocaleTimeString('ar-SA')}
-                        </p>
-                      </div>
-                    </div>
+                    <ChatMessage 
+                      key={msg.id || idx} 
+                      msg={msg} 
+                      idx={idx} 
+                      renderAttachment={renderAttachment}
+                    />
                   ))}
                   
-                  {loading && (
-                    <div className="flex justify-end">
+                  {isTyping && (
+                    <div className="flex justify-end animate-fadeIn">
                       <div className="bg-slate-700 rounded-2xl rounded-tl-md p-4">
-                        <div className="flex items-center gap-2 text-gray-400">
-                          <Loader2 className="w-5 h-5 animate-spin" />
+                        <div className="flex items-center gap-3 text-gray-400">
+                          <div className="flex gap-1">
+                            <span className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{animationDelay: '0ms'}} />
+                            <span className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}} />
+                            <span className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{animationDelay: '300ms'}} />
+                          </div>
                           <span>جاري التفكير...</span>
                         </div>
                       </div>
@@ -543,9 +567,8 @@ const AIChat = ({ user }) => {
               </ScrollArea>
 
               {/* Input Area */}
-              <div className="border-t border-slate-700 p-4">
+              <div className="border-t border-slate-700 p-4 bg-slate-800/50 backdrop-blur">
                 <div className="max-w-4xl mx-auto">
-                  {/* Settings bar */}
                   {currentSession?.session_type === 'video' && (
                     <div className="flex items-center gap-4 mb-3 text-sm">
                       <div className="flex items-center gap-2">
@@ -553,7 +576,7 @@ const AIChat = ({ user }) => {
                         <select
                           value={generationSettings.duration}
                           onChange={(e) => setGenerationSettings({...generationSettings, duration: parseInt(e.target.value)})}
-                          className="bg-slate-700 border-slate-600 text-white rounded px-2 py-1"
+                          className="bg-slate-700 border-slate-600 text-white rounded px-2 py-1 text-sm"
                         >
                           <option value={4}>4 ثواني</option>
                           <option value={8}>8 ثواني</option>
@@ -565,7 +588,7 @@ const AIChat = ({ user }) => {
                         <select
                           value={generationSettings.size}
                           onChange={(e) => setGenerationSettings({...generationSettings, size: e.target.value})}
-                          className="bg-slate-700 border-slate-600 text-white rounded px-2 py-1"
+                          className="bg-slate-700 border-slate-600 text-white rounded px-2 py-1 text-sm"
                         >
                           <option value="1280x720">HD (16:9)</option>
                           <option value="1792x1024">عريض</option>
@@ -588,14 +611,14 @@ const AIChat = ({ user }) => {
                         currentSession?.session_type === 'website' ? 'صف الموقع الذي تريد بناءه...' :
                         'اكتب رسالتك هنا...'
                       }
-                      className="flex-1 bg-slate-700 border-slate-600 text-white placeholder:text-gray-400 text-lg py-6"
+                      className="flex-1 bg-slate-700 border-slate-600 text-white placeholder:text-gray-400 text-lg py-6 focus:ring-2 focus:ring-purple-500 transition-all"
                       disabled={loading}
                       data-testid="chat-input"
                     />
                     <Button
                       onClick={sendMessage}
                       disabled={loading || !inputMessage.trim()}
-                      className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 px-6"
+                      className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 px-6 transition-all disabled:opacity-50"
                       data-testid="send-btn"
                     >
                       {loading ? (
@@ -611,6 +634,17 @@ const AIChat = ({ user }) => {
           )}
         </div>
       </div>
+      
+      {/* CSS Animation */}
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out;
+        }
+      `}</style>
     </div>
   );
 };
