@@ -1258,7 +1258,21 @@ async def add_free_trials(user_id: str, images: int = 0, videos: int = 0, admin:
 
 # ============== APP SETUP ==============
 
+# Import and setup chat router
+from routers import chat_router, set_ai_assistant
+from services import AIAssistant
+
+# Initialize AI Assistant
+ai_assistant = AIAssistant(
+    db=db,
+    api_key=EMERGENT_LLM_KEY,
+    elevenlabs_key=ELEVENLABS_API_KEY
+)
+set_ai_assistant(ai_assistant)
+
+# Include routers
 app.include_router(api_router)
+app.include_router(chat_router, prefix="/api")
 
 app.add_middleware(
     CORSMiddleware,

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { LogOut, LayoutDashboard, Shield, Menu, X } from 'lucide-react';
+import { LogOut, LayoutDashboard, Shield, Menu, X, MessageSquare } from 'lucide-react';
 
 export const ZitexLogo = ({ size = 'md', light = false }) => {
   const sizes = {
@@ -64,6 +64,15 @@ export const Navbar = ({ user, transparent = false, setUser }) => {
             {user ? (
               <>
                 <Button
+                  variant={transparent ? "outline" : "default"}
+                  onClick={() => navigate('/chat')}
+                  data-testid="navbar-chat-btn"
+                  className={transparent ? 'bg-gradient-to-r from-purple-500 to-pink-500 border-0 text-white hover:from-purple-600 hover:to-pink-600' : 'bg-gradient-to-r from-purple-500 to-pink-500'}
+                >
+                  <MessageSquare className="w-4 h-4 me-2" />
+                  الشات الذكي
+                </Button>
+                <Button
                   variant={transparent ? "outline" : "ghost"}
                   onClick={() => navigate(isAdmin ? '/admin' : '/dashboard')}
                   data-testid="navbar-dashboard-btn"
@@ -102,6 +111,10 @@ export const Navbar = ({ user, transparent = false, setUser }) => {
               <Link to="/pricing" className={`py-2 ${transparent ? 'text-white' : 'text-gray-900'}`}>الأسعار</Link>
               {user ? (
                 <>
+                  <Button variant="default" onClick={() => navigate('/chat')} className="justify-start bg-gradient-to-r from-purple-500 to-pink-500">
+                    <MessageSquare className="w-4 h-4 me-2" />
+                    الشات الذكي
+                  </Button>
                   <Button variant="ghost" onClick={() => navigate(isAdmin ? '/admin' : '/dashboard')} className="justify-start">
                     لوحة التحكم
                   </Button>
