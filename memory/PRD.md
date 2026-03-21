@@ -1,176 +1,148 @@
 # Zitex - منصة الإبداع بالذكاء الاصطناعي
 
 ## Problem Statement
-منصة متكاملة لإنشاء المواقع وتوليد الصور والفيديوهات باستخدام الذكاء الاصطناعي، مع نظام اشتراكات ونقاط ودعم الدفع البنكي السعودي و PayPal.
+منصة متكاملة للمحادثة مع الذكاء الاصطناعي لتوليد الصور والفيديوهات السينمائية وبناء المواقع، مع حفظ جميع المشاريع والمحادثات للأبد.
 
 ## Architecture
 - **Frontend**: React 19 + Tailwind CSS + Shadcn UI
-- **Backend**: FastAPI (Python)
-- **Database**: MongoDB
+- **Backend**: FastAPI (Python) + Modular Services
+- **Database**: MongoDB (sessions, assets, users)
 - **AI Integration**: 
-  - GPT-5.2 (النصوص والاقتراحات)
+  - GPT-4o (المحادثة الذكية)
   - Gemini Nano Banana (توليد الصور)
-  - ElevenLabs (تحويل النص إلى صوت - TTS)
-  - Sora 2 (توليد الفيديو - مهيأ)
-- **Notifications**: WhatsApp via CallMeBot API (MOCKED)
+  - Sora 2 (فيديوهات سينمائية 4K)
+  - ElevenLabs (تحويل النص إلى صوت)
 
 ## User Personas
-1. **المالك (Owner)**: صلاحيات كاملة مجانية، إدارة الموقع، إشعارات واتساب، إدارة الأدوار
-2. **مدير أعلى (Super Admin)**: إدارة المستخدمين والطلبات والمدفوعات
+1. **المالك (Owner)**: صلاحيات كاملة مجانية
+2. **مدير أعلى (Super Admin)**: إدارة المستخدمين والطلبات
 3. **مدير (Admin)**: إدارة الطلبات والمدفوعات
-4. **العميل (Client)**: إنشاء مواقع، توليد صور/فيديو بالاشتراك أو الدفع الفردي
+4. **العميل (Client)**: استخدام الخدمات عبر الشات
 
-## Role Hierarchy
-| الدور | المستوى | الصلاحيات |
-|-------|---------|-----------|
-| owner | 100 | جميع الصلاحيات + نقل الملكية |
-| super_admin | 80 | إدارة المستخدمين + تعيين المدراء |
-| admin | 50 | إدارة الطلبات والمدفوعات |
-| client | 10 | استخدام الخدمات |
+## Core Features
 
-## Core Requirements
-- ✅ تصميم RTL عربي كامل
-- ✅ شعار Zitex على شكل حرف Z
-- ✅ نظام مصادقة JWT
-- ✅ لوحات التحكم (عميل + أدمن)
-- ✅ نظام الاشتراكات (صور/فيديو)
-- ✅ نظام النقاط لإنشاء المواقع
-- ✅ نظام الدفع اليدوي (بنكي + PayPal)
-- ✅ صفحة الأسعار المفصلة
-- ✅ حساب مالك مجاني
-- ✅ 3 صور مجانية لكل عميل جديد
-- ✅ 3 فيديوهات مجانية لكل عميل جديد
-- ✅ تجربة إنشاء موقع محدودة مجانية
-- ✅ إشعارات واتساب عند كل دفعة (MOCKED)
+### 🤖 نظام الشات الذكي (جديد - المرحلة 1 + 2)
+- **محادثة تفاعلية**: تحدث مع AI باللغة العربية
+- **توليد الصور**: "أريد صورة لقطة جميلة" → AI يولد الصورة
+- **فيديوهات سينمائية**: Sora 2 بجودة 4K (4/8/12 ثانية)
+- **تعليق صوتي**: ElevenLabs بأصوات واقعية متعددة اللغات
+- **بناء المواقع**: AI يبني كود React/HTML كامل
+- **حفظ المشاريع**: جميع المحادثات والأصول محفوظة للأبد
+- **تحميل الأصول**: صور PNG، فيديو MP4، صوت MP3، كود JSON
 
-## What's Been Implemented (March 2026)
+### API Structure (New)
+```
+/api/chat/
+  ├── sessions (POST) - إنشاء جلسة جديدة
+  ├── sessions (GET) - استرجاع جلسات المستخدم
+  ├── sessions/{id} (GET) - استرجاع جلسة مع الرسائل
+  ├── sessions/{id} (DELETE) - أرشفة جلسة
+  ├── sessions/{id}/messages (POST) - إرسال رسالة
+  ├── sessions/{id}/assets (GET) - أصول الجلسة
+  └── voices (GET) - الأصوات المتاحة
+```
 
-### Advanced Creative Suite (جديد)
-- ✅ **تعديل الصور**: رفع صورة وإضافة نص عليها
-  - اختيار موقع النص (أعلى/وسط/أسفل)
-  - اختيار لون النص
-  - تحديد حجم الخط
-  - تحميل الصورة المعدلة
+### Session Types
+| النوع | الوصف | الأوامر |
+|-------|-------|---------|
+| general | محادثة عامة | جميع الأوامر |
+| image | توليد الصور | [GENERATE_IMAGE: prompt] |
+| video | فيديوهات سينمائية | [GENERATE_VIDEO: prompt] |
+| website | بناء المواقع | [GENERATE_WEBSITE: requirements] |
 
-- ✅ **التعليق الصوتي للفيديو**: 
-  - اختيار من 9+ أصوات (ElevenLabs)
-  - معاينة الصوت قبل التوليد
-  - دعم متعدد اللغات (عربي/إنجليزي)
-  - ملاحظة: ElevenLabs free tier قد يكون محدوداً
+### Video Settings (Sora 2)
+- **المدة**: 4، 8، أو 12 ثانية
+- **الدقة**: 
+  - 1280x720 (HD أفقي)
+  - 1792x1024 (عريض)
+  - 1024x1792 (عمودي)
+  - 1024x1024 (مربع)
+- **وقت التوليد**: 2-5 دقائق
 
-- ✅ **أزرار التحميل**: 
-  - تحميل الصور المُنشأة والمعدلة
-  - تحميل الفيديوهات والصوت
-  - تسجيل التحميلات في سجل النشاط
+### Code Architecture (Updated)
+```
+/app/backend/
+  ├── server.py          # Main FastAPI app
+  ├── models/
+  │   ├── __init__.py
+  │   └── chat_models.py # ChatSession, ChatMessage, etc.
+  ├── services/
+  │   ├── __init__.py
+  │   └── ai_chat_service.py # AIAssistant class
+  └── routers/
+      ├── __init__.py
+      └── chat_router.py  # Chat API endpoints
 
-### Admin Controls (جديد)
-- ✅ **سجل النشاط العام** `/admin/activity`:
-  - عرض جميع الأنشطة على المنصة
-  - فلتر حسب النوع (صور/فيديو/مدفوعات/إلخ)
-  - بحث بالاسم أو البريد
+/app/frontend/src/
+  ├── App.js
+  ├── components/
+  │   └── Navbar.js      # مع زر "الشات الذكي"
+  └── pages/
+      ├── AIChat.js      # صفحة الشات الجديدة (جديد)
+      ├── ImageGenerator.js
+      ├── VideoGenerator.js
+      └── ... (other pages)
+```
 
-- ✅ **إدارة المستخدمين المحسنة** `/admin/clients`:
-  - عرض سجل نشاط كل مستخدم
-  - تغيير أدوار المستخدمين (client/admin/super_admin)
-  - تفعيل/تعطيل الحسابات
-  - إضافة نقاط وتجارب مجانية
-  - نقل الملكية (للمالك فقط)
+## What's Been Implemented
 
-### Free Trials System
-- كل مستخدم جديد يحصل على:
-  - 3 صور مجانية
-  - 3 فيديوهات مجانية
-  - تجربة موقع واحدة (معاينة محدودة)
+### ✅ المرحلة 1 + 2 (مارس 2026)
+- [x] نظام شات تفاعلي مع GPT-4o
+- [x] توليد صور عبر المحادثة (Gemini)
+- [x] دعم فيديوهات Sora 2 (جاهز للتشغيل)
+- [x] تعليق صوتي ElevenLabs (جاهز)
+- [x] بناء مواقع عبر الشات (جاهز)
+- [x] حفظ المحادثات في MongoDB
+- [x] أزرار تحميل لجميع الأصول
+- [x] واجهة شات احترافية RTL
+- [x] زر "الشات الذكي" في Navbar
 
-### Backend APIs
-- `/api/auth/*` - تسجيل، دخول، معلومات المستخدم
-- `/api/voices` - قائمة الأصوات المتاحة للتعليق الصوتي
-- `/api/tts/generate` - تحويل النص إلى صوت (ElevenLabs)
-- `/api/generate/image` - توليد الصور
-- `/api/images/edit` - تعديل الصور وإضافة نص
-- `/api/images/upload-edit` - رفع صورة وتعديلها
-- `/api/generate/video` - توليد الفيديو مع تعليق صوتي
-- `/api/download/log` - تسجيل التحميلات
-- `/api/requests/*` - إنشاء وإدارة طلبات المواقع
-- `/api/payments/*` - إدارة المدفوعات
-- `/api/websites/*` - إدارة المواقع المنجزة
-- `/api/pricing` - عرض الأسعار
-- `/api/admin/stats` - إحصائيات لوحة التحكم
-- `/api/admin/users` - قائمة المستخدمين
-- `/api/admin/users/{id}/activity` - سجل نشاط مستخدم
-- `/api/admin/users/{id}/role` - تغيير دور المستخدم
-- `/api/admin/users/{id}/deactivate` - تعطيل حساب
-- `/api/admin/users/{id}/activate` - تفعيل حساب
-- `/api/admin/users/{id}/add-credits` - إضافة نقاط
-- `/api/admin/users/{id}/add-free-trials` - إضافة تجارب مجانية
-- `/api/admin/activity` - سجل النشاط العام
-- `/api/admin/settings/payment` - إعدادات الدفع
+### ✅ الميزات السابقة
+- [x] نظام مصادقة JWT
+- [x] لوحات التحكم (عميل + أدمن)
+- [x] نظام التجارب المجانية
+- [x] صفحة الأسعار
+- [x] إدارة المستخدمين والأدوار
+- [x] سجل النشاط
+- [x] صفحات توليد الصور والفيديو (القديمة)
 
-### Frontend Pages
-- `/` - الصفحة الرئيسية
-- `/login`, `/register` - المصادقة
-- `/pricing` - الأسعار والباقات
-- `/dashboard` - لوحة تحكم العميل
-- `/dashboard/new-request` - طلب موقع جديد
-- `/dashboard/requests` - طلباتي
-- `/dashboard/websites` - مواقعي
-- `/dashboard/images` - توليد وتعديل الصور
-- `/dashboard/videos` - إنشاء الفيديو مع التعليق الصوتي
-- `/admin` - لوحة تحكم الأدمن
-- `/admin/requests` - إدارة الطلبات
-- `/admin/payments` - إدارة المدفوعات
-- `/admin/clients` - إدارة المستخدمين (محسنة)
-- `/admin/websites` - إدارة المواقع
-- `/admin/settings` - إعدادات الدفع + واتساب
-- `/admin/activity` - سجل النشاط العام (جديد)
-
-### Pricing Structure
-| الخدمة | السعر الشهري | السعر الفردي | مجاني |
-|--------|--------------|--------------|-------|
-| توليد الصور | 100 ريال | 10 ريال/صورة | 3 صور |
-| إنشاء الفيديو | 150 ريال | 20 ريال/فيديو | 3 فيديو |
-| إنشاء المواقع | نظام نقاط | 50-300 نقطة | تجربة 1 |
-
-### Credits Packages
-- باقة المبتدئ: 100 نقطة = 50 ريال
-- باقة المحترف: 500 نقطة = 200 ريال
-- باقة الأعمال: 2000 نقطة = 700 ريال
+## Test Results (Latest)
+- **Backend**: 100% (16/16 tests passed)
+- **Frontend**: 100% (all features working)
+- **Test File**: `/app/test_reports/iteration_4.json`
 
 ## Owner Account
 - **Email**: owner@zitex.com
 - **Password**: owner123
-- **Role**: owner + is_owner = true
-- **WhatsApp**: 966507374438
+- **Role**: owner (unlimited access)
 
 ## Known Limitations
-- **ElevenLabs TTS**: Free tier قد يكون محدوداً ("Unusual activity detected")
-- **WhatsApp**: إشعارات WhatsApp مُحاكاة (MOCKED) باستخدام CallMeBot placeholder
+- **Sora 2**: توليد الفيديو يستغرق 2-5 دقائق
+- **ElevenLabs**: Free tier محدود
+- **WhatsApp**: إشعارات مُحاكاة (MOCKED)
+- **Website Deployment**: لم يُنفذ بعد (المرحلة 3)
 
 ## Prioritized Backlog
 
-### P0 (Critical) - ✅ DONE
-- نظام المصادقة
-- لوحات التحكم
-- التجارب المجانية
-- توليد الصور والفيديو
-- تعديل الصور وإضافة النص
-- التعليق الصوتي للفيديو
-- سجل النشاط وإدارة الأدوار
+### P0 (Done) ✅
+- نظام الشات الذكي
+- توليد الصور والفيديو عبر المحادثة
+- حفظ المشاريع
 
 ### P1 (High Priority)
-- تكامل PayPal للدفع الدولي
-- نظام النقاط/الرصيد لإنشاء المواقع
-- إشعارات البريد الإلكتروني
+- **المرحلة 3**: نظام deployment للمواقع
+- تكامل PayPal
+- نظام النقاط/الرصيد
 
 ### P2 (Medium Priority)
-- ترقية ElevenLabs إلى paid plan
+- ترقية ElevenLabs
 - تقارير متقدمة
 - دعم لغات متعددة (i18n)
 
-## Test Reports
-- `/app/test_reports/iteration_1.json`
-- `/app/test_reports/iteration_2.json`
-- `/app/test_reports/iteration_3.json` (أحدث)
+## URLs
+- **Frontend**: https://creative-suite-test.preview.emergentagent.com
+- **Chat Page**: /chat
+- **API Docs**: /docs
 
 ## Last Updated
-March 18, 2026
+March 21, 2026
