@@ -20,6 +20,7 @@ import AdminWebsites from '@/pages/AdminWebsites';
 import AdminSettings from '@/pages/AdminSettings';
 import AdminActivity from '@/pages/AdminActivity';
 import AIChat from '@/pages/AIChat';
+import ProjectsPage from '@/pages/ProjectsPage';
 import '@/App.css';
 
 function App() {
@@ -83,6 +84,7 @@ function App() {
           <Route path="/admin/settings" element={<ProtectedRoute adminOnly><AdminSettings user={user} /></ProtectedRoute>} />
           <Route path="/admin/activity" element={<ProtectedRoute adminOnly><AdminActivity user={user} /></ProtectedRoute>} />
           <Route path="/chat" element={<ProtectedRoute><AIChat user={user} /></ProtectedRoute>} />
+          <Route path="/projects" element={<ProtectedRoute><ProjectsPage user={user} /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
       <Toaster position="top-center" richColors />

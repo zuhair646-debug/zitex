@@ -214,7 +214,7 @@ class AIAssistant:
             generation_result = await self._handle_website_generation(ai_response, user_id, session_id, settings)
             if generation_result:
                 attachments.append(generation_result)
-                ai_response = re.sub(r'\[GENERATE_WEBSITE:[^\]]+\]', '', ai_response)
+                ai_response = re.sub(r'\[GENERATE_WEBSITE:[\s\S]+?\]', '', ai_response)
                 ai_response += "\n\n✅ تم إنشاء الموقع! يمكنك تحميل الكود."
         
         # إنشاء رسالة المساعد
@@ -457,33 +457,30 @@ class AIAssistant:
     ) -> Optional[Dict]:
         """معالجة إنشاء الموقع"""
         try:
-            match = re.search(r'\[GENERATE_WEBSITE:\s*(.+?)\]', response)
+            # استخدام re.DOTALL للتعامل مع الأسطر المتعددة
+            match = re.search(r'\[GENERATE_WEBSITE:\s*([\s\S]+?)\]', response)
             if not match:
                 return None
             
             requirements = match.group(1).strip()
+            logger.info(f"Generating website with requirements: {requirements[:100]}...")
             
             # استخدام GPT لإنشاء كود الموقع
             chat = LlmChat(
                 api_key=self.api_key,
                 session_id=f"web-{uuid.uuid4()}",
-                system_message="""أنت مطور ويب محترف. قم بإنشاء موقع ويب كامل باستخدام React وTailwind CSS.
-                
-أنشئ ملفات:
-1. App.jsx - المكون الرئيسي
-2. index.css - الأنماط
-3. components/ - المكونات الفرعية
+                system_message="""أنت مطور ويب محترف. أنشئ موقع ويب كامل بـ React + Tailwind CSS.
 
-أرجع الكود بصيغة JSON:
+أرجع JSON فقط بهذا الشكل:
 {
     "files": {
-        "App.jsx": "...",
-        "index.css": "...",
-        "components/Header.jsx": "...",
-        ...
+        "App.jsx": "// الكود هنا",
+        "index.css": "/* الأنماط */"
     },
-    "instructions": "تعليمات التشغيل"
-}"""
+    "instructions": "npm install && npm start"
+}
+
+مهم: أرجع JSON صالح فقط، بدون أي نص إضافي!"""
             ).with_model("openai", "gpt-4o")
             
             code_response = await chat.send_message(UserMessage(text=f"أنشئ موقع ويب بالمتطلبات التالية:\n{requirements}"))

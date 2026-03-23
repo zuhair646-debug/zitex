@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { LogOut, LayoutDashboard, Shield, Menu, X, MessageSquare } from 'lucide-react';
+import { LogOut, LayoutDashboard, Shield, Menu, X, MessageSquare, Rocket } from 'lucide-react';
 
 export const ZitexLogo = ({ size = 'md', light = false }) => {
   const sizes = {
@@ -71,6 +71,15 @@ export const Navbar = ({ user, transparent = false, setUser }) => {
                 >
                   <MessageSquare className="w-4 h-4 me-2" />
                   الشات الذكي
+                </Button>
+                <Button
+                  variant={transparent ? "outline" : "ghost"}
+                  onClick={() => navigate('/projects')}
+                  data-testid="navbar-projects-btn"
+                  className={transparent ? 'border-green-500/50 text-green-400 hover:bg-green-500/20' : 'text-green-400'}
+                >
+                  <Rocket className="w-4 h-4 me-2" />
+                  مشاريعي
                 </Button>
                 <Button
                   variant={transparent ? "outline" : "ghost"}
