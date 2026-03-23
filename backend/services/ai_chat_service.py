@@ -22,49 +22,61 @@ logger = logging.getLogger(__name__)
 
 # System prompts for different modes
 SYSTEM_PROMPTS = {
-    "general": """أنت مساعد إبداعي ذكي اسمه "زيتكس". تساعد المستخدمين في:
-- توليد صور احترافية
-- إنشاء فيديوهات سينمائية
-- بناء مواقع ويب
-- إضافة تعليق صوتي
+    "general": """أنت "زيتكس" - مساعد إبداعي يملك قدرات فعلية لتوليد المحتوى.
 
-عند طلب صورة: اطلب تفاصيل إضافية إذا لزم الأمر، ثم قل [GENERATE_IMAGE: وصف الصورة بالإنجليزية]
-عند طلب فيديو: اسأل عن المدة والأسلوب، ثم قل [GENERATE_VIDEO: وصف الفيديو بالإنجليزية]
-عند طلب موقع: اسأل عن نوع الموقع والمتطلبات، ثم قل [GENERATE_WEBSITE: وصف الموقع]
-عند طلب صوت: اسأل عن النص والصوت المطلوب، ثم قل [GENERATE_AUDIO: النص]
+🎨 قدراتك:
+1. توليد صور فوراً (Gemini AI)
+2. إنشاء فيديوهات سينمائية (Sora 2)
+3. تحويل النص إلى صوت (ElevenLabs)
+4. بناء مواقع ويب
 
-أجب دائماً بالعربية بشكل ودود ومحترف. ساعد المستخدم خطوة بخطوة.""",
+⚡ مهم: عندما يطلب المستخدم شيء، نفّذه مباشرة! لا تسأل أسئلة كثيرة.
 
-    "image": """أنت خبير في توليد الصور بالذكاء الاصطناعي. ساعد المستخدم في:
-- وصف الصورة المطلوبة بدقة
-- اختيار الأسلوب (واقعي، فني، أنيمي، إلخ)
-- تعديل الصور الموجودة
+📝 الأوامر:
+- للصورة: [GENERATE_IMAGE: وصف بالإنجليزية]
+- للفيديو: [GENERATE_VIDEO: وصف بالإنجليزية | duration:12]
+- للصوت: [GENERATE_AUDIO: النص]
+- للموقع: [GENERATE_WEBSITE: الوصف]
 
-عندما تكون جاهزاً للتوليد، قل [GENERATE_IMAGE: وصف تفصيلي بالإنجليزية]
-أجب بالعربية.""",
+مثال: إذا قال "صورة قطة" → اكتب فوراً:
+[GENERATE_IMAGE: A beautiful white cat sitting elegantly, photorealistic, soft lighting, high quality]
 
-    "video": """أنت مخرج سينمائي محترف. ساعد المستخدم في:
-- كتابة سيناريو الفيديو
-- اختيار المدة (4، 8، أو 12 ثانية)
-- تحديد الأبعاد (أفقي، عمودي، مربع)
-- إضافة تعليق صوتي
+🎬 للفيديو الطويل (دقيقة = 5 مشاهد):
+[GENERATE_VIDEO: Scene 1 description | duration:12]
+[GENERATE_VIDEO: Scene 2 description | duration:12]
+... وهكذا
 
-عندما تكون جاهزاً، قل [GENERATE_VIDEO: وصف المشهد بالإنجليزية | duration:X | size:WxH]
-للصوت قل [GENERATE_AUDIO: النص | voice_id:ID]
-أجب بالعربية.""",
+أجب بالعربية. نفّذ فوراً.""",
 
-    "website": """أنت مطور ويب محترف. ساعد المستخدم في:
-- فهم متطلبات الموقع
-- اختيار التصميم المناسب
-- بناء صفحات الموقع
+    "image": """أنت خبير توليد صور في زيتكس.
 
-اسأل عن:
-1. نوع الموقع (شخصي، تجاري، متجر، محفظة أعمال)
-2. الألوان المفضلة
-3. المحتوى الأساسي
+⚡ عندما يطلب صورة، نفّذ فوراً:
+[GENERATE_IMAGE: وصف تفصيلي بالإنجليزية، photorealistic، high quality]
 
-عندما تكون جاهزاً، قل [GENERATE_WEBSITE: وصف الموقع ومتطلباته]
-أجب بالعربية."""
+مثال: "قطة" → [GENERATE_IMAGE: A cute white cat with blue eyes, sitting gracefully, soft natural lighting, photorealistic, 4K quality]
+
+لا تسأل - نفّذ مباشرة!""",
+
+    "video": """أنت مخرج سينمائي في زيتكس.
+
+⚡ عندما يطلب فيديو، نفّذ فوراً:
+[GENERATE_VIDEO: وصف المشهد بالإنجليزية، cinematic | duration:12 | size:1280x720]
+
+🎬 لفيديو دقيقة (5 مشاهد × 12 ثانية):
+[GENERATE_VIDEO: Scene 1 - Opening | duration:12]
+[GENERATE_VIDEO: Scene 2 - Development | duration:12]
+[GENERATE_VIDEO: Scene 3 - Middle | duration:12]
+[GENERATE_VIDEO: Scene 4 - Climax | duration:12]
+[GENERATE_VIDEO: Scene 5 - Closing | duration:12]
+
+لا تسأل - نفّذ مباشرة!""",
+
+    "website": """أنت مطور ويب في زيتكس.
+
+⚡ عندما يطلب موقع، نفّذ فوراً:
+[GENERATE_WEBSITE: وصف الموقع بالتفصيل]
+
+لا تسأل - نفّذ مباشرة!"""
 }
 
 
@@ -172,12 +184,24 @@ class AIAssistant:
                 ai_response = re.sub(r'\[GENERATE_IMAGE:[^\]]+\]', '', ai_response)
                 ai_response += "\n\n✅ تم توليد الصورة بنجاح!"
         
-        elif "[GENERATE_VIDEO:" in ai_response:
-            generation_result = await self._handle_video_generation(ai_response, user_id, session_id, settings)
-            if generation_result:
-                attachments.append(generation_result)
-                ai_response = re.sub(r'\[GENERATE_VIDEO:[^\]]+\]', '', ai_response)
-                ai_response += "\n\n✅ تم توليد الفيديو بنجاح!"
+        # دعم توليد فيديوهات متعددة (لفيديو دقيقة كاملة)
+        video_matches = re.findall(r'\[GENERATE_VIDEO:[^\]]+\]', ai_response)
+        if video_matches:
+            video_count = len(video_matches)
+            ai_response = re.sub(r'\[GENERATE_VIDEO:[^\]]+\]', '', ai_response)
+            
+            if video_count > 1:
+                ai_response += f"\n\n🎬 جاري توليد {video_count} مشاهد فيديو... (قد يستغرق عدة دقائق)"
+            
+            for i, video_cmd in enumerate(video_matches):
+                generation_result = await self._handle_video_generation(video_cmd, user_id, session_id, settings)
+                if generation_result:
+                    generation_result["scene_number"] = i + 1
+                    generation_result["total_scenes"] = video_count
+                    attachments.append(generation_result)
+            
+            if attachments:
+                ai_response += f"\n\n✅ تم توليد {len([a for a in attachments if a.get('type') == 'video'])} فيديو بنجاح!"
         
         elif "[GENERATE_AUDIO:" in ai_response:
             generation_result = await self._handle_audio_generation(ai_response, user_id, session_id, settings)
@@ -279,28 +303,40 @@ class AIAssistant:
     ) -> Optional[Dict]:
         """معالجة توليد الفيديو"""
         try:
+            # استخراج الأمر من النص
             match = re.search(r'\[GENERATE_VIDEO:\s*(.+?)\]', response)
             if not match:
-                return None
+                # إذا كان response هو الأمر نفسه
+                if response.startswith('[GENERATE_VIDEO:'):
+                    match = re.search(r'\[GENERATE_VIDEO:\s*(.+?)\]', response)
+                if not match:
+                    return None
             
             full_prompt = match.group(1).strip()
             
             # تحليل الإعدادات من النص
             prompt = full_prompt
-            duration = settings.get("duration", 4)
+            duration = settings.get("duration", 12)  # 12 ثانية كافتراضي للجودة
             size = settings.get("size", "1280x720")
             
             if "|" in full_prompt:
                 parts = full_prompt.split("|")
                 prompt = parts[0].strip()
                 for part in parts[1:]:
+                    part = part.strip().lower()
                     if "duration:" in part:
                         try:
-                            duration = int(part.split(":")[1].strip())
+                            dur = int(part.split(":")[1].strip())
+                            if dur in [4, 8, 12]:
+                                duration = dur
                         except (ValueError, IndexError):
                             pass
                     elif "size:" in part:
-                        size = part.split(":")[1].strip()
+                        s = part.split(":")[1].strip()
+                        if s in ["1280x720", "1792x1024", "1024x1792", "1024x1024"]:
+                            size = s
+            
+            logger.info(f"Generating video: prompt='{prompt[:50]}...', duration={duration}, size={size}")
             
             # توليد الفيديو باستخدام Sora 2
             video_gen = OpenAIVideoGeneration(api_key=self.api_key)
@@ -310,7 +346,7 @@ class AIAssistant:
                 model="sora-2",
                 size=size,
                 duration=duration,
-                max_wait_time=600
+                max_wait_time=900  # 15 دقيقة للفيديوهات الطويلة
             )
             
             if video_bytes:
