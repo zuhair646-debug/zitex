@@ -729,6 +729,8 @@ const AIChat = ({ user }) => {
                           <option value={4}>4 ثواني</option>
                           <option value={8}>8 ثواني</option>
                           <option value={12}>12 ثانية</option>
+                          <option value={50}>50 ثانية</option>
+                          <option value={60}>دقيقة كاملة</option>
                         </select>
                       </div>
                       <div className="flex items-center gap-2">

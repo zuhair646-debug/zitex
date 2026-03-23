@@ -211,7 +211,7 @@ class AIAssistant:
                             if "duration:" in part:
                                 try:
                                     dur = int(part.split(":")[1].strip())
-                                    if dur in [4, 8, 12]:
+                                    if dur in [4, 8, 12, 50, 60]:
                                         duration = dur
                                 except:
                                     pass
@@ -374,7 +374,7 @@ class AIAssistant:
                     if "duration:" in part:
                         try:
                             dur = int(part.split(":")[1].strip())
-                            if dur in [4, 8, 12]:
+                            if dur in [4, 8, 12, 50, 60]:
                                 duration = dur
                         except (ValueError, IndexError):
                             pass
