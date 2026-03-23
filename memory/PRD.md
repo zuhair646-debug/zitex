@@ -18,10 +18,16 @@
 ### ✅ المرحلة 1+2: الشات الذكي
 - [x] شات AI تفاعلي باللغة العربية
 - [x] توليد صور فوري عبر المحادثة
-- [x] توليد فيديوهات سينمائية (Sora 2)
+- [x] توليد فيديوهات سينمائية (Sora 2) - **تم إصلاحه March 23, 2026**
 - [x] بناء مواقع عبر الشات
 - [x] حفظ جميع المحادثات والمشاريع
 - [x] أزرار تحميل لجميع الأصول
+
+### ✅ إصلاحات March 23, 2026
+- [x] **إصلاح توليد الفيديو**: تم تحويله إلى background task مع polling
+- [x] **إضافة آلية Polling**: Frontend يتحقق من حالة الفيديو كل 5 ثواني
+- [x] **شريط حالة الفيديو**: يظهر عند وجود طلبات معلقة
+- [x] **إصلاح layout**: تصحيح مشكلة عرض الرسائل في منطقة الدردشة
 
 ### ✅ المرحلة 3: النشر والتوزيع
 - [x] صفحة المشاريع `/projects`
@@ -39,6 +45,8 @@ GET  /api/chat/sessions          - قائمة الجلسات
 GET  /api/chat/sessions/{id}     - جلسة محددة
 POST /api/chat/sessions/{id}/messages - إرسال رسالة
 DELETE /api/chat/sessions/{id}   - حذف جلسة
+GET  /api/chat/video-requests    - طلبات الفيديو المعلقة (جديد)
+GET  /api/chat/video-requests/{id} - حالة طلب فيديو محدد (جديد)
 ```
 
 ### Deployment API
@@ -56,7 +64,16 @@ GET  /api/deploy/projects/{id}/download - تحميل ZIP
   - 1792x1024 (عريض)
   - 1024x1792 (عمودي)
   - 1024x1024 (مربع)
-- **الوقت**: 2-5 دقائق للتوليد
+- **الوقت**: 2-5 دقائق للتوليد (Background Task)
+
+## نظام توليد الفيديو (محدث)
+1. المستخدم يطلب فيديو عبر الشات
+2. Backend يُنشئ `video_request` في قاعدة البيانات
+3. يُرسل رسالة فورية للمستخدم "جاري التوليد..."
+4. يبدأ توليد الفيديو في الخلفية (Background Task)
+5. Frontend يبدأ polling كل 5 ثواني للتحقق من الحالة
+6. عند الانتهاء، يُحفظ الفيديو ويُضاف كرسالة جديدة
+7. Frontend يُحدث الشاشة تلقائياً لعرض الفيديو
 
 ## الصفحات
 - `/` - الصفحة الرئيسية
@@ -72,14 +89,44 @@ GET  /api/deploy/projects/{id}/download - تحميل ZIP
 - **Password**: owner123
 
 ## ملاحظات تقنية
-- توليد الفيديو يستغرق 2-5 دقائق (Sora 2)
+- توليد الفيديو يستغرق 2-5 دقائق (Sora 2) - يعمل في الخلفية
 - الصور تُنشأ فوراً (Gemini)
 - المواقع تُنشأ في ثوانٍ (GPT-4o)
+- Polling يتحقق من حالة الفيديو كل 5 ثواني
 
 ## المهام المتبقية
 - [ ] تكامل PayPal للدفع الدولي
 - [ ] نظام النقاط/الرصيد
 - [ ] إشعارات WhatsApp حقيقية
+- [ ] إصلاح مشكلة تسجيل الخروج (قد لا يمسح الـ token بشكل صحيح)
+- [ ] إضافة toast لأخطاء تسجيل الدخول
+
+## Code Architecture
+```
+/app/
+├── backend/
+│   ├── .env
+│   ├── requirements.txt
+│   ├── server.py
+│   ├── models/
+│   │   └── chat_models.py
+│   ├── services/
+│   │   ├── ai_chat_service.py  # Video background task + polling
+│   │   └── deployment_service.py
+│   ├── routers/
+│   │   ├── chat_router.py      # Video-requests endpoints
+│   │   └── deployment_router.py
+│   └── tests/
+│       └── test_video_polling.py
+├── frontend/
+│   ├── .env
+│   ├── package.json
+│   └── src/
+│       └── pages/
+│           └── AIChat.js       # Polling logic + pending video indicator
+└── memory/
+    └── PRD.md
+```
 
 ## آخر تحديث
-March 23, 2026
+March 23, 2026 - إصلاح كامل لتوليد الفيديو مع آلية Polling

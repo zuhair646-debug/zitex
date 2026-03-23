@@ -214,3 +214,40 @@ async def get_available_voices(
         {"voice_id": "XB0fDUnXU5powFXDhCwa", "name": "Charlotte", "gender": "female", "language": "en", "accent": "British"},
     ]
     return {"voices": voices}
+
+
+
+@router.get("/video-requests")
+async def get_video_requests(
+    session_id: str = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """استرجاع طلبات الفيديو"""
+    if not ai_assistant:
+        raise HTTPException(status_code=503, detail="AI service not available")
+    
+    requests = await ai_assistant.get_video_requests(
+        user_id=current_user['user_id'],
+        session_id=session_id
+    )
+    return requests
+
+
+@router.get("/video-requests/{request_id}")
+async def get_video_request(
+    request_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """استرجاع طلب فيديو محدد"""
+    if not ai_assistant:
+        raise HTTPException(status_code=503, detail="AI service not available")
+    
+    request = await ai_assistant.db.video_requests.find_one(
+        {"id": request_id, "user_id": current_user['user_id']},
+        {"_id": 0}
+    )
+    
+    if not request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    
+    return request

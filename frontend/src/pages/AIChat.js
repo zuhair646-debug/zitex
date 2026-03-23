@@ -101,6 +101,7 @@ const AIChat = ({ user }) => {
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isTyping, setIsTyping] = useState(false);
+  const [pendingVideoRequests, setPendingVideoRequests] = useState([]);
   const [generationSettings, setGenerationSettings] = useState({
     duration: 4,
     size: '1280x720',
@@ -110,10 +111,84 @@ const AIChat = ({ user }) => {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const audioRef = useRef(null);
+  const pollingIntervalRef = useRef(null);
 
   useEffect(() => {
     fetchSessions();
   }, []);
+
+  // Polling for video requests status
+  useEffect(() => {
+    if (pendingVideoRequests.length > 0 && currentSession) {
+      // Start polling every 5 seconds
+      pollingIntervalRef.current = setInterval(async () => {
+        await checkVideoRequestsStatus();
+      }, 5000);
+      
+      return () => {
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+        }
+      };
+    }
+  }, [pendingVideoRequests, currentSession]);
+
+  const checkVideoRequestsStatus = useCallback(async () => {
+    if (!currentSession || pendingVideoRequests.length === 0) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(
+        `${process.env.REACT_APP_BACKEND_URL}/api/chat/video-requests?session_id=${currentSession.id}`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
+      
+      if (res.ok) {
+        const requests = await res.json();
+        const completedRequests = requests.filter(r => r.status === 'completed');
+        const stillPending = requests.filter(r => r.status === 'pending' || r.status === 'processing');
+        const failedRequests = requests.filter(r => r.status === 'failed');
+        
+        // Handle completed videos - reload session to get new messages
+        if (completedRequests.length > 0) {
+          const newlyCompleted = completedRequests.filter(
+            r => pendingVideoRequests.some(p => p.id === r.id)
+          );
+          
+          if (newlyCompleted.length > 0) {
+            toast.success(`✅ تم توليد ${newlyCompleted.length} فيديو بنجاح!`);
+            // Reload the session to get new messages with videos
+            await loadSession(currentSession.id);
+          }
+        }
+        
+        // Handle failed requests
+        if (failedRequests.length > 0) {
+          const newlyFailed = failedRequests.filter(
+            r => pendingVideoRequests.some(p => p.id === r.id)
+          );
+          
+          if (newlyFailed.length > 0) {
+            newlyFailed.forEach(r => {
+              toast.error(`❌ فشل توليد الفيديو: ${r.error || 'خطأ غير معروف'}`);
+            });
+          }
+        }
+        
+        // Update pending requests
+        const stillPendingIds = stillPending.map(r => r.id);
+        setPendingVideoRequests(prev => prev.filter(p => stillPendingIds.includes(p.id)));
+        
+        // Stop polling if no more pending requests
+        if (stillPending.length === 0 && pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+      }
+    } catch (error) {
+      console.error('Error checking video requests:', error);
+    }
+  }, [currentSession, pendingVideoRequests]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -154,6 +229,7 @@ const AIChat = ({ user }) => {
       setSessions(prev => [session, ...prev]);
       setCurrentSession(session);
       setMessages([]);
+      setPendingVideoRequests([]); // Clear pending requests for new session
       toast.success('تم إنشاء محادثة جديدة');
     } catch (error) {
       toast.error('فشل إنشاء المحادثة');
@@ -169,6 +245,17 @@ const AIChat = ({ user }) => {
       const session = await res.json();
       setCurrentSession(session);
       setMessages(session.messages || []);
+      
+      // Check for pending video requests when loading session
+      const videoRes = await fetch(
+        `${process.env.REACT_APP_BACKEND_URL}/api/chat/video-requests?session_id=${sessionId}`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
+      if (videoRes.ok) {
+        const requests = await videoRes.json();
+        const pending = requests.filter(r => r.status === 'pending' || r.status === 'processing');
+        setPendingVideoRequests(pending);
+      }
     } catch (error) {
       toast.error('فشل تحميل المحادثة');
     }
@@ -216,6 +303,15 @@ const AIChat = ({ user }) => {
           const filtered = prev.filter(m => m.id !== tempUserMsg.id);
           return [...filtered, data.user_message, data.assistant_message];
         });
+
+        // Check for pending video requests in the response
+        const videoPendingAttachment = data.assistant_message?.attachments?.find(
+          a => a.type === 'video_pending'
+        );
+        if (videoPendingAttachment && videoPendingAttachment.requests) {
+          setPendingVideoRequests(prev => [...prev, ...videoPendingAttachment.requests]);
+          toast.info('🎬 جاري توليد الفيديو في الخلفية... سيظهر تلقائياً عند الانتهاء');
+        }
 
         if (sessions.find(s => s.id === currentSession.id)?.message_count === 0) {
           setSessions(prev => prev.map(s => 
@@ -387,6 +483,26 @@ const AIChat = ({ user }) => {
           </div>
         );
       
+      case 'video_pending':
+        return (
+          <div className="mt-3 p-4 bg-orange-500/20 border border-orange-500/50 rounded-xl animate-pulse">
+            <div className="flex items-center gap-3 mb-2">
+              <Loader2 className="w-6 h-6 text-orange-400 animate-spin" />
+              <span className="text-orange-300 font-semibold">جاري توليد الفيديو...</span>
+            </div>
+            <p className="text-sm text-orange-200/80">{attachment.message || 'يستغرق التوليد 2-5 دقائق'}</p>
+            <div className="mt-3 space-y-2">
+              {attachment.requests?.map((req, i) => (
+                <div key={req.id} className="flex items-center gap-2 text-xs text-orange-200/60">
+                  <span className="w-2 h-2 bg-orange-400 rounded-full animate-pulse"></span>
+                  <span>فيديو {i + 1}: {req.prompt?.slice(0, 40)}... ({req.duration}ث)</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-orange-300/50 mt-3">💡 يمكنك متابعة المحادثة - سيظهر الفيديو تلقائياً</p>
+          </div>
+        );
+      
       case 'video_error':
         return (
           <div className="mt-3 p-4 bg-red-500/20 border border-red-500/50 rounded-xl">
@@ -405,12 +521,12 @@ const AIChat = ({ user }) => {
   }, [downloadAsset]);
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col" data-testid="ai-chat-page">
+    <div className="h-screen bg-slate-900 flex flex-col overflow-hidden" data-testid="ai-chat-page">
       <Navbar user={user} transparent />
       
-      <div className="flex-1 flex pt-16">
+      <div className="flex-1 flex mt-16 overflow-hidden">
         {/* Sidebar */}
-        <div className={`${sidebarOpen ? 'w-80' : 'w-0'} transition-all duration-300 overflow-hidden bg-slate-800 border-l border-slate-700 flex flex-col`}>
+        <div className={`${sidebarOpen ? 'w-80' : 'w-0'} flex-shrink-0 transition-all duration-300 overflow-hidden bg-slate-800 border-l border-slate-700 flex flex-col`}>
           <div className="p-4 border-b border-slate-700">
             <Button
               onClick={() => createSession('general')}
@@ -474,7 +590,7 @@ const AIChat = ({ user }) => {
         </Button>
 
         {/* Chat Area */}
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col overflow-hidden">
           {!currentSession ? (
             // Welcome screen
             <div className="flex-1 flex items-center justify-center p-8">
@@ -535,7 +651,7 @@ const AIChat = ({ user }) => {
           ) : (
             <>
               {/* Messages */}
-              <ScrollArea className="flex-1 p-4">
+              <ScrollArea className="flex-1 p-4 overflow-y-auto">
                 <div className="max-w-4xl mx-auto space-y-4">
                   {messages.length === 0 && (
                     <div className="text-center py-12 text-gray-500 animate-fadeIn">
@@ -581,6 +697,26 @@ const AIChat = ({ user }) => {
               {/* Input Area */}
               <div className="border-t border-slate-700 p-4 bg-slate-800/50 backdrop-blur">
                 <div className="max-w-4xl mx-auto">
+                  {/* Pending Video Requests Indicator */}
+                  {pendingVideoRequests.length > 0 && (
+                    <div className="mb-3 p-3 bg-orange-500/20 border border-orange-500/40 rounded-lg flex items-center gap-3">
+                      <Loader2 className="w-5 h-5 text-orange-400 animate-spin" />
+                      <div className="flex-1">
+                        <span className="text-orange-300 text-sm font-medium">
+                          جاري توليد {pendingVideoRequests.length} فيديو...
+                        </span>
+                        <span className="text-orange-200/60 text-xs mr-2">
+                          (يستغرق 2-5 دقائق)
+                        </span>
+                      </div>
+                      <div className="flex gap-1">
+                        {pendingVideoRequests.map((_, i) => (
+                          <span key={i} className="w-2 h-2 bg-orange-400 rounded-full animate-pulse" style={{animationDelay: `${i * 200}ms`}} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
                   {currentSession?.session_type === 'video' && (
                     <div className="flex items-center gap-4 mb-3 text-sm">
                       <div className="flex items-center gap-2">

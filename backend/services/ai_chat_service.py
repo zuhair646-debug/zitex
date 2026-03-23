@@ -184,32 +184,71 @@ class AIAssistant:
                 ai_response = re.sub(r'\[GENERATE_IMAGE:[^\]]+\]', '', ai_response)
                 ai_response += "\n\n✅ تم توليد الصورة بنجاح!"
         
-        # دعم توليد فيديوهات متعددة (لفيديو دقيقة كاملة)
+        # دعم توليد الفيديو - نظام الخلفية
         video_matches = re.findall(r'\[GENERATE_VIDEO:[^\]]+\]', ai_response)
         if video_matches:
             video_count = len(video_matches)
             ai_response = re.sub(r'\[GENERATE_VIDEO:[^\]]+\]', '', ai_response)
             
-            # إضافة رسالة للمستخدم
-            ai_response += f"\n\n🎬 جاري توليد {'فيديو' if video_count == 1 else f'{video_count} مقاطع فيديو'}..."
-            ai_response += "\n⏱️ التوليد يستغرق 2-5 دقائق. انتظر قليلاً..."
+            # إنشاء طلب فيديو في الخلفية
+            import asyncio
             
+            # حفظ طلبات الفيديو في قاعدة البيانات
+            video_requests = []
             for i, video_cmd in enumerate(video_matches):
-                generation_result = await self._handle_video_generation(video_cmd, user_id, session_id, settings)
-                if generation_result:
-                    generation_result["scene_number"] = i + 1
-                    generation_result["total_scenes"] = video_count
-                    attachments.append(generation_result)
+                match = re.search(r'\[GENERATE_VIDEO:\s*(.+?)\]', video_cmd)
+                if match:
+                    prompt = match.group(1).strip()
+                    duration = settings.get("duration", 4)
+                    size = settings.get("size", "1280x720")
+                    
+                    # تحليل المعاملات من النص
+                    if "|" in prompt:
+                        parts = prompt.split("|")
+                        prompt = parts[0].strip()
+                        for part in parts[1:]:
+                            part = part.strip().lower()
+                            if "duration:" in part:
+                                try:
+                                    dur = int(part.split(":")[1].strip())
+                                    if dur in [4, 8, 12]:
+                                        duration = dur
+                                except:
+                                    pass
+                            elif "size:" in part:
+                                s = part.split(":")[1].strip()
+                                if s in ["1280x720", "1792x1024", "1024x1792", "1024x1024"]:
+                                    size = s
+                    
+                    request_id = str(uuid.uuid4())
+                    video_request = {
+                        "id": request_id,
+                        "user_id": user_id,
+                        "session_id": session_id,
+                        "prompt": prompt,
+                        "duration": duration,
+                        "size": size,
+                        "status": "pending",
+                        "created_at": datetime.now(timezone.utc).isoformat()
+                    }
+                    await self.db.video_requests.insert_one(video_request)
+                    video_requests.append(video_request)
+                    
+                    # بدء التوليد في الخلفية
+                    asyncio.create_task(self._generate_video_background(request_id, user_id, session_id, prompt, duration, size))
             
-            # تحديث الرسالة بعد التوليد
-            success_count = len([a for a in attachments if a.get('type') == 'video'])
-            error_count = len([a for a in attachments if a.get('type') == 'video_error'])
+            # إضافة رسالة للمستخدم
+            ai_response += f"\n\n🎬 تم إرسال طلب {'الفيديو' if video_count == 1 else f'{video_count} فيديوهات'} للتوليد!"
+            ai_response += "\n⏱️ التوليد يستغرق 2-5 دقائق."
+            ai_response += "\n📩 سيظهر الفيديو هنا تلقائياً عند الانتهاء."
+            ai_response += "\n\n💡 يمكنك متابعة المحادثة أثناء الانتظار!"
             
-            if success_count > 0:
-                ai_response = ai_response.replace("جاري توليد", "تم توليد")
-                ai_response = ai_response.replace("انتظر قليلاً...", f"✅ نجح {success_count} فيديو!")
-            if error_count > 0:
-                ai_response += f"\n⚠️ فشل {error_count} فيديو - حاول مرة أخرى"
+            # إضافة معلومات الطلب كـ attachment
+            attachments.append({
+                "type": "video_pending",
+                "requests": [{"id": r["id"], "prompt": r["prompt"][:50], "duration": r["duration"]} for r in video_requests],
+                "message": f"جاري توليد {video_count} فيديو..."
+            })
         
         elif "[GENERATE_AUDIO:" in ai_response:
             generation_result = await self._handle_audio_generation(ai_response, user_id, session_id, settings)
@@ -574,3 +613,119 @@ class AIAssistant:
             {"_id": 0}
         ).sort("created_at", -1).to_list(100)
         return assets
+
+
+    async def _generate_video_background(
+        self, 
+        request_id: str, 
+        user_id: str, 
+        session_id: str,
+        prompt: str,
+        duration: int,
+        size: str
+    ):
+        """توليد الفيديو في الخلفية"""
+        try:
+            logger.info(f"Background video generation started: {request_id}")
+            
+            # تحديث الحالة
+            await self.db.video_requests.update_one(
+                {"id": request_id},
+                {"$set": {"status": "processing"}}
+            )
+            
+            # توليد الفيديو
+            import concurrent.futures
+            import asyncio
+            
+            def generate_sync():
+                video_gen = OpenAIVideoGeneration(api_key=self.api_key)
+                return video_gen.text_to_video(
+                    prompt=prompt,
+                    model="sora-2",
+                    size=size,
+                    duration=duration,
+                    max_wait_time=600
+                )
+            
+            loop = asyncio.get_event_loop()
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                video_bytes = await loop.run_in_executor(pool, generate_sync)
+            
+            if video_bytes:
+                video_b64 = base64.b64encode(video_bytes).decode()
+                video_url = f"data:video/mp4;base64,{video_b64}"
+                
+                # حفظ الفيديو
+                record = {
+                    "id": str(uuid.uuid4()),
+                    "user_id": user_id,
+                    "session_id": session_id,
+                    "request_id": request_id,
+                    "prompt": prompt,
+                    "video_url": video_url,
+                    "duration": duration,
+                    "size": size,
+                    "type": "video",
+                    "created_at": datetime.now(timezone.utc).isoformat()
+                }
+                await self.db.generated_assets.insert_one(record)
+                
+                # تحديث الطلب
+                await self.db.video_requests.update_one(
+                    {"id": request_id},
+                    {"$set": {
+                        "status": "completed",
+                        "video_id": record["id"],
+                        "completed_at": datetime.now(timezone.utc).isoformat()
+                    }}
+                )
+                
+                # إضافة رسالة للجلسة
+                video_msg = {
+                    "id": str(uuid.uuid4()),
+                    "role": "assistant",
+                    "content": f"✅ تم توليد الفيديو بنجاح! ({duration} ثانية)",
+                    "message_type": "video",
+                    "attachments": [{
+                        "type": "video",
+                        "url": video_url,
+                        "prompt": prompt,
+                        "duration": duration,
+                        "size": size,
+                        "id": record["id"]
+                    }],
+                    "metadata": {"request_id": request_id},
+                    "created_at": datetime.now(timezone.utc).isoformat()
+                }
+                
+                await self.db.chat_sessions.update_one(
+                    {"id": session_id},
+                    {"$push": {"messages": video_msg}}
+                )
+                
+                logger.info(f"Video generation completed: {request_id}")
+            else:
+                await self.db.video_requests.update_one(
+                    {"id": request_id},
+                    {"$set": {"status": "failed", "error": "No video returned"}}
+                )
+                
+        except Exception as e:
+            logger.error(f"Background video generation failed: {e}")
+            await self.db.video_requests.update_one(
+                {"id": request_id},
+                {"$set": {"status": "failed", "error": str(e)}}
+            )
+    
+    async def get_video_requests(self, user_id: str, session_id: str = None) -> List[Dict]:
+        """استرجاع طلبات الفيديو"""
+        query = {"user_id": user_id}
+        if session_id:
+            query["session_id"] = session_id
+        
+        requests = await self.db.video_requests.find(
+            query,
+            {"_id": 0}
+        ).sort("created_at", -1).to_list(50)
+        return requests
