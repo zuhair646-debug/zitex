@@ -387,6 +387,18 @@ const AIChat = ({ user }) => {
           </div>
         );
       
+      case 'video_error':
+        return (
+          <div className="mt-3 p-4 bg-red-500/20 border border-red-500/50 rounded-xl">
+            <div className="flex items-center gap-2 mb-2">
+              <Video className="w-6 h-6 text-red-400" />
+              <span className="text-red-300 font-semibold">فشل توليد الفيديو</span>
+            </div>
+            <p className="text-sm text-red-200">{attachment.message || 'حدث خطأ غير متوقع'}</p>
+            <p className="text-xs text-red-300/70 mt-2">💡 نصيحة: حاول مرة أخرى أو استخدم وصف أبسط</p>
+          </div>
+        );
+      
       default:
         return null;
     }

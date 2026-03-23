@@ -190,8 +190,9 @@ class AIAssistant:
             video_count = len(video_matches)
             ai_response = re.sub(r'\[GENERATE_VIDEO:[^\]]+\]', '', ai_response)
             
-            if video_count > 1:
-                ai_response += f"\n\n🎬 جاري توليد {video_count} مشاهد فيديو... (قد يستغرق عدة دقائق)"
+            # إضافة رسالة للمستخدم
+            ai_response += f"\n\n🎬 جاري توليد {'فيديو' if video_count == 1 else f'{video_count} مقاطع فيديو'}..."
+            ai_response += "\n⏱️ التوليد يستغرق 2-5 دقائق. انتظر قليلاً..."
             
             for i, video_cmd in enumerate(video_matches):
                 generation_result = await self._handle_video_generation(video_cmd, user_id, session_id, settings)
@@ -200,8 +201,15 @@ class AIAssistant:
                     generation_result["total_scenes"] = video_count
                     attachments.append(generation_result)
             
-            if attachments:
-                ai_response += f"\n\n✅ تم توليد {len([a for a in attachments if a.get('type') == 'video'])} فيديو بنجاح!"
+            # تحديث الرسالة بعد التوليد
+            success_count = len([a for a in attachments if a.get('type') == 'video'])
+            error_count = len([a for a in attachments if a.get('type') == 'video_error'])
+            
+            if success_count > 0:
+                ai_response = ai_response.replace("جاري توليد", "تم توليد")
+                ai_response = ai_response.replace("انتظر قليلاً...", f"✅ نجح {success_count} فيديو!")
+            if error_count > 0:
+                ai_response += f"\n⚠️ فشل {error_count} فيديو - حاول مرة أخرى"
         
         elif "[GENERATE_AUDIO:" in ai_response:
             generation_result = await self._handle_audio_generation(ai_response, user_id, session_id, settings)
@@ -339,15 +347,32 @@ class AIAssistant:
             logger.info(f"Generating video: prompt='{prompt[:50]}...', duration={duration}, size={size}")
             
             # توليد الفيديو باستخدام Sora 2
-            video_gen = OpenAIVideoGeneration(api_key=self.api_key)
+            # Note: text_to_video is synchronous, run in thread pool
+            import asyncio
+            import concurrent.futures
             
-            video_bytes = video_gen.text_to_video(
-                prompt=prompt,
-                model="sora-2",
-                size=size,
-                duration=duration,
-                max_wait_time=900  # 15 دقيقة للفيديوهات الطويلة
-            )
+            def generate_video_sync():
+                video_gen = OpenAIVideoGeneration(api_key=self.api_key)
+                return video_gen.text_to_video(
+                    prompt=prompt,
+                    model="sora-2",
+                    size=size,
+                    duration=duration,
+                    max_wait_time=600  # 10 دقائق
+                )
+            
+            try:
+                loop = asyncio.get_event_loop()
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    video_bytes = await loop.run_in_executor(pool, generate_video_sync)
+            except Exception as gen_error:
+                logger.error(f"Sora 2 generation failed: {gen_error}")
+                return {
+                    "type": "video_error",
+                    "error": str(gen_error),
+                    "prompt": prompt,
+                    "message": "فشل توليد الفيديو. قد يكون هناك ضغط على الخدمة. حاول مرة أخرى."
+                }
             
             if video_bytes:
                 video_b64 = base64.b64encode(video_bytes).decode()
@@ -375,8 +400,21 @@ class AIAssistant:
                     "size": size,
                     "id": record["id"]
                 }
+            else:
+                return {
+                    "type": "video_error",
+                    "error": "No video returned",
+                    "prompt": prompt,
+                    "message": "لم يتم إرجاع فيديو. حاول مرة أخرى."
+                }
         except Exception as e:
             logger.error(f"Video generation error: {e}")
+            return {
+                "type": "video_error",
+                "error": str(e),
+                "prompt": prompt if 'prompt' in dir() else "unknown",
+                "message": f"خطأ في توليد الفيديو: {str(e)[:100]}"
+            }
         return None
     
     async def _handle_audio_generation(
