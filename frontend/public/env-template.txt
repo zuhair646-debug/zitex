@@ -1,0 +1,25 @@
+# ===================================
+# Zitex Backend Environment File
+# ===================================
+# انسخ هذا الملف وسمّه .env
+# ثم املأ القيم بمفاتيحك الخاصة
+# ===================================
+
+# قاعدة البيانات
+MONGO_URL=mongodb://localhost:27017
+DB_NAME=zitex
+
+# السماح لجميع المواقع
+CORS_ORIGINS=*
+
+# مفتاح OpenAI - احصل عليه من: https://platform.openai.com/api-keys
+EMERGENT_API_KEY=ضع_مفتاح_OpenAI_هنا
+
+# مفتاح JWT للتشفير - اكتب أي نص عشوائي طويل
+JWT_SECRET=اكتب_نص_عشوائي_طويل_هنا_مثل_abc123xyz456
+
+# رقم واتساب المالك (اختياري)
+OWNER_WHATSAPP=رقمك_هنا
+
+# مفتاح ElevenLabs للصوت (اختياري) - من: https://elevenlabs.io
+ELEVENLABS_API_KEY=ضع_مفتاح_ElevenLabs_هنا
