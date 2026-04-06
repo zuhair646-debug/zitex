@@ -43,9 +43,8 @@ PAYPAL_SECRET = os.environ.get('PAYPAL_SECRET')
 # Initialize PayPal
 import paypalrestsdk
 if PAYPAL_CLIENT_ID and PAYPAL_SECRET:
-    # جرب sandbox أولاً ثم live
     paypalrestsdk.configure({
-        "mode": "sandbox",  # sandbox for testing, change to live for production
+        "mode": "live",  # LIVE MODE - Production
         "client_id": PAYPAL_CLIENT_ID,
         "client_secret": PAYPAL_SECRET
     })
