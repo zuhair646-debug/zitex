@@ -174,7 +174,7 @@ const AIChat = ({ user }) => {
   const fetchVoices = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/tts/voices`, {
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/voices`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -836,19 +836,38 @@ const AIChat = ({ user }) => {
       <Navbar user={user} transparent />
       
       <div className="flex-1 flex mt-16 overflow-hidden">
+        {/* Mobile Hamburger Menu Button */}
+        {!sidebarOpen && currentSession && (
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="md:hidden fixed top-20 right-4 z-30 p-2 bg-slate-700 rounded-lg shadow-lg border border-slate-600"
+            data-testid="mobile-menu-btn"
+          >
+            <MessageSquare className="w-5 h-5 text-white" />
+          </button>
+        )}
+        
+        {/* Sidebar Overlay for Mobile */}
+        {sidebarOpen && (
+          <div 
+            className="md:hidden fixed inset-0 bg-black/50 z-10"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+        
         {/* Sidebar */}
-        <div className={`${sidebarOpen ? 'w-full md:w-80' : 'w-0'} ${sidebarOpen ? 'absolute md:relative inset-0 z-20 md:z-0' : ''} flex-shrink-0 transition-all duration-300 overflow-hidden bg-slate-800 border-l border-slate-700 flex flex-col`}>
+        <div className={`${sidebarOpen ? 'w-80' : 'w-0'} ${sidebarOpen ? 'fixed md:relative inset-y-0 right-0 z-20 mt-16 md:mt-0' : ''} flex-shrink-0 transition-all duration-300 overflow-hidden bg-slate-800 border-l border-slate-700 flex flex-col`}>
           <div className="p-3 md:p-4 border-b border-slate-700">
             {/* Mobile close button */}
             <div className="flex md:hidden justify-between items-center mb-3">
               <span className="text-white font-semibold">المحادثات</span>
               <Button size="sm" variant="ghost" onClick={() => setSidebarOpen(false)}>
-                <ChevronRight className="w-5 h-5" />
+                <ChevronRight className="w-5 h-5 text-white" />
               </Button>
             </div>
             
             <Button
-              onClick={() => createSession('general')}
+              onClick={() => { createSession('general'); if(window.innerWidth < 768) setSidebarOpen(false); }}
               className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 transition-all text-sm md:text-base"
               data-testid="new-chat-btn"
             >
@@ -857,15 +876,15 @@ const AIChat = ({ user }) => {
             </Button>
             
             <div className="flex gap-2 mt-3">
-              <Button size="sm" variant="outline" onClick={() => createSession('image')}
+              <Button size="sm" variant="outline" onClick={() => { createSession('image'); if(window.innerWidth < 768) setSidebarOpen(false); }}
                 className="flex-1 border-purple-500/50 text-purple-400 hover:bg-purple-500/20 transition-colors">
                 <Image className="w-4 h-4" />
               </Button>
-              <Button size="sm" variant="outline" onClick={() => createSession('video')}
+              <Button size="sm" variant="outline" onClick={() => { createSession('video'); if(window.innerWidth < 768) setSidebarOpen(false); }}
                 className="flex-1 border-orange-500/50 text-orange-400 hover:bg-orange-500/20 transition-colors">
                 <Video className="w-4 h-4" />
               </Button>
-              <Button size="sm" variant="outline" onClick={() => createSession('website')}
+              <Button size="sm" variant="outline" onClick={() => { createSession('website'); if(window.innerWidth < 768) setSidebarOpen(false); }}
                 className="flex-1 border-green-500/50 text-green-400 hover:bg-green-500/20 transition-colors">
                 <Globe className="w-4 h-4" />
               </Button>
@@ -912,12 +931,12 @@ const AIChat = ({ user }) => {
         <div className="flex-1 flex flex-col overflow-hidden">
           {!currentSession ? (
             // Welcome screen
-            <div className="flex-1 flex items-center justify-center p-8">
+            <div className="flex-1 flex items-center justify-center p-4 md:p-8">
               <div className="text-center max-w-2xl animate-fadeIn">
-                <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-purple-500 to-pink-500 rounded-3xl flex items-center justify-center shadow-2xl">
-                  <Sparkles className="w-12 h-12 text-white" />
+                <div className="w-20 h-20 md:w-24 md:h-24 mx-auto mb-6 bg-gradient-to-br from-purple-500 to-pink-500 rounded-3xl flex items-center justify-center shadow-2xl">
+                  <Sparkles className="w-10 h-10 md:w-12 md:h-12 text-white" />
                 </div>
-                <h1 className="text-4xl font-bold text-white mb-4">مرحباً بك في زيتكس</h1>
+                <h1 className="text-2xl md:text-4xl font-bold text-white mb-4">مرحباً بك في زيتكس</h1>
                 <p className="text-xl text-gray-400 mb-8">
                   مساعدك الإبداعي الذكي لتوليد الصور والفيديوهات وبناء المواقع
                 </p>

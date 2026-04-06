@@ -1,256 +1,368 @@
 import React, { useState, useEffect } from 'react';
-import { Navbar, ZitexLogo } from '@/components/Navbar';
+import { Navbar } from '@/components/Navbar';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useNavigate } from 'react-router-dom';
-import { Check, Globe, Image, Video, Coins, CreditCard, Building2 } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { toast } from 'sonner';
+import { 
+  Check, Star, Zap, Image, Video, Globe, Gift, 
+  Users, Crown, Sparkles, Copy, Share2
+} from 'lucide-react';
 
 const PricingPage = ({ user }) => {
-  const navigate = useNavigate();
-  const [paymentSettings, setPaymentSettings] = useState(null);
+  const [pricing, setPricing] = useState(null);
+  const [referralInfo, setReferralInfo] = useState(null);
+  const [userBalance, setUserBalance] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${process.env.REACT_APP_BACKEND_URL}/api/settings/payment`)
-      .then(res => res.json())
-      .then(data => setPaymentSettings(data))
-      .catch(console.error);
-  }, []);
+    fetchPricing();
+    if (user) {
+      fetchReferralInfo();
+      fetchUserBalance();
+    }
+  }, [user]);
 
-  const creditsPackages = [
-    { id: 'starter', name: 'باقة المبتدئ', credits: 100, price_sar: 50, price_usd: 13, popular: false },
-    { id: 'pro', name: 'باقة المحترف', credits: 500, price_sar: 200, price_usd: 53, popular: true },
-    { id: 'enterprise', name: 'باقة الأعمال', credits: 2000, price_sar: 700, price_usd: 187, popular: false },
-  ];
+  const fetchPricing = async () => {
+    try {
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/pricing`);
+      if (res.ok) {
+        const data = await res.json();
+        setPricing(data);
+      }
+    } catch (error) {
+      console.error('Error fetching pricing:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const subscriptions = [
-    {
-      title: 'توليد الصور',
-      icon: <Image className="w-8 h-8" />,
-      color: 'from-purple-500 to-pink-500',
-      monthly: { price_sar: 100, price_usd: 27, features: ['صور لا محدودة', 'جودة عالية HD', 'تنزيل فوري', 'دعم فني'] },
-      single: { price_sar: 10, price_usd: 3, label: 'للصورة الواحدة' }
-    },
-    {
-      title: 'إنشاء الفيديو',
-      icon: <Video className="w-8 h-8" />,
-      color: 'from-orange-500 to-red-500',
-      monthly: { price_sar: 150, price_usd: 40, features: ['فيديوهات متعددة', 'مدة حتى 30 ثانية', 'جودة 1080p', 'دعم فني'] },
-      single: { price_sar: 20, price_usd: 5, label: 'للفيديو الواحد' }
-    },
-  ];
+  const fetchReferralInfo = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/referral/info`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setReferralInfo(data);
+      }
+    } catch (error) {
+      console.error('Error fetching referral info:', error);
+    }
+  };
 
-  const websiteCredits = [
-    { type: 'موقع بسيط', credits: 50, desc: 'صفحة واحدة - landing page' },
-    { type: 'موقع متقدم', credits: 150, desc: 'متعدد الصفحات مع لوحة تحكم' },
-    { type: 'متجر إلكتروني', credits: 300, desc: 'نظام كامل للتجارة الإلكترونية' },
-  ];
+  const fetchUserBalance = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/user/balance`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUserBalance(data);
+      }
+    } catch (error) {
+      console.error('Error fetching balance:', error);
+    }
+  };
+
+  const copyReferralCode = () => {
+    if (referralInfo?.referral_code) {
+      navigator.clipboard.writeText(referralInfo.referral_code);
+      toast.success('تم نسخ كود الدعوة!');
+    }
+  };
+
+  const shareReferralLink = () => {
+    if (referralInfo?.referral_link) {
+      if (navigator.share) {
+        navigator.share({
+          title: 'انضم لـ Zitex',
+          text: `انضم لمنصة Zitex واحصل على 20 نقطة مجانية! استخدم كود الدعوة: ${referralInfo.referral_code}`,
+          url: referralInfo.referral_link
+        });
+      } else {
+        navigator.clipboard.writeText(referralInfo.referral_link);
+        toast.success('تم نسخ رابط الدعوة!');
+      }
+    }
+  };
+
+  const handlePurchase = async (packageId, packageType = 'credits') => {
+    if (!user) {
+      toast.error('يرجى تسجيل الدخول أولاً');
+      window.location.href = '/login';
+      return;
+    }
+    toast.info('جاري التحويل لصفحة الدفع...');
+    window.location.href = `/payment?package=${packageId}&type=${packageType}`;
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="animate-spin w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full" />
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-slate-900" data-testid="pricing-page">
-      <Navbar user={user} transparent />
+    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900" data-testid="pricing-page">
+      <Navbar user={user} />
       
-      <div className="container mx-auto px-4 md:px-8 max-w-7xl pt-24 pb-12">
-        <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-bold text-white mb-4" data-testid="pricing-title">
-            الأسعار والباقات
-          </h1>
-          <p className="text-gray-400 text-lg">اختر الباقة المناسبة لاحتياجاتك</p>
-        </div>
+      <div className="pt-24 pb-16 px-4">
+        <div className="max-w-7xl mx-auto">
+          {/* Header */}
+          <div className="text-center mb-16">
+            <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
+              أسعار <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">شفافة</span> وبسيطة
+            </h1>
+            <p className="text-xl text-gray-400 max-w-2xl mx-auto">
+              ابدأ مجاناً مع 20 نقطة + 3 صور + 2 فيديو، واشترِ المزيد حسب احتياجك
+            </p>
+          </div>
 
-        <Tabs defaultValue="subscriptions" className="w-full">
-          <TabsList className="grid w-full max-w-md mx-auto grid-cols-3 mb-8 bg-slate-800">
-            <TabsTrigger value="subscriptions" className="data-[state=active]:bg-blue-600">الاشتراكات</TabsTrigger>
-            <TabsTrigger value="credits" className="data-[state=active]:bg-blue-600">النقاط</TabsTrigger>
-            <TabsTrigger value="payment" className="data-[state=active]:bg-blue-600">طرق الدفع</TabsTrigger>
-          </TabsList>
-
-          {/* Subscriptions Tab */}
-          <TabsContent value="subscriptions">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
-              {subscriptions.map((sub, idx) => (
-                <Card key={idx} className="bg-slate-800 border-slate-700 overflow-hidden">
-                  <div className={`h-2 bg-gradient-to-r ${sub.color}`}></div>
-                  <CardHeader className="text-center pb-4">
-                    <div className={`w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br ${sub.color} flex items-center justify-center text-white`}>
-                      {sub.icon}
-                    </div>
-                    <CardTitle className="text-2xl text-white">{sub.title}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    {/* Monthly Plan */}
-                    <div className="p-6 bg-slate-700/50 rounded-xl">
-                      <div className="text-center mb-4">
-                        <span className="text-sm text-gray-400">اشتراك شهري</span>
-                        <div className="mt-2">
-                          <span className="text-4xl font-bold text-white">{sub.monthly.price_sar}</span>
-                          <span className="text-gray-400 ms-2">ريال/شهر</span>
-                        </div>
-                        <p className="text-sm text-gray-500 mt-1">أو ${sub.monthly.price_usd} دولار</p>
-                      </div>
-                      <ul className="space-y-2 mb-4">
-                        {sub.monthly.features.map((feature, i) => (
-                          <li key={i} className="flex items-center gap-2 text-gray-300">
-                            <Check className="w-4 h-4 text-green-400" />
-                            {feature}
-                          </li>
-                        ))}
-                      </ul>
-                      <Button 
-                        className={`w-full bg-gradient-to-r ${sub.color}`}
-                        onClick={() => navigate(user ? '/dashboard' : '/register')}
-                      >
-                        اشترك الآن
-                      </Button>
-                    </div>
-                    
-                    {/* Single Use */}
-                    <div className="p-4 bg-slate-700/30 rounded-xl text-center">
-                      <span className="text-gray-400">أو استخدام واحد: </span>
-                      <span className="text-white font-semibold">{sub.single.price_sar} ريال</span>
-                      <span className="text-gray-500"> ({sub.single.label})</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-
-            {/* Website Credits */}
-            <Card className="bg-slate-800 border-slate-700">
-              <CardHeader>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white">
-                    <Globe className="w-6 h-6" />
-                  </div>
+          {/* User Balance Card */}
+          {user && userBalance && (
+            <Card className="bg-gradient-to-r from-purple-900/50 to-pink-900/50 border-purple-500/30 mb-12">
+              <CardContent className="p-6">
+                <div className="flex flex-wrap items-center justify-between gap-4">
                   <div>
-                    <CardTitle className="text-white">إنشاء المواقع</CardTitle>
-                    <p className="text-gray-400 text-sm">نظام النقاط - ادفع حسب استهلاكك</p>
+                    <p className="text-gray-400 text-sm">رصيدك الحالي</p>
+                    <p className="text-3xl font-bold text-white">{userBalance.credits} <span className="text-lg text-purple-400">نقطة</span></p>
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {websiteCredits.map((item, idx) => (
-                    <div key={idx} className="p-4 bg-slate-700/50 rounded-xl text-center">
-                      <h4 className="text-white font-semibold mb-2">{item.type}</h4>
-                      <div className="text-3xl font-bold text-blue-400 mb-2">{item.credits}</div>
-                      <p className="text-sm text-gray-400">نقطة</p>
-                      <p className="text-xs text-gray-500 mt-2">{item.desc}</p>
+                  <div className="flex gap-4 text-center">
+                    <div className="bg-slate-800/50 rounded-lg px-4 py-2">
+                      <p className="text-2xl font-bold text-purple-400">{userBalance.free_images}</p>
+                      <p className="text-xs text-gray-400">صور مجانية</p>
                     </div>
-                  ))}
+                    <div className="bg-slate-800/50 rounded-lg px-4 py-2">
+                      <p className="text-2xl font-bold text-orange-400">{userBalance.free_videos}</p>
+                      <p className="text-xs text-gray-400">فيديو مجاني</p>
+                    </div>
+                    {userBalance.bonus_points > 0 && (
+                      <div className="bg-slate-800/50 rounded-lg px-4 py-2">
+                        <p className="text-2xl font-bold text-green-400">{userBalance.bonus_points}</p>
+                        <p className="text-xs text-gray-400">نقاط مكافأة</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
-          </TabsContent>
+          )}
 
-          {/* Credits Tab */}
-          <TabsContent value="credits">
+          {/* Credits Packages */}
+          <div className="mb-16">
+            <h2 className="text-2xl font-bold text-white text-center mb-8 flex items-center justify-center gap-2">
+              <Zap className="w-6 h-6 text-yellow-400" />
+              باقات النقاط
+            </h2>
+            
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {creditsPackages.map((pkg, idx) => (
-                <Card key={idx} className={`bg-slate-800 border-slate-700 relative ${pkg.popular ? 'border-blue-500 ring-2 ring-blue-500/20' : ''}`}>
+              {pricing?.credits_packages?.map((pkg) => (
+                <Card 
+                  key={pkg.id}
+                  className={`relative overflow-hidden transition-all duration-300 hover:scale-105 ${
+                    pkg.popular 
+                      ? 'bg-gradient-to-b from-purple-900/80 to-slate-800 border-purple-500 shadow-lg shadow-purple-500/20' 
+                      : 'bg-slate-800 border-slate-700 hover:border-purple-500/50'
+                  }`}
+                >
                   {pkg.popular && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-sm px-4 py-1 rounded-full">
+                    <div className="absolute top-0 left-0 right-0 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-center py-1 text-sm font-semibold">
+                      <Star className="w-4 h-4 inline me-1" />
                       الأكثر شعبية
                     </div>
                   )}
-                  <CardContent className="p-8 text-center">
-                    <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center text-white">
-                      <Coins className="w-8 h-8" />
+                  
+                  <CardHeader className={pkg.popular ? 'pt-10' : ''}>
+                    <CardTitle className="text-white text-xl">{pkg.name}</CardTitle>
+                    <CardDescription className="text-gray-400">
+                      {pkg.credits} نقطة
+                      {pkg.bonus > 0 && <span className="text-green-400 mr-1">+ {pkg.bonus} هدية</span>}
+                    </CardDescription>
+                  </CardHeader>
+                  
+                  <CardContent>
+                    <div className="mb-6">
+                      <span className="text-4xl font-bold text-white">{pkg.price_sar}</span>
+                      <span className="text-gray-400 mr-1">ر.س</span>
+                      <span className="text-gray-500 text-sm block">≈ ${pkg.price_usd}</span>
                     </div>
-                    <h3 className="text-xl font-semibold text-white mb-2">{pkg.name}</h3>
-                    <div className="text-5xl font-bold text-yellow-400 mb-2">{pkg.credits}</div>
-                    <p className="text-gray-400 mb-6">نقطة</p>
-                    <div className="space-y-2 mb-6">
-                      <p className="text-2xl font-bold text-white">{pkg.price_sar} ريال</p>
-                      <p className="text-gray-500">أو ${pkg.price_usd} دولار</p>
-                    </div>
+                    
+                    <ul className="space-y-3 text-gray-300 text-sm">
+                      <li className="flex items-center gap-2">
+                        <Check className="w-4 h-4 text-green-400" />
+                        {Math.floor(pkg.credits / 5)} صورة تقريباً
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <Check className="w-4 h-4 text-green-400" />
+                        {Math.floor(pkg.credits / 25)} فيديو 12 ثانية
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <Check className="w-4 h-4 text-green-400" />
+                        صلاحية دائمة
+                      </li>
+                      {pkg.bonus > 0 && (
+                        <li className="flex items-center gap-2 text-green-400">
+                          <Gift className="w-4 h-4" />
+                          +{pkg.bonus} نقطة هدية
+                        </li>
+                      )}
+                    </ul>
+                  </CardContent>
+                  
+                  <CardFooter>
                     <Button 
-                      className={`w-full ${pkg.popular ? 'bg-blue-500 hover:bg-blue-600' : 'bg-slate-700 hover:bg-slate-600'}`}
-                      onClick={() => navigate(user ? '/dashboard' : '/register')}
+                      onClick={() => handlePurchase(pkg.id, 'credits')}
+                      className={`w-full ${
+                        pkg.popular 
+                          ? 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600' 
+                          : 'bg-slate-700 hover:bg-slate-600'
+                      }`}
                     >
-                      شراء الباقة
+                      اشتري الآن
                     </Button>
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+          </div>
+
+          {/* Subscriptions */}
+          <div className="mb-16">
+            <h2 className="text-2xl font-bold text-white text-center mb-8 flex items-center justify-center gap-2">
+              <Crown className="w-6 h-6 text-yellow-400" />
+              الاشتراكات الشهرية
+            </h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {pricing?.subscriptions && Object.entries(pricing.subscriptions).map(([key, sub]) => (
+                <Card key={key} className="bg-slate-800 border-slate-700 hover:border-purple-500/50 transition-all">
+                  <CardHeader>
+                    <div className="flex items-center gap-2 mb-2">
+                      {key.includes('image') && <Image className="w-5 h-5 text-purple-400" />}
+                      {key.includes('video') && <Video className="w-5 h-5 text-orange-400" />}
+                      {key.includes('all') && <Sparkles className="w-5 h-5 text-yellow-400" />}
+                    </div>
+                    <CardTitle className="text-white">{sub.name}</CardTitle>
+                    <CardDescription className="text-gray-400">{sub.limit}</CardDescription>
+                  </CardHeader>
+                  
+                  <CardContent>
+                    <div className="mb-4">
+                      <span className="text-3xl font-bold text-white">{sub.price_sar}</span>
+                      <span className="text-gray-400 mr-1">ر.س/شهر</span>
+                    </div>
+                    
+                    <ul className="space-y-2">
+                      {sub.features?.map((feature, idx) => (
+                        <li key={idx} className="flex items-center gap-2 text-gray-300 text-sm">
+                          <Check className="w-4 h-4 text-green-400" />
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                  
+                  <CardFooter>
+                    <Button 
+                      onClick={() => handlePurchase(key, 'subscription')}
+                      variant="outline"
+                      className="w-full border-purple-500/50 text-purple-400 hover:bg-purple-500/20"
+                    >
+                      اشترك الآن
+                    </Button>
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+          </div>
+
+          {/* Service Costs */}
+          <div className="mb-16">
+            <h2 className="text-2xl font-bold text-white text-center mb-8">تكلفة الخدمات بالنقاط</h2>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {pricing?.service_costs && [
+                { key: 'image_generation', icon: Image, color: 'text-purple-400', label: 'صورة واحدة' },
+                { key: 'video_12_seconds', icon: Video, color: 'text-orange-400', label: 'فيديو 12 ثانية' },
+                { key: 'video_60_seconds', icon: Video, color: 'text-red-400', label: 'فيديو دقيقة' },
+                { key: 'website_simple', icon: Globe, color: 'text-green-400', label: 'موقع بسيط' },
+              ].map(({ key, icon: Icon, color, label }) => (
+                <Card key={key} className="bg-slate-800/50 border-slate-700 text-center">
+                  <CardContent className="pt-6">
+                    <Icon className={`w-8 h-8 mx-auto mb-2 ${color}`} />
+                    <p className="text-2xl font-bold text-white">{pricing.service_costs[key]}</p>
+                    <p className="text-sm text-gray-400">نقطة</p>
+                    <p className="text-xs text-gray-500 mt-1">{label}</p>
                   </CardContent>
                 </Card>
               ))}
             </div>
-          </TabsContent>
+          </div>
 
-          {/* Payment Methods Tab */}
-          <TabsContent value="payment">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Saudi Arabia */}
-              <Card className="bg-slate-800 border-slate-700">
-                <CardHeader>
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
-                      <Building2 className="w-6 h-6 text-green-400" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-white">للمقيمين في السعودية</CardTitle>
-                      <p className="text-gray-400 text-sm">تحويل بنكي</p>
+          {/* Referral Section */}
+          {user && (
+            <Card className="bg-gradient-to-r from-green-900/30 to-emerald-900/30 border-green-500/30 mb-16">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <Users className="w-6 h-6 text-green-400" />
+                  ادعُ أصدقاءك واكسب نقاط
+                </CardTitle>
+                <CardDescription className="text-gray-400">
+                  احصل على {referralInfo?.rewards?.inviter_bonus || 30} نقطة لكل صديق ينضم، وصديقك يحصل على {referralInfo?.rewards?.invited_bonus || 20} نقطة!
+                </CardDescription>
+              </CardHeader>
+              
+              <CardContent>
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex-1 min-w-[200px]">
+                    <label className="text-sm text-gray-400 block mb-1">كود الدعوة الخاص بك</label>
+                    <div className="flex gap-2">
+                      <div className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-white font-mono text-lg">
+                        {referralInfo?.referral_code || '---'}
+                      </div>
+                      <Button onClick={copyReferralCode} variant="outline" className="border-green-500/50 text-green-400">
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                      <Button onClick={shareReferralLink} className="bg-green-600 hover:bg-green-700">
+                        <Share2 className="w-4 h-4" />
+                      </Button>
                     </div>
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {paymentSettings?.bank_name ? (
-                    <>
-                      <div className="p-4 bg-slate-700/50 rounded-lg">
-                        <p className="text-gray-400 text-sm">اسم البنك</p>
-                        <p className="text-white font-semibold">{paymentSettings.bank_name}</p>
-                      </div>
-                      <div className="p-4 bg-slate-700/50 rounded-lg">
-                        <p className="text-gray-400 text-sm">رقم الآيبان</p>
-                        <p className="text-white font-mono">{paymentSettings.bank_iban}</p>
-                      </div>
-                      <div className="p-4 bg-slate-700/50 rounded-lg">
-                        <p className="text-gray-400 text-sm">اسم صاحب الحساب</p>
-                        <p className="text-white font-semibold">{paymentSettings.bank_account_name}</p>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="p-6 bg-slate-700/50 rounded-lg text-center">
-                      <p className="text-gray-400">سيتم إضافة معلومات الحساب البنكي قريباً</p>
-                    </div>
-                  )}
-                  <p className="text-sm text-gray-500 text-center">
-                    بعد التحويل، ارفع إثبات الدفع من لوحة التحكم
-                  </p>
-                </CardContent>
-              </Card>
-
-              {/* International */}
-              <Card className="bg-slate-800 border-slate-700">
-                <CardHeader>
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
-                      <CreditCard className="w-6 h-6 text-blue-400" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-white">للعملاء الدوليين</CardTitle>
-                      <p className="text-gray-400 text-sm">PayPal</p>
-                    </div>
+                  
+                  <div className="text-center px-6 py-4 bg-slate-800/50 rounded-lg">
+                    <p className="text-3xl font-bold text-green-400">{referralInfo?.total_referrals || 0}</p>
+                    <p className="text-sm text-gray-400">دعوة ناجحة</p>
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {paymentSettings?.paypal_email ? (
-                    <div className="p-4 bg-slate-700/50 rounded-lg">
-                      <p className="text-gray-400 text-sm">PayPal Email</p>
-                      <p className="text-white font-semibold">{paymentSettings.paypal_email}</p>
-                    </div>
-                  ) : (
-                    <div className="p-6 bg-slate-700/50 rounded-lg text-center">
-                      <p className="text-gray-400">سيتم إضافة معلومات PayPal قريباً</p>
-                    </div>
-                  )}
-                  <p className="text-sm text-gray-500 text-center">
-                    أرسل الدفع عبر PayPal ثم ارفع إثبات الدفع
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-        </Tabs>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Free Trial Info */}
+          <div className="text-center">
+            <Card className="bg-slate-800/50 border-slate-700 inline-block">
+              <CardContent className="p-6">
+                <Gift className="w-12 h-12 text-yellow-400 mx-auto mb-4" />
+                <h3 className="text-xl font-bold text-white mb-2">ابدأ مجاناً الآن!</h3>
+                <p className="text-gray-400 mb-4">
+                  كل مستخدم جديد يحصل على: <span className="text-green-400 font-semibold">20 نقطة + 3 صور + 2 فيديو</span> مجاناً
+                </p>
+                {!user && (
+                  <Button 
+                    onClick={() => window.location.href = '/register'}
+                    className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+                  >
+                    سجّل الآن مجاناً
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
     </div>
   );

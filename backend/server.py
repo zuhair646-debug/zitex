@@ -137,12 +137,18 @@ class ApplyReferralRequest(BaseModel):
 
 # إعدادات النقاط
 POINTS_CONFIG = {
-    "first_purchase_bonus": 50,       # نقاط أول شحن
-    "referral_bonus_inviter": 30,     # نقاط للداعي
-    "referral_bonus_invited": 20,     # نقاط للمدعو
-    "points_per_image": 5,            # نقاط لكل صورة
-    "points_per_video": 20,           # نقاط لكل فيديو
-    "points_per_minute_video": 50,    # نقاط لكل دقيقة فيديو
+    "signup_bonus": 20,                # نقاط التسجيل المجاني
+    "first_purchase_bonus": 50,        # نقاط أول شحن
+    "referral_bonus_inviter": 30,      # نقاط للداعي
+    "referral_bonus_invited": 20,      # نقاط للمدعو
+    "points_per_image": 5,             # نقاط لكل صورة
+    "points_per_video_4s": 10,         # نقاط لفيديو 4 ثواني
+    "points_per_video_8s": 18,         # نقاط لفيديو 8 ثواني
+    "points_per_video_12s": 25,        # نقاط لفيديو 12 ثانية
+    "points_per_video_50s": 80,        # نقاط لفيديو 50 ثانية
+    "points_per_video_60s": 100,       # نقاط لفيديو دقيقة
+    "points_per_website_simple": 50,   # نقاط لموقع بسيط
+    "points_per_tts_1000": 2,          # نقاط لكل 1000 حرف TTS
 }
 
 class ImageEditRequest(BaseModel):
@@ -361,32 +367,73 @@ async def send_whatsapp_notification(message: str):
 
 # ============== AUTH ROUTES ==============
 
+class UserRegisterWithReferral(BaseModel):
+    email: EmailStr
+    password: str
+    name: str
+    country: str = "SA"
+    referral_code: Optional[str] = None
+
 @api_router.post("/auth/register")
-async def register(user_data: UserRegister):
+async def register(user_data: UserRegisterWithReferral):
     existing = await db.users.find_one({"email": user_data.email}, {"_id": 0})
     if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=400, detail="البريد الإلكتروني مسجل مسبقاً")
+    
+    # نقاط التسجيل المجانية
+    signup_bonus = POINTS_CONFIG.get("signup_bonus", 20)
     
     user = User(
         email=user_data.email,
         name=user_data.name,
         role="client",
         country=user_data.country,
-        credits=0,
+        credits=signup_bonus,  # نقاط مجانية عند التسجيل
+        bonus_points=signup_bonus,
         free_images=3,
-        free_videos=3,
+        free_videos=2,
         free_website_trial=True
     )
     
     doc = user.model_dump()
     doc['password'] = hash_password(user_data.password)
     doc['created_at'] = doc['created_at'].isoformat()
+    doc['signup_bonus_claimed'] = True  # تم المطالبة تلقائياً
+    
+    # التحقق من كود الدعوة
+    referral_bonus_msg = ""
+    if user_data.referral_code:
+        inviter = await db.users.find_one({"referral_code": user_data.referral_code.upper()}, {"_id": 0})
+        if inviter:
+            doc['referred_by'] = user_data.referral_code.upper()
+            # إضافة نقاط المدعو
+            invited_bonus = POINTS_CONFIG.get("referral_bonus_invited", 20)
+            doc['credits'] += invited_bonus
+            doc['bonus_points'] += invited_bonus
+            referral_bonus_msg = f" + {invited_bonus} نقطة من الدعوة"
+            
+            # إضافة نقاط الداعي
+            inviter_bonus = POINTS_CONFIG.get("referral_bonus_inviter", 30)
+            await db.users.update_one(
+                {"id": inviter['id']},
+                {"$inc": {"credits": inviter_bonus, "bonus_points": inviter_bonus, "total_referrals": 1}}
+            )
     
     await db.users.insert_one(doc)
-    await log_activity(user.id, "user_registered", "create", f"New user registered: {user.email}")
+    await log_activity(user.id, "user_registered", "create", f"New user registered: {user.email} with {doc['credits']} bonus points")
     
     token = create_token(user.id, user.role)
-    return {"token": token, "user": user}
+    
+    # إزالة الحقول الحساسة من الاستجابة
+    user_response = user.model_dump()
+    user_response['credits'] = doc['credits']
+    user_response['bonus_points'] = doc['bonus_points']
+    
+    return {
+        "token": token, 
+        "user": user_response,
+        "welcome_message": f"🎉 مرحباً {user.name}! حصلت على {doc['credits']} نقطة مجانية{referral_bonus_msg}"
+    }
 
 @api_router.post("/auth/login")
 async def login(credentials: UserLogin):
@@ -1183,19 +1230,211 @@ async def update_website_status(website_id: str, status: str, admin: dict = Depe
 
 # ============== PRICING ==============
 
+# تسعير الخدمات - شامل ومحدث
+PRICING_CONFIG = {
+    # باقات النقاط
+    "credits_packages": [
+        {"id": "starter", "name": "باقة المبتدئ", "credits": 100, "price_sar": 50, "price_usd": 13, "popular": False, "bonus": 0},
+        {"id": "pro", "name": "باقة المحترف", "credits": 500, "price_sar": 200, "price_usd": 53, "popular": True, "bonus": 50},
+        {"id": "enterprise", "name": "باقة الأعمال", "credits": 2000, "price_sar": 700, "price_usd": 187, "popular": False, "bonus": 300},
+    ],
+    # اشتراكات شهرية
+    "subscriptions": {
+        "images_monthly": {"name": "اشتراك الصور الشهري", "price_sar": 100, "price_usd": 27, "limit": "غير محدود", "features": ["صور غير محدودة", "جودة عالية HD", "أولوية التوليد"]},
+        "videos_monthly": {"name": "اشتراك الفيديو الشهري", "price_sar": 150, "price_usd": 40, "limit": "50 فيديو/شهر", "features": ["50 فيديو سينمائي", "دقيقة كاملة لكل فيديو", "جودة 4K"]},
+        "all_inclusive": {"name": "الباقة الشاملة", "price_sar": 300, "price_usd": 80, "limit": "كل شيء", "features": ["صور غير محدودة", "100 فيديو/شهر", "5 مواقع/شهر", "دعم أولوية"]},
+    },
+    # تكلفة الخدمات بالنقاط
+    "service_costs": {
+        "image_generation": 5,           # 5 نقاط لكل صورة
+        "video_4_seconds": 10,           # 10 نقاط لفيديو 4 ثواني
+        "video_8_seconds": 18,           # 18 نقطة لفيديو 8 ثواني
+        "video_12_seconds": 25,          # 25 نقطة لفيديو 12 ثانية
+        "video_50_seconds": 80,          # 80 نقطة لفيديو 50 ثانية
+        "video_60_seconds": 100,         # 100 نقطة لفيديو دقيقة
+        "website_simple": 50,            # 50 نقطة لموقع بسيط
+        "website_advanced": 150,         # 150 نقطة لموقع متقدم
+        "website_ecommerce": 300,        # 300 نقطة لمتجر إلكتروني
+        "tts_per_1000_chars": 2,         # 2 نقطة لكل 1000 حرف صوتي
+    },
+    # التجربة المجانية
+    "free_trial": {
+        "images": 3,
+        "videos": 2,
+        "website_preview": True,
+        "signup_bonus": 20,              # 20 نقطة مجانية عند التسجيل
+    },
+    # مكافآت الدعوات
+    "referral_rewards": {
+        "inviter_bonus": 30,             # 30 نقطة للداعي
+        "invited_bonus": 20,             # 20 نقطة للمدعو
+        "first_purchase_bonus": 50,      # 50 نقطة أول عملية شراء
+    }
+}
+
 @api_router.get("/pricing")
 async def get_pricing():
+    return PRICING_CONFIG
+
+@api_router.get("/pricing/calculate")
+async def calculate_price(service: str, quantity: int = 1):
+    """حساب تكلفة خدمة معينة"""
+    costs = PRICING_CONFIG["service_costs"]
+    if service not in costs:
+        raise HTTPException(status_code=400, detail="خدمة غير معروفة")
+    
+    total_cost = costs[service] * quantity
     return {
-        "credits_packages": CREDITS_PACKAGES,
-        "subscriptions": {
-            "images_monthly": {"price_sar": 100, "price_usd": 27},
-            "images_single": {"price_sar": 10, "price_usd": 3},
-            "videos_monthly": {"price_sar": 150, "price_usd": 40},
-            "videos_single": {"price_sar": 20, "price_usd": 5},
-        },
-        "website_credits": {"simple": 50, "advanced": 150, "ecommerce": 300},
-        "free_trial": {"images": 3, "videos": 3, "website_preview": True}
+        "service": service,
+        "quantity": quantity,
+        "cost_per_unit": costs[service],
+        "total_cost": total_cost
     }
+
+# ============== REFERRAL SYSTEM (نظام الدعوات) ==============
+
+@api_router.get("/referral/info")
+async def get_referral_info(current_user: dict = Depends(get_current_user)):
+    """الحصول على معلومات الدعوة للمستخدم"""
+    user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0, "password": 0})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="المستخدم غير موجود")
+    
+    referral_code = user_doc.get('referral_code', str(uuid.uuid4())[:8].upper())
+    
+    # تحديث الكود إذا لم يكن موجوداً
+    if 'referral_code' not in user_doc:
+        await db.users.update_one(
+            {"id": current_user['user_id']},
+            {"$set": {"referral_code": referral_code}}
+        )
+    
+    # حساب عدد الدعوات الناجحة
+    referrals_count = await db.users.count_documents({"referred_by": referral_code})
+    
+    return {
+        "referral_code": referral_code,
+        "referral_link": f"https://zitex.com/register?ref={referral_code}",
+        "total_referrals": referrals_count,
+        "bonus_points": user_doc.get('bonus_points', 0),
+        "rewards": PRICING_CONFIG["referral_rewards"]
+    }
+
+@api_router.post("/referral/apply")
+async def apply_referral_code(request: ApplyReferralRequest, current_user: dict = Depends(get_current_user)):
+    """تطبيق كود دعوة"""
+    user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="المستخدم غير موجود")
+    
+    # التحقق من عدم استخدام كود من قبل
+    if user_doc.get('referred_by'):
+        raise HTTPException(status_code=400, detail="لقد استخدمت كود دعوة من قبل")
+    
+    # التحقق من صحة الكود
+    inviter = await db.users.find_one({"referral_code": request.referral_code.upper()}, {"_id": 0})
+    if not inviter:
+        raise HTTPException(status_code=400, detail="كود الدعوة غير صحيح")
+    
+    # لا يمكن دعوة نفسك
+    if inviter['id'] == current_user['user_id']:
+        raise HTTPException(status_code=400, detail="لا يمكنك استخدام كودك الخاص")
+    
+    rewards = PRICING_CONFIG["referral_rewards"]
+    
+    # إضافة النقاط للمدعو
+    await db.users.update_one(
+        {"id": current_user['user_id']},
+        {
+            "$set": {"referred_by": request.referral_code.upper()},
+            "$inc": {"bonus_points": rewards["invited_bonus"], "credits": rewards["invited_bonus"]}
+        }
+    )
+    
+    # إضافة النقاط للداعي
+    await db.users.update_one(
+        {"id": inviter['id']},
+        {
+            "$inc": {
+                "bonus_points": rewards["inviter_bonus"],
+                "credits": rewards["inviter_bonus"],
+                "total_referrals": 1
+            }
+        }
+    )
+    
+    await log_activity(
+        current_user['user_id'],
+        "referral_applied",
+        "create",
+        f"Applied referral code: {request.referral_code}",
+        {"inviter_id": inviter['id'], "bonus": rewards["invited_bonus"]}
+    )
+    
+    return {
+        "message": f"تم تطبيق الكود بنجاح! حصلت على {rewards['invited_bonus']} نقطة مجانية",
+        "bonus_received": rewards["invited_bonus"]
+    }
+
+@api_router.get("/referral/leaderboard")
+async def get_referral_leaderboard():
+    """قائمة أفضل الداعين"""
+    top_referrers = await db.users.find(
+        {"total_referrals": {"$gt": 0}},
+        {"_id": 0, "name": 1, "total_referrals": 1, "bonus_points": 1}
+    ).sort("total_referrals", -1).limit(10).to_list(10)
+    
+    return {"leaderboard": top_referrers}
+
+# ============== USER POINTS/CREDITS ==============
+
+@api_router.get("/user/balance")
+async def get_user_balance(current_user: dict = Depends(get_current_user)):
+    """الحصول على رصيد المستخدم"""
+    user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0, "password": 0})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="المستخدم غير موجود")
+    
+    return {
+        "credits": user_doc.get('credits', 0),
+        "bonus_points": user_doc.get('bonus_points', 0),
+        "free_images": user_doc.get('free_images', 0),
+        "free_videos": user_doc.get('free_videos', 0),
+        "free_website_trial": user_doc.get('free_website_trial', False),
+        "subscription_type": user_doc.get('subscription_type'),
+        "subscription_expires": user_doc.get('subscription_expires'),
+        "total_spent": user_doc.get('total_spent', 0),
+        "service_costs": PRICING_CONFIG["service_costs"]
+    }
+
+@api_router.post("/user/claim-signup-bonus")
+async def claim_signup_bonus(current_user: dict = Depends(get_current_user)):
+    """المطالبة بمكافأة التسجيل"""
+    user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="المستخدم غير موجود")
+    
+    if user_doc.get('signup_bonus_claimed'):
+        raise HTTPException(status_code=400, detail="لقد حصلت على مكافأة التسجيل من قبل")
+    
+    bonus = PRICING_CONFIG["free_trial"]["signup_bonus"]
+    
+    await db.users.update_one(
+        {"id": current_user['user_id']},
+        {
+            "$set": {"signup_bonus_claimed": True},
+            "$inc": {"credits": bonus, "bonus_points": bonus}
+        }
+    )
+    
+    await log_activity(
+        current_user['user_id'],
+        "signup_bonus_claimed",
+        "create",
+        f"Claimed signup bonus: {bonus} points"
+    )
+    
+    return {"message": f"تهانينا! حصلت على {bonus} نقطة مجانية", "bonus": bonus}
 
 @api_router.get("/settings/payment")
 async def get_payment_settings():
