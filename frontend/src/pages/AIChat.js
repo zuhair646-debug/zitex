@@ -71,45 +71,64 @@ const SessionItem = memo(({ session, isActive, onSelect, onDelete, getIcon }) =>
   </div>
 ));
 
-const ChatMessage = memo(({ msg, idx, renderAttachment, onPlayAudio, onGenerateTTS, playingAudio, ttsEnabled }) => (
-  <div
-    className={`flex ${msg.role === 'user' ? 'justify-start' : 'justify-end'} animate-fadeIn`}
-    data-testid={`message-${idx}`}
-  >
-    <div className={`max-w-[80%] ${
-      msg.role === 'user' 
-        ? 'bg-blue-600 rounded-2xl rounded-tr-md' 
-        : 'bg-slate-700 rounded-2xl rounded-tl-md'
-    } p-4 shadow-lg`}>
-      <p className="text-white whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-      {msg.attachments?.map((attachment, aIdx) => (
-        <div key={aIdx}>{renderAttachment(attachment)}</div>
-      ))}
-      <div className="flex items-center justify-between mt-2">
-        <p className="text-xs text-gray-400 opacity-70">
-          {new Date(msg.created_at).toLocaleTimeString('ar-SA')}
+const ChatMessage = memo(({ msg, idx, renderAttachment, onPlayAudio, onGenerateTTS, playingAudio, ttsEnabled }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const maxLength = 300; // الحد الأقصى للأحرف قبل "المزيد"
+  const shouldTruncate = msg.content && msg.content.length > maxLength;
+  const displayContent = shouldTruncate && !isExpanded 
+    ? msg.content.slice(0, maxLength) + '...' 
+    : msg.content;
+
+  return (
+    <div
+      className={`flex ${msg.role === 'user' ? 'justify-start' : 'justify-end'} animate-fadeIn px-2 md:px-0`}
+      data-testid={`message-${idx}`}
+    >
+      <div className={`max-w-[95%] md:max-w-[80%] ${
+        msg.role === 'user' 
+          ? 'bg-blue-600 rounded-2xl rounded-tr-md' 
+          : 'bg-slate-700 rounded-2xl rounded-tl-md'
+      } p-3 md:p-4 shadow-lg`}>
+        <p className="text-white whitespace-pre-wrap leading-relaxed text-sm md:text-base">
+          {displayContent}
         </p>
-        {msg.role === 'assistant' && (
+        {shouldTruncate && (
           <button
-            onClick={() => msg.audio_url ? onPlayAudio(msg.audio_url, msg.id) : onGenerateTTS(msg.content, msg.id)}
-            className={`p-1.5 rounded-full transition-all ${
-              playingAudio === msg.id 
-                ? 'bg-purple-500 text-white' 
-                : 'bg-slate-600 hover:bg-slate-500 text-gray-300'
-            }`}
-            title={msg.audio_url ? 'تشغيل الصوت' : 'توليد صوت'}
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="text-purple-400 hover:text-purple-300 text-xs md:text-sm mt-2 font-medium transition-colors"
           >
-            {playingAudio === msg.id ? (
-              <VolumeX className="w-4 h-4" />
-            ) : (
-              <Volume2 className="w-4 h-4" />
-            )}
+            {isExpanded ? '🔼 عرض أقل' : '🔽 عرض المزيد'}
           </button>
         )}
+        {msg.attachments?.map((attachment, aIdx) => (
+          <div key={aIdx}>{renderAttachment(attachment)}</div>
+        ))}
+        <div className="flex items-center justify-between mt-2 gap-2">
+          <p className="text-xs text-gray-400 opacity-70">
+            {new Date(msg.created_at).toLocaleTimeString('ar-SA')}
+          </p>
+          {msg.role === 'assistant' && (
+            <button
+              onClick={() => msg.audio_url ? onPlayAudio(msg.audio_url, msg.id) : onGenerateTTS(msg.content, msg.id)}
+              className={`p-1.5 rounded-full transition-all ${
+                playingAudio === msg.id 
+                  ? 'bg-purple-500 text-white' 
+                  : 'bg-slate-600 hover:bg-slate-500 text-gray-300'
+              }`}
+              title={msg.audio_url ? 'تشغيل الصوت' : 'توليد صوت'}
+            >
+              {playingAudio === msg.id ? (
+                <VolumeX className="w-4 h-4" />
+              ) : (
+                <Volume2 className="w-4 h-4" />
+              )}
+            </button>
+          )}
+        </div>
       </div>
     </div>
-  </div>
-));
+  );
+});
 
 // ============== Main Component ==============
 const AIChat = ({ user }) => {
@@ -818,11 +837,19 @@ const AIChat = ({ user }) => {
       
       <div className="flex-1 flex mt-16 overflow-hidden">
         {/* Sidebar */}
-        <div className={`${sidebarOpen ? 'w-80' : 'w-0'} flex-shrink-0 transition-all duration-300 overflow-hidden bg-slate-800 border-l border-slate-700 flex flex-col`}>
-          <div className="p-4 border-b border-slate-700">
+        <div className={`${sidebarOpen ? 'w-full md:w-80' : 'w-0'} ${sidebarOpen ? 'absolute md:relative inset-0 z-20 md:z-0' : ''} flex-shrink-0 transition-all duration-300 overflow-hidden bg-slate-800 border-l border-slate-700 flex flex-col`}>
+          <div className="p-3 md:p-4 border-b border-slate-700">
+            {/* Mobile close button */}
+            <div className="flex md:hidden justify-between items-center mb-3">
+              <span className="text-white font-semibold">المحادثات</span>
+              <Button size="sm" variant="ghost" onClick={() => setSidebarOpen(false)}>
+                <ChevronRight className="w-5 h-5" />
+              </Button>
+            </div>
+            
             <Button
               onClick={() => createSession('general')}
-              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 transition-all"
+              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 transition-all text-sm md:text-base"
               data-testid="new-chat-btn"
             >
               <Plus className="w-4 h-4 me-2" />
@@ -861,7 +888,7 @@ const AIChat = ({ user }) => {
                     key={session.id}
                     session={session}
                     isActive={currentSession?.id === session.id}
-                    onSelect={loadSession}
+                    onSelect={(id) => { loadSession(id); if(window.innerWidth < 768) setSidebarOpen(false); }}
                     onDelete={deleteSession}
                     getIcon={getSessionIcon}
                   />
@@ -871,12 +898,12 @@ const AIChat = ({ user }) => {
           </ScrollArea>
         </div>
 
-        {/* Toggle sidebar */}
+        {/* Toggle sidebar - Desktop */}
         <Button
           size="icon"
           variant="ghost"
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="absolute right-0 top-1/2 transform -translate-y-1/2 z-10 bg-slate-700 rounded-r-none hover:bg-slate-600"
+          className="hidden md:flex absolute right-0 top-1/2 transform -translate-y-1/2 z-10 bg-slate-700 rounded-r-none hover:bg-slate-600"
         >
           {sidebarOpen ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </Button>

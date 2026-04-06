@@ -82,6 +82,12 @@ class User(BaseModel):
     subscription_expires: Optional[str] = None
     is_owner: bool = False
     is_active: bool = True
+    # نظام الدعوات والنقاط
+    referral_code: str = Field(default_factory=lambda: str(uuid.uuid4())[:8].upper())
+    referred_by: Optional[str] = None
+    total_referrals: int = 0
+    bonus_points: int = 0
+    first_purchase_bonus_claimed: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class ActivityLog(BaseModel):
@@ -118,6 +124,26 @@ class TTSVoice(BaseModel):
     provider: str
     language: str = "ar"
     preview_url: Optional[str] = None
+
+# نظام الدعوات والنقاط
+class ReferralInfo(BaseModel):
+    referral_code: str
+    total_referrals: int
+    bonus_points: int
+    referral_link: str
+
+class ApplyReferralRequest(BaseModel):
+    referral_code: str
+
+# إعدادات النقاط
+POINTS_CONFIG = {
+    "first_purchase_bonus": 50,       # نقاط أول شحن
+    "referral_bonus_inviter": 30,     # نقاط للداعي
+    "referral_bonus_invited": 20,     # نقاط للمدعو
+    "points_per_image": 5,            # نقاط لكل صورة
+    "points_per_video": 20,           # نقاط لكل فيديو
+    "points_per_minute_video": 50,    # نقاط لكل دقيقة فيديو
+}
 
 class ImageEditRequest(BaseModel):
     image_base64: str
