@@ -14,7 +14,7 @@ from datetime import datetime, timezone, timedelta
 import bcrypt
 import jwt
 from emergentintegrations.llm.chat import LlmChat, UserMessage
-from emergentintegrations.llm.openai import OpenAITextToSpeech
+from emergentintegrations.llm.openai import OpenAITextToSpeech, OpenAISpeechToText
 from elevenlabs.client import ElevenLabs
 from elevenlabs.types import VoiceSettings
 import base64
@@ -40,6 +40,9 @@ ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY')
 
 # Initialize OpenAI TTS via emergentintegrations
 openai_tts = OpenAITextToSpeech(api_key=EMERGENT_LLM_KEY) if EMERGENT_LLM_KEY else None
+
+# Initialize OpenAI STT (Speech-to-Text) via emergentintegrations
+openai_stt = OpenAISpeechToText(api_key=EMERGENT_LLM_KEY) if EMERGENT_LLM_KEY else None
 
 # Initialize ElevenLabs client
 eleven_client = ElevenLabs(api_key=ELEVENLABS_API_KEY) if ELEVENLABS_API_KEY else None
@@ -492,6 +495,65 @@ async def generate_tts(request: TTSRequest, current_user: dict = Depends(get_cur
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"خطأ في توليد الصوت: {str(e)}")
+
+# ============== SPEECH TO TEXT (Voice Input) ==============
+
+@api_router.post("/stt/transcribe")
+async def transcribe_audio(
+    audio: UploadFile = File(...),
+    language: str = Form(default="ar"),
+    current_user: dict = Depends(get_current_user)
+):
+    """Convert speech to text using OpenAI Whisper"""
+    if not openai_stt:
+        raise HTTPException(status_code=400, detail="خدمة التحويل الصوتي غير متاحة")
+    
+    # Check file size (max 25MB)
+    content = await audio.read()
+    if len(content) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="حجم الملف أكبر من 25MB")
+    
+    # Check file type
+    allowed_types = ['audio/webm', 'audio/mp3', 'audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/m4a', 'audio/ogg']
+    if audio.content_type and not any(t in audio.content_type for t in ['audio', 'webm', 'ogg']):
+        raise HTTPException(status_code=400, detail=f"نوع الملف غير مدعوم: {audio.content_type}")
+    
+    try:
+        # Create a file-like object
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix='.webm', delete=False) as tmp_file:
+            tmp_file.write(content)
+            tmp_file_path = tmp_file.name
+        
+        # Transcribe using OpenAI Whisper
+        with open(tmp_file_path, 'rb') as audio_file:
+            response = await openai_stt.transcribe(
+                file=audio_file,
+                model="whisper-1",
+                language=language,
+                response_format="json"
+            )
+        
+        # Clean up temp file
+        import os as os_module
+        os_module.unlink(tmp_file_path)
+        
+        # Log activity
+        await log_activity(
+            current_user['user_id'],
+            "stt_transcribed",
+            "create",
+            f"Transcribed audio: {response.text[:50]}...",
+            {"language": language, "chars": len(response.text)}
+        )
+        
+        return {
+            "text": response.text,
+            "language": language
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"خطأ في تحويل الصوت: {str(e)}")
 
 # ============== IMAGE GENERATION & EDITING ==============
 

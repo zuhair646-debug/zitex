@@ -125,6 +125,9 @@ const AIChat = ({ user }) => {
   const [showTTSSettings, setShowTTSSettings] = useState(false);
   const [availableVoices, setAvailableVoices] = useState([]);
   const [playingAudio, setPlayingAudio] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState(null);
+  const [recordingTime, setRecordingTime] = useState(0);
   const [generationSettings, setGenerationSettings] = useState({
     duration: 4,
     size: '1280x720',
@@ -141,6 +144,8 @@ const AIChat = ({ user }) => {
   const inputRef = useRef(null);
   const audioRef = useRef(null);
   const pollingIntervalRef = useRef(null);
+  const recordingTimerRef = useRef(null);
+  const audioChunksRef = useRef([]);
 
   useEffect(() => {
     fetchSessions();
@@ -206,6 +211,195 @@ const AIChat = ({ user }) => {
       toast.error('فشل توليد الصوت');
     }
   };
+
+  // ============== Voice Recording Functions ==============
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      
+      audioChunksRef.current = [];
+      
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+      
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        stream.getTracks().forEach(track => track.stop());
+        await transcribeAudio(audioBlob);
+      };
+      
+      recorder.start(100); // Collect data every 100ms
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+      setRecordingTime(0);
+      
+      // Start timer
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+      
+      toast.info('🎤 جاري التسجيل... اضغط مرة أخرى للإيقاف');
+    } catch (error) {
+      console.error('Recording error:', error);
+      toast.error('فشل الوصول للمايكروفون. تأكد من إعطاء الصلاحية.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+      setIsRecording(false);
+      
+      // Stop timer
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+    }
+  };
+
+  const transcribeAudio = async (audioBlob) => {
+    if (!currentSession) {
+      toast.error('اختر محادثة أولاً');
+      return;
+    }
+    
+    setLoading(true);
+    toast.info('🔄 جاري تحويل الصوت إلى نص...');
+    
+    try {
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'recording.webm');
+      formData.append('language', 'ar');
+      
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/stt/transcribe`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        if (data.text && data.text.trim()) {
+          // Set the transcribed text as input and auto-send
+          setInputMessage(data.text);
+          toast.success('✅ تم تحويل الصوت!');
+          
+          // Auto-send after a short delay
+          setTimeout(() => {
+            sendMessageWithText(data.text);
+          }, 500);
+        } else {
+          toast.error('لم يتم التعرف على أي كلام');
+        }
+      } else {
+        const error = await res.json();
+        toast.error(error.detail || 'فشل تحويل الصوت');
+      }
+    } catch (error) {
+      console.error('Transcription error:', error);
+      toast.error('خطأ في تحويل الصوت');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const sendMessageWithText = async (text) => {
+    if (!text.trim() || !currentSession) return;
+    
+    const userMessage = text.trim();
+    setInputMessage('');
+    setLoading(true);
+    setIsTyping(true);
+
+    const tempUserMsg = {
+      id: `temp-${Date.now()}`,
+      role: 'user',
+      content: userMessage,
+      message_type: 'text',
+      attachments: [],
+      created_at: new Date().toISOString()
+    };
+    setMessages(prev => [...prev, tempUserMsg]);
+
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(
+        `${process.env.REACT_APP_BACKEND_URL}/api/chat/sessions/${currentSession.id}/messages`,
+        {
+          method: 'POST',
+          headers: { 
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            message: userMessage,
+            settings: {
+              ...generationSettings,
+              tts: ttsSettings
+            }
+          })
+        }
+      );
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setMessages(prev => {
+          const filtered = prev.filter(m => m.id !== tempUserMsg.id);
+          return [...filtered, data.user_message, data.assistant_message];
+        });
+        
+        // Auto-play audio if TTS is enabled
+        if (ttsSettings.enabled && data.assistant_message?.audio_url) {
+          playAudio(data.assistant_message.audio_url, data.assistant_message.id);
+        }
+
+        // Check for pending video requests
+        const videoPendingAttachment = data.assistant_message?.attachments?.find(
+          a => a.type === 'video_pending'
+        );
+        if (videoPendingAttachment && videoPendingAttachment.requests) {
+          setPendingVideoRequests(prev => [...prev, ...videoPendingAttachment.requests]);
+          toast.info('🎬 جاري توليد الفيديو في الخلفية...');
+        }
+      } else {
+        toast.error(data.detail || 'فشل إرسال الرسالة');
+        setMessages(prev => prev.filter(m => m.id !== tempUserMsg.id));
+      }
+    } catch (error) {
+      toast.error('خطأ في الاتصال');
+      setMessages(prev => prev.filter(m => m.id !== tempUserMsg.id));
+    } finally {
+      setLoading(false);
+      setIsTyping(false);
+    }
+  };
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
+
+  // Cleanup recording on unmount
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+      }
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+      }
+    };
+  }, [mediaRecorder]);
 
   // Polling for video requests status
   useEffect(() => {
@@ -934,6 +1128,29 @@ const AIChat = ({ user }) => {
                       data-testid="chat-input"
                     />
                     
+                    {/* Microphone Button */}
+                    <Button
+                      variant="outline"
+                      onClick={toggleRecording}
+                      disabled={loading}
+                      className={`px-4 transition-all ${
+                        isRecording 
+                          ? 'bg-red-500/20 border-red-500 text-red-400 animate-pulse' 
+                          : 'border-slate-600 text-gray-400 hover:text-white hover:border-green-500'
+                      }`}
+                      title={isRecording ? `جاري التسجيل... ${recordingTime}ث` : 'تحدث بالصوت'}
+                    >
+                      <Mic className={`w-5 h-5 ${isRecording ? 'text-red-400' : ''}`} />
+                    </Button>
+                    
+                    {/* Recording indicator */}
+                    {isRecording && (
+                      <div className="flex items-center gap-2 px-3 py-2 bg-red-500/20 border border-red-500/50 rounded-lg">
+                        <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                        <span className="text-red-400 text-sm font-medium">{recordingTime}ث</span>
+                      </div>
+                    )}
+                    
                     {/* TTS Toggle Button */}
                     <Button
                       variant="outline"
@@ -960,7 +1177,7 @@ const AIChat = ({ user }) => {
                     
                     <Button
                       onClick={sendMessage}
-                      disabled={loading || !inputMessage.trim()}
+                      disabled={loading || !inputMessage.trim() || isRecording}
                       className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 px-6 transition-all disabled:opacity-50"
                       data-testid="send-btn"
                     >
@@ -972,13 +1189,21 @@ const AIChat = ({ user }) => {
                     </Button>
                   </div>
                   
-                  {/* TTS Status */}
-                  {ttsSettings.enabled && (
-                    <div className="mt-2 text-xs text-purple-400 flex items-center gap-2">
-                      <Volume2 className="w-3 h-3" />
-                      <span>الرد الصوتي مفعّل ({ttsSettings.provider === 'openai' ? 'OpenAI' : 'ElevenLabs'})</span>
-                    </div>
-                  )}
+                  {/* Voice/TTS Status */}
+                  <div className="mt-2 flex items-center gap-4 text-xs">
+                    {isRecording && (
+                      <span className="text-red-400 flex items-center gap-1">
+                        <Mic className="w-3 h-3" />
+                        جاري التسجيل... اضغط على المايك للإيقاف
+                      </span>
+                    )}
+                    {ttsSettings.enabled && !isRecording && (
+                      <span className="text-purple-400 flex items-center gap-1">
+                        <Volume2 className="w-3 h-3" />
+                        الرد الصوتي مفعّل ({ttsSettings.provider === 'openai' ? 'OpenAI' : 'ElevenLabs'})
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             </>
