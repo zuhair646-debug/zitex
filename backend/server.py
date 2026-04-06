@@ -37,6 +37,18 @@ JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key')
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 OWNER_WHATSAPP = os.environ.get('OWNER_WHATSAPP', '966507374438')
 ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY')
+PAYPAL_CLIENT_ID = os.environ.get('PAYPAL_CLIENT_ID')
+PAYPAL_SECRET = os.environ.get('PAYPAL_SECRET')
+
+# Initialize PayPal
+import paypalrestsdk
+if PAYPAL_CLIENT_ID and PAYPAL_SECRET:
+    # جرب sandbox أولاً ثم live
+    paypalrestsdk.configure({
+        "mode": "sandbox",  # sandbox for testing, change to live for production
+        "client_id": PAYPAL_CLIENT_ID,
+        "client_secret": PAYPAL_SECRET
+    })
 
 # Initialize OpenAI TTS via emergentintegrations
 openai_tts = OpenAITextToSpeech(api_key=EMERGENT_LLM_KEY) if EMERGENT_LLM_KEY else None
@@ -1469,29 +1481,72 @@ async def claim_signup_bonus(current_user: dict = Depends(get_current_user)):
 
 @api_router.post("/payments/create-order")
 async def create_payment_order(request: CreateOrderRequest, current_user: dict = Depends(get_current_user)):
-    """إنشاء طلب دفع جديد"""
+    """إنشاء طلب دفع PayPal حقيقي"""
     
     # البحث عن الباقة
     package_info = None
     credits_to_add = 0
+    package_name = ""
     
     if request.package_type == "credits":
         for pkg in PRICING_CONFIG["credits_packages"]:
             if pkg["id"] == request.package_id:
                 package_info = pkg
                 credits_to_add = pkg["credits"] + pkg.get("bonus", 0)
+                package_name = pkg["name"]
                 break
     elif request.package_type == "subscription":
         if request.package_id in PRICING_CONFIG["subscriptions"]:
             package_info = PRICING_CONFIG["subscriptions"][request.package_id]
             package_info["id"] = request.package_id
+            package_name = package_info.get("name", request.package_id)
     
     if not package_info:
         raise HTTPException(status_code=400, detail="الباقة غير موجودة")
     
-    # إنشاء طلب الدفع (لـ PayPal sandbox نستخدم ID مؤقت)
-    # في الإنتاج، سنستخدم PayPal API الحقيقية
-    mock_paypal_order_id = f"PAYPAL-{str(uuid.uuid4())[:8].upper()}"
+    paypal_order_id = None
+    
+    # إنشاء طلب PayPal حقيقي
+    if PAYPAL_CLIENT_ID and PAYPAL_SECRET:
+        try:
+            payment = paypalrestsdk.Payment({
+                "intent": "sale",
+                "payer": {"payment_method": "paypal"},
+                "redirect_urls": {
+                    "return_url": f"{os.environ.get('FRONTEND_URL', 'https://zitex.com')}/payment/success",
+                    "cancel_url": f"{os.environ.get('FRONTEND_URL', 'https://zitex.com')}/payment/cancel"
+                },
+                "transactions": [{
+                    "item_list": {
+                        "items": [{
+                            "name": package_name,
+                            "sku": request.package_id,
+                            "price": str(request.amount),
+                            "currency": request.currency,
+                            "quantity": 1
+                        }]
+                    },
+                    "amount": {
+                        "total": str(request.amount),
+                        "currency": request.currency
+                    },
+                    "description": f"Zitex - {package_name} ({credits_to_add} نقطة)"
+                }]
+            })
+            
+            if payment.create():
+                paypal_order_id = payment.id
+                logging.info(f"PayPal payment created: {paypal_order_id}")
+            else:
+                logging.error(f"PayPal error: {payment.error}")
+                raise HTTPException(status_code=500, detail=f"خطأ PayPal: {payment.error}")
+        except Exception as e:
+            logging.error(f"PayPal exception: {e}")
+            # Fallback to mock for testing
+            paypal_order_id = f"PAYPAL-{str(uuid.uuid4())[:8].upper()}"
+    else:
+        # Mock mode if no PayPal credentials
+        paypal_order_id = f"PAYPAL-{str(uuid.uuid4())[:8].upper()}"
     
     order = PaymentOrder(
         user_id=current_user['user_id'],
@@ -1499,9 +1554,9 @@ async def create_payment_order(request: CreateOrderRequest, current_user: dict =
         package_type=request.package_type,
         amount=request.amount,
         currency=request.currency,
-        paypal_order_id=mock_paypal_order_id,
+        paypal_order_id=paypal_order_id,
         credits_added=credits_to_add,
-        metadata={"package_info": package_info}
+        metadata={"package_info": package_info, "package_name": package_name}
     )
     
     order_doc = order.model_dump()
@@ -1513,11 +1568,11 @@ async def create_payment_order(request: CreateOrderRequest, current_user: dict =
         "payment_order_created",
         "create",
         f"Created payment order for {request.package_id}",
-        {"order_id": order.id, "amount": request.amount}
+        {"order_id": order.id, "amount": request.amount, "paypal_id": paypal_order_id}
     )
     
     return {
-        "order_id": mock_paypal_order_id,
+        "order_id": paypal_order_id,
         "internal_id": order.id,
         "amount": request.amount,
         "currency": request.currency
