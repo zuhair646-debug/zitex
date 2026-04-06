@@ -1037,18 +1037,18 @@ const AIChat = ({ user }) => {
               </ScrollArea>
 
               {/* Input Area */}
-              <div className="border-t border-slate-700 p-4 bg-slate-800/50 backdrop-blur">
+              <div className="border-t border-slate-700 p-2 md:p-4 bg-slate-800/50 backdrop-blur">
                 <div className="max-w-4xl mx-auto">
                   {/* Audio Element for TTS */}
                   <audio ref={audioRef} className="hidden" />
                   
                   {/* TTS Settings Panel */}
                   {showTTSSettings && (
-                    <div className="mb-3 p-4 bg-slate-700/50 border border-slate-600 rounded-lg animate-fadeIn">
+                    <div className="mb-3 p-3 md:p-4 bg-slate-700/50 border border-slate-600 rounded-lg animate-fadeIn">
                       <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-white font-medium flex items-center gap-2">
-                          <Volume2 className="w-5 h-5 text-purple-400" />
-                          إعدادات الرد الصوتي
+                        <h4 className="text-white font-medium flex items-center gap-2 text-sm md:text-base">
+                          <Volume2 className="w-4 h-4 md:w-5 md:h-5 text-purple-400" />
+                          إعدادات الصوت
                         </h4>
                         <button 
                           onClick={() => setShowTTSSettings(false)}
@@ -1056,25 +1056,25 @@ const AIChat = ({ user }) => {
                         >✕</button>
                       </div>
                       
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <div>
-                          <label className="block text-sm text-gray-400 mb-1">المزود</label>
+                          <label className="block text-xs text-gray-400 mb-1">المزود</label>
                           <select
                             value={ttsSettings.provider}
                             onChange={(e) => setTtsSettings({...ttsSettings, provider: e.target.value, voice: e.target.value === 'openai' ? 'alloy' : '21m00Tcm4TlvDq8ikWAM'})}
-                            className="w-full bg-slate-600 border-slate-500 text-white rounded px-3 py-2 text-sm"
+                            className="w-full bg-slate-600 border-slate-500 text-white rounded px-2 py-1.5 text-sm"
                           >
-                            <option value="openai">OpenAI TTS (أرخص)</option>
-                            <option value="elevenlabs">ElevenLabs (جودة أعلى)</option>
+                            <option value="openai">OpenAI TTS</option>
+                            <option value="elevenlabs">ElevenLabs</option>
                           </select>
                         </div>
                         
                         <div>
-                          <label className="block text-sm text-gray-400 mb-1">الصوت</label>
+                          <label className="block text-xs text-gray-400 mb-1">الصوت</label>
                           <select
                             value={ttsSettings.voice}
                             onChange={(e) => setTtsSettings({...ttsSettings, voice: e.target.value})}
-                            className="w-full bg-slate-600 border-slate-500 text-white rounded px-3 py-2 text-sm"
+                            className="w-full bg-slate-600 border-slate-500 text-white rounded px-2 py-1.5 text-sm"
                           >
                             {availableVoices
                               .filter(v => v.provider === ttsSettings.provider)
@@ -1086,7 +1086,7 @@ const AIChat = ({ user }) => {
                         </div>
                         
                         <div>
-                          <label className="block text-sm text-gray-400 mb-1">السرعة: {ttsSettings.speed}x</label>
+                          <label className="block text-xs text-gray-400 mb-1">السرعة: {ttsSettings.speed}x</label>
                           <input
                             type="range"
                             min="0.5"
@@ -1098,66 +1098,21 @@ const AIChat = ({ user }) => {
                           />
                         </div>
                       </div>
-                      
-                      <div className="mt-3 text-xs text-gray-500">
-                        💰 التكلفة: {ttsSettings.provider === 'openai' ? '$0.015/1000 حرف' : '$0.30/1000 حرف'}
-                      </div>
                     </div>
                   )}
                   
                   {/* Pending Video Requests Indicator */}
                   {pendingVideoRequests.length > 0 && (
-                    <div className="mb-3 p-3 bg-orange-500/20 border border-orange-500/40 rounded-lg flex items-center gap-3">
-                      <Loader2 className="w-5 h-5 text-orange-400 animate-spin" />
-                      <div className="flex-1">
-                        <span className="text-orange-300 text-sm font-medium">
-                          جاري توليد {pendingVideoRequests.length} فيديو...
-                        </span>
-                        <span className="text-orange-200/60 text-xs mr-2">
-                          (يستغرق 2-5 دقائق)
-                        </span>
-                      </div>
-                      <div className="flex gap-1">
-                        {pendingVideoRequests.map((_, i) => (
-                          <span key={i} className="w-2 h-2 bg-orange-400 rounded-full animate-pulse" style={{animationDelay: `${i * 200}ms`}} />
-                        ))}
-                      </div>
+                    <div className="mb-2 p-2 bg-orange-500/20 border border-orange-500/40 rounded-lg flex items-center gap-2 text-sm">
+                      <Loader2 className="w-4 h-4 text-orange-400 animate-spin flex-shrink-0" />
+                      <span className="text-orange-300 text-xs md:text-sm">
+                        جاري توليد {pendingVideoRequests.length} فيديو... (2-5 دقائق)
+                      </span>
                     </div>
                   )}
                   
-                  {currentSession?.session_type === 'video' && (
-                    <div className="flex items-center gap-4 mb-3 text-sm">
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-400">المدة:</span>
-                        <select
-                          value={generationSettings.duration}
-                          onChange={(e) => setGenerationSettings({...generationSettings, duration: parseInt(e.target.value)})}
-                          className="bg-slate-700 border-slate-600 text-white rounded px-2 py-1 text-sm"
-                        >
-                          <option value={4}>4 ثواني</option>
-                          <option value={8}>8 ثواني</option>
-                          <option value={12}>12 ثانية</option>
-                          <option value={50}>50 ثانية</option>
-                          <option value={60}>دقيقة كاملة</option>
-                        </select>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-400">الدقة:</span>
-                        <select
-                          value={generationSettings.size}
-                          onChange={(e) => setGenerationSettings({...generationSettings, size: e.target.value})}
-                          className="bg-slate-700 border-slate-600 text-white rounded px-2 py-1 text-sm"
-                        >
-                          <option value="1280x720">HD (16:9)</option>
-                          <option value="1792x1024">عريض</option>
-                          <option value="1024x1792">عمودي</option>
-                          <option value="1024x1024">مربع</option>
-                        </select>
-                      </div>
-                    </div>
-                  )}
-                  
-                  <div className="flex gap-3">
+                  {/* Main Input Row */}
+                  <div className="flex gap-2">
                     <Input
                       ref={inputRef}
                       value={inputMessage}
@@ -1169,7 +1124,7 @@ const AIChat = ({ user }) => {
                         currentSession?.session_type === 'website' ? 'صف الموقع الذي تريد بناءه...' :
                         'اكتب رسالتك هنا...'
                       }
-                      className="flex-1 bg-slate-700 border-slate-600 text-white placeholder:text-gray-400 text-lg py-6 focus:ring-2 focus:ring-purple-500 transition-all"
+                      className="flex-1 bg-slate-700 border-slate-600 text-white placeholder:text-gray-400 text-base py-3 focus:ring-2 focus:ring-purple-500 transition-all"
                       disabled={loading}
                       data-testid="chat-input"
                     />
@@ -1179,7 +1134,8 @@ const AIChat = ({ user }) => {
                       variant="outline"
                       onClick={toggleRecording}
                       disabled={loading}
-                      className={`px-4 transition-all ${
+                      size="icon"
+                      className={`flex-shrink-0 transition-all ${
                         isRecording 
                           ? 'bg-red-500/20 border-red-500 text-red-400 animate-pulse' 
                           : 'border-slate-600 text-gray-400 hover:text-white hover:border-green-500'
@@ -1189,42 +1145,12 @@ const AIChat = ({ user }) => {
                       <Mic className={`w-5 h-5 ${isRecording ? 'text-red-400' : ''}`} />
                     </Button>
                     
-                    {/* Recording indicator */}
-                    {isRecording && (
-                      <div className="flex items-center gap-2 px-3 py-2 bg-red-500/20 border border-red-500/50 rounded-lg">
-                        <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-                        <span className="text-red-400 text-sm font-medium">{recordingTime}ث</span>
-                      </div>
-                    )}
-                    
-                    {/* TTS Toggle Button */}
-                    <Button
-                      variant="outline"
-                      onClick={() => setTtsSettings({...ttsSettings, enabled: !ttsSettings.enabled})}
-                      className={`px-4 transition-all ${
-                        ttsSettings.enabled 
-                          ? 'bg-purple-500/20 border-purple-500 text-purple-400' 
-                          : 'border-slate-600 text-gray-400 hover:text-white'
-                      }`}
-                      title={ttsSettings.enabled ? 'الرد الصوتي مفعّل' : 'تفعيل الرد الصوتي'}
-                    >
-                      <Volume2 className="w-5 h-5" />
-                    </Button>
-                    
-                    {/* TTS Settings Button */}
-                    <Button
-                      variant="outline"
-                      onClick={() => setShowTTSSettings(!showTTSSettings)}
-                      className="px-4 border-slate-600 text-gray-400 hover:text-white transition-all"
-                      title="إعدادات الصوت"
-                    >
-                      <Settings className="w-5 h-5" />
-                    </Button>
-                    
+                    {/* Send Button */}
                     <Button
                       onClick={sendMessage}
                       disabled={loading || !inputMessage.trim() || isRecording}
-                      className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 px-6 transition-all disabled:opacity-50"
+                      size="icon"
+                      className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 flex-shrink-0 transition-all disabled:opacity-50"
                       data-testid="send-btn"
                     >
                       {loading ? (
@@ -1235,18 +1161,72 @@ const AIChat = ({ user }) => {
                     </Button>
                   </div>
                   
-                  {/* Voice/TTS Status */}
-                  <div className="mt-2 flex items-center gap-4 text-xs">
-                    {isRecording && (
-                      <span className="text-red-400 flex items-center gap-1">
-                        <Mic className="w-3 h-3" />
-                        جاري التسجيل... اضغط على المايك للإيقاف
-                      </span>
+                  {/* Recording indicator */}
+                  {isRecording && (
+                    <div className="mt-2 flex items-center gap-2 px-3 py-1.5 bg-red-500/20 border border-red-500/50 rounded-lg w-fit">
+                      <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                      <span className="text-red-400 text-sm font-medium">{recordingTime}ث - اضغط للإيقاف</span>
+                    </div>
+                  )}
+                  
+                  {/* Tools Bar - Bottom */}
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    {/* Video Settings */}
+                    {currentSession?.session_type === 'video' && (
+                      <>
+                        <select
+                          value={generationSettings.duration}
+                          onChange={(e) => setGenerationSettings({...generationSettings, duration: parseInt(e.target.value)})}
+                          className="bg-slate-700 border-slate-600 text-white rounded px-2 py-1 text-xs"
+                        >
+                          <option value={4}>4 ثواني</option>
+                          <option value={8}>8 ثواني</option>
+                          <option value={12}>12 ثانية</option>
+                          <option value={50}>50 ثانية</option>
+                          <option value={60}>دقيقة</option>
+                        </select>
+                        <select
+                          value={generationSettings.size}
+                          onChange={(e) => setGenerationSettings({...generationSettings, size: e.target.value})}
+                          className="bg-slate-700 border-slate-600 text-white rounded px-2 py-1 text-xs"
+                        >
+                          <option value="1280x720">HD</option>
+                          <option value="1792x1024">عريض</option>
+                          <option value="1024x1792">عمودي</option>
+                          <option value="1024x1024">مربع</option>
+                        </select>
+                      </>
                     )}
-                    {ttsSettings.enabled && !isRecording && (
-                      <span className="text-purple-400 flex items-center gap-1">
+                    
+                    {/* TTS Toggle */}
+                    <button
+                      onClick={() => setTtsSettings({...ttsSettings, enabled: !ttsSettings.enabled})}
+                      className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-all ${
+                        ttsSettings.enabled 
+                          ? 'bg-purple-500/20 border border-purple-500/50 text-purple-400' 
+                          : 'bg-slate-700 text-gray-400 hover:text-white'
+                      }`}
+                      title={ttsSettings.enabled ? 'إيقاف الرد الصوتي' : 'تفعيل الرد الصوتي'}
+                    >
+                      <Volume2 className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">صوت</span>
+                    </button>
+                    
+                    {/* TTS Settings */}
+                    <button
+                      onClick={() => setShowTTSSettings(!showTTSSettings)}
+                      className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-slate-700 text-gray-400 hover:text-white transition-all"
+                      title="إعدادات الصوت"
+                    >
+                      <Settings className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">إعدادات</span>
+                    </button>
+                    
+                    {/* Status Indicators */}
+                    {ttsSettings.enabled && (
+                      <span className="text-purple-400 text-xs flex items-center gap-1 mr-auto">
                         <Volume2 className="w-3 h-3" />
-                        الرد الصوتي مفعّل ({ttsSettings.provider === 'openai' ? 'OpenAI' : 'ElevenLabs'})
+                        {ttsSettings.provider === 'openai' ? 'OpenAI' : 'ElevenLabs'}
                       </span>
                     )}
                   </div>

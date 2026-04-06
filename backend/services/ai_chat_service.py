@@ -292,6 +292,9 @@ class AIAssistant:
             
             # حفظ طلبات الفيديو في قاعدة البيانات
             video_requests = []
+            total_cost = 0
+            insufficient_credits = False
+            
             for i, video_cmd in enumerate(video_matches):
                 match = re.search(r'\[GENERATE_VIDEO:\s*(.+?)\]', video_cmd)
                 if match:
@@ -317,6 +320,34 @@ class AIAssistant:
                                 if s in ["1280x720", "1792x1024", "1024x1792", "1024x1024"]:
                                     size = s
                     
+                    # تحديد تكلفة الفيديو حسب المدة
+                    service_key = f"video_{duration}_seconds"
+                    if duration == 4:
+                        service_key = "video_4_seconds"
+                    elif duration == 8:
+                        service_key = "video_8_seconds"
+                    elif duration == 12:
+                        service_key = "video_12_seconds"
+                    elif duration == 50:
+                        service_key = "video_50_seconds"
+                    elif duration == 60:
+                        service_key = "video_60_seconds"
+                    
+                    # التحقق من الرصيد وخصم النقاط
+                    can_generate, payment_type, cost = await self._check_and_deduct_credits(user_id, service_key)
+                    
+                    if not can_generate:
+                        insufficient_credits = True
+                        ai_response += f"\n\n❌ {payment_type}"
+                        attachments.append({
+                            "type": "error",
+                            "error": "رصيد غير كافٍ",
+                            "message": payment_type
+                        })
+                        break
+                    
+                    total_cost += cost
+                    
                     request_id = str(uuid.uuid4())
                     video_request = {
                         "id": request_id,
@@ -326,6 +357,8 @@ class AIAssistant:
                         "duration": duration,
                         "size": size,
                         "status": "pending",
+                        "payment_type": payment_type,
+                        "cost": cost,
                         "created_at": datetime.now(timezone.utc).isoformat()
                     }
                     await self.db.video_requests.insert_one(video_request)
@@ -334,18 +367,28 @@ class AIAssistant:
                     # بدء التوليد في الخلفية
                     asyncio.create_task(self._generate_video_background(request_id, user_id, session_id, prompt, duration, size))
             
-            # إضافة رسالة للمستخدم
-            ai_response += f"\n\n🎬 تم إرسال طلب {'الفيديو' if video_count == 1 else f'{video_count} فيديوهات'} للتوليد!"
-            ai_response += "\n⏱️ التوليد يستغرق 2-5 دقائق."
-            ai_response += "\n📩 سيظهر الفيديو هنا تلقائياً عند الانتهاء."
-            ai_response += "\n\n💡 يمكنك متابعة المحادثة أثناء الانتظار!"
-            
-            # إضافة معلومات الطلب كـ attachment
-            attachments.append({
-                "type": "video_pending",
-                "requests": [{"id": r["id"], "prompt": r["prompt"][:50], "duration": r["duration"]} for r in video_requests],
-                "message": f"جاري توليد {video_count} فيديو..."
-            })
+            if not insufficient_credits and video_requests:
+                # إضافة رسالة للمستخدم
+                cost_msg = ""
+                if total_cost > 0:
+                    cost_msg = f" (-{total_cost} نقطة)"
+                elif video_requests[0].get("payment_type") == "free":
+                    cost_msg = " (مجاني)"
+                elif video_requests[0].get("payment_type") == "subscription":
+                    cost_msg = " (اشتراك)"
+                
+                ai_response += f"\n\n🎬 تم إرسال طلب {'الفيديو' if video_count == 1 else f'{video_count} فيديوهات'} للتوليد!{cost_msg}"
+                ai_response += "\n⏱️ التوليد يستغرق 2-5 دقائق."
+                ai_response += "\n📩 سيظهر الفيديو هنا تلقائياً عند الانتهاء."
+                ai_response += "\n\n💡 يمكنك متابعة المحادثة أثناء الانتظار!"
+                
+                # إضافة معلومات الطلب كـ attachment
+                attachments.append({
+                    "type": "video_pending",
+                    "requests": [{"id": r["id"], "prompt": r["prompt"][:50], "duration": r["duration"], "cost": r.get("cost", 0)} for r in video_requests],
+                    "message": f"جاري توليد {video_count} فيديو...",
+                    "total_cost": total_cost
+                })
         
         elif "[GENERATE_AUDIO:" in ai_response:
             generation_result = await self._handle_audio_generation(ai_response, user_id, session_id, settings)
@@ -417,6 +460,62 @@ class AIAssistant:
             "assistant_message": assistant_msg
         }
     
+    # تكلفة الخدمات بالنقاط
+    SERVICE_COSTS = {
+        "image_generation": 5,
+        "video_4_seconds": 10,
+        "video_8_seconds": 18,
+        "video_12_seconds": 25,
+        "video_50_seconds": 80,
+        "video_60_seconds": 100,
+        "website_simple": 50,
+        "tts_per_1000_chars": 2,
+    }
+    
+    async def _check_and_deduct_credits(self, user_id: str, service: str, amount: int = 1) -> Tuple[bool, str, int]:
+        """التحقق من الرصيد وخصم النقاط"""
+        user_doc = await self.db.users.find_one({"id": user_id}, {"_id": 0})
+        if not user_doc:
+            return False, "المستخدم غير موجود", 0
+        
+        # المالك لا يدفع
+        if user_doc.get('is_owner'):
+            return True, "owner", 0
+        
+        # التحقق من الرصيد المجاني
+        if service == "image_generation" and user_doc.get('free_images', 0) > 0:
+            await self.db.users.update_one({"id": user_id}, {"$inc": {"free_images": -1}})
+            return True, "free", 0
+        
+        if service.startswith("video_") and user_doc.get('free_videos', 0) > 0:
+            await self.db.users.update_one({"id": user_id}, {"$inc": {"free_videos": -1}})
+            return True, "free", 0
+        
+        # التحقق من الاشتراك
+        subscription_type = user_doc.get('subscription_type')
+        subscription_expires = user_doc.get('subscription_expires')
+        if subscription_type:
+            if subscription_expires and datetime.fromisoformat(subscription_expires) > datetime.now(timezone.utc):
+                if service == "image_generation" and subscription_type in ["images", "all"]:
+                    return True, "subscription", 0
+                if service.startswith("video_") and subscription_type in ["videos", "all"]:
+                    return True, "subscription", 0
+        
+        # حساب التكلفة
+        cost = self.SERVICE_COSTS.get(service, 5) * amount
+        credits = user_doc.get('credits', 0)
+        
+        if credits < cost:
+            return False, f"رصيدك غير كافٍ. تحتاج {cost} نقطة ولديك {credits} فقط", cost
+        
+        # خصم النقاط
+        await self.db.users.update_one(
+            {"id": user_id},
+            {"$inc": {"credits": -cost, "total_spent": cost}}
+        )
+        
+        return True, "credits", cost
+    
     async def _handle_image_generation(self, response: str, user_id: str, session_id: str) -> Optional[Dict]:
         """معالجة توليد الصور"""
         try:
@@ -425,6 +524,15 @@ class AIAssistant:
                 return None
             
             prompt = match.group(1).strip()
+            
+            # التحقق من الرصيد وخصم النقاط
+            can_generate, payment_type, cost = await self._check_and_deduct_credits(user_id, "image_generation")
+            if not can_generate:
+                return {
+                    "type": "error",
+                    "error": payment_type,
+                    "message": f"❌ {payment_type}"
+                }
             
             # توليد الصورة باستخدام Gemini
             chat = LlmChat(
@@ -446,15 +554,28 @@ class AIAssistant:
                     "prompt": prompt,
                     "image_url": image_data,
                     "type": "generated",
+                    "payment_type": payment_type,
+                    "cost": cost,
                     "created_at": datetime.now(timezone.utc).isoformat()
                 }
                 await self.db.generated_assets.insert_one(record)
+                
+                cost_msg = ""
+                if payment_type == "free":
+                    cost_msg = " (مجاني)"
+                elif payment_type == "subscription":
+                    cost_msg = " (اشتراك)"
+                elif payment_type == "credits":
+                    cost_msg = f" (-{cost} نقطة)"
                 
                 return {
                     "type": "image",
                     "url": image_data,
                     "prompt": prompt,
-                    "id": record["id"]
+                    "id": record["id"],
+                    "payment_type": payment_type,
+                    "cost": cost,
+                    "cost_message": cost_msg
                 }
         except Exception as e:
             logger.error(f"Image generation error: {e}")

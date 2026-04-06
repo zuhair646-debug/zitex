@@ -135,6 +135,35 @@ class ReferralInfo(BaseModel):
 class ApplyReferralRequest(BaseModel):
     referral_code: str
 
+# ============== PAYMENT MODELS ==============
+
+class PaymentOrder(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    package_id: str
+    package_type: str  # credits, subscription
+    amount: float
+    currency: str = "USD"
+    status: str = "pending"  # pending, completed, failed, refunded
+    payment_method: str = "paypal"
+    paypal_order_id: Optional[str] = None
+    credits_added: int = 0
+    metadata: Optional[dict] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    completed_at: Optional[datetime] = None
+
+class CreateOrderRequest(BaseModel):
+    package_id: str
+    package_type: str = "credits"
+    amount: float
+    currency: str = "USD"
+
+class CaptureOrderRequest(BaseModel):
+    order_id: str
+    package_id: str
+    package_type: str = "credits"
+
 # إعدادات النقاط
 POINTS_CONFIG = {
     "signup_bonus": 20,                # نقاط التسجيل المجاني
@@ -1435,6 +1464,157 @@ async def claim_signup_bonus(current_user: dict = Depends(get_current_user)):
     )
     
     return {"message": f"تهانينا! حصلت على {bonus} نقطة مجانية", "bonus": bonus}
+
+# ============== PAYMENTS ==============
+
+@api_router.post("/payments/create-order")
+async def create_payment_order(request: CreateOrderRequest, current_user: dict = Depends(get_current_user)):
+    """إنشاء طلب دفع جديد"""
+    
+    # البحث عن الباقة
+    package_info = None
+    credits_to_add = 0
+    
+    if request.package_type == "credits":
+        for pkg in PRICING_CONFIG["credits_packages"]:
+            if pkg["id"] == request.package_id:
+                package_info = pkg
+                credits_to_add = pkg["credits"] + pkg.get("bonus", 0)
+                break
+    elif request.package_type == "subscription":
+        if request.package_id in PRICING_CONFIG["subscriptions"]:
+            package_info = PRICING_CONFIG["subscriptions"][request.package_id]
+            package_info["id"] = request.package_id
+    
+    if not package_info:
+        raise HTTPException(status_code=400, detail="الباقة غير موجودة")
+    
+    # إنشاء طلب الدفع (لـ PayPal sandbox نستخدم ID مؤقت)
+    # في الإنتاج، سنستخدم PayPal API الحقيقية
+    mock_paypal_order_id = f"PAYPAL-{str(uuid.uuid4())[:8].upper()}"
+    
+    order = PaymentOrder(
+        user_id=current_user['user_id'],
+        package_id=request.package_id,
+        package_type=request.package_type,
+        amount=request.amount,
+        currency=request.currency,
+        paypal_order_id=mock_paypal_order_id,
+        credits_added=credits_to_add,
+        metadata={"package_info": package_info}
+    )
+    
+    order_doc = order.model_dump()
+    order_doc['created_at'] = order_doc['created_at'].isoformat()
+    await db.payment_orders.insert_one(order_doc)
+    
+    await log_activity(
+        current_user['user_id'],
+        "payment_order_created",
+        "create",
+        f"Created payment order for {request.package_id}",
+        {"order_id": order.id, "amount": request.amount}
+    )
+    
+    return {
+        "order_id": mock_paypal_order_id,
+        "internal_id": order.id,
+        "amount": request.amount,
+        "currency": request.currency
+    }
+
+@api_router.post("/payments/capture-order")
+async def capture_payment_order(request: CaptureOrderRequest, current_user: dict = Depends(get_current_user)):
+    """تأكيد الدفع وإضافة النقاط"""
+    
+    # البحث عن الطلب
+    order_doc = await db.payment_orders.find_one({
+        "paypal_order_id": request.order_id,
+        "user_id": current_user['user_id'],
+        "status": "pending"
+    }, {"_id": 0})
+    
+    if not order_doc:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    
+    # في الإنتاج، نتحقق من PayPal API
+    # هنا نفترض أن الدفع تم بنجاح
+    
+    credits_to_add = order_doc.get('credits_added', 0)
+    
+    # التحقق من مكافأة أول عملية شراء
+    user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0})
+    first_purchase_bonus = 0
+    if user_doc and not user_doc.get('first_purchase_bonus_claimed'):
+        first_purchase_bonus = POINTS_CONFIG.get("first_purchase_bonus", 50)
+        credits_to_add += first_purchase_bonus
+    
+    # تحديث الطلب
+    await db.payment_orders.update_one(
+        {"id": order_doc['id']},
+        {
+            "$set": {
+                "status": "completed",
+                "completed_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    # إضافة النقاط للمستخدم
+    update_ops = {"$inc": {"credits": credits_to_add, "total_spent": order_doc.get('amount', 0)}}
+    if first_purchase_bonus > 0:
+        update_ops["$set"] = {"first_purchase_bonus_claimed": True}
+    
+    # إذا كان اشتراك، نضيف نوع الاشتراك وتاريخ الانتهاء
+    if request.package_type == "subscription":
+        expires_at = datetime.now(timezone.utc) + timedelta(days=30)
+        if "$set" not in update_ops:
+            update_ops["$set"] = {}
+        update_ops["$set"]["subscription_type"] = request.package_id.replace("_monthly", "")
+        update_ops["$set"]["subscription_expires"] = expires_at.isoformat()
+    
+    await db.users.update_one({"id": current_user['user_id']}, update_ops)
+    
+    await log_activity(
+        current_user['user_id'],
+        "payment_completed",
+        "create",
+        f"Payment completed: {credits_to_add} credits added",
+        {
+            "order_id": order_doc['id'],
+            "credits_added": credits_to_add,
+            "first_purchase_bonus": first_purchase_bonus
+        }
+    )
+    
+    # إرسال إشعار للمالك
+    try:
+        await send_whatsapp_notification(
+            f"💰 عملية شراء جديدة!\n"
+            f"المستخدم: {user_doc.get('name', 'غير معروف')}\n"
+            f"الباقة: {request.package_id}\n"
+            f"المبلغ: ${order_doc.get('amount', 0)}\n"
+            f"النقاط المضافة: {credits_to_add}"
+        )
+    except:
+        pass
+    
+    return {
+        "status": "completed",
+        "credits_added": credits_to_add,
+        "first_purchase_bonus": first_purchase_bonus,
+        "message": f"تم الدفع بنجاح! حصلت على {credits_to_add} نقطة"
+    }
+
+@api_router.get("/payments/history")
+async def get_payment_history(current_user: dict = Depends(get_current_user)):
+    """سجل المدفوعات"""
+    orders = await db.payment_orders.find(
+        {"user_id": current_user['user_id']},
+        {"_id": 0}
+    ).sort("created_at", -1).limit(50).to_list(50)
+    
+    return {"orders": orders}
 
 @api_router.get("/settings/payment")
 async def get_payment_settings():

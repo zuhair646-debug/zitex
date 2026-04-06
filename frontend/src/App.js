@@ -12,6 +12,7 @@ import MyWebsites from '@/pages/MyWebsites';
 import ImageGenerator from '@/pages/ImageGenerator';
 import VideoGenerator from '@/pages/VideoGenerator';
 import PricingPage from '@/pages/PricingPage';
+import PaymentPage from '@/pages/PaymentPage';
 import AdminDashboard from '@/pages/AdminDashboard';
 import AdminRequests from '@/pages/AdminRequests';
 import AdminPayments from '@/pages/AdminPayments';
@@ -67,6 +68,7 @@ function App() {
           <Route path="/login" element={<LoginPage setUser={setUser} />} />
           <Route path="/register" element={<RegisterPage setUser={setUser} />} />
           <Route path="/pricing" element={<PricingPage user={user} />} />
+          <Route path="/payment" element={<ProtectedRoute><PaymentPage user={user} /></ProtectedRoute>} />
           
           <Route path="/dashboard" element={<ProtectedRoute><ClientDashboard user={user} setUser={setUser} /></ProtectedRoute>} />
           <Route path="/dashboard/new-request" element={<ProtectedRoute><NewRequest user={user} /></ProtectedRoute>} />
