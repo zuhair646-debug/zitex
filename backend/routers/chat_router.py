@@ -1,0 +1,253 @@
+"""
+Zitex Chat API Router
+راوتر API للشات الذكي
+"""
+from fastapi import APIRouter, HTTPException, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel
+from typing import Optional, Dict, Any, List
+import jwt
+import os
+
+router = APIRouter(prefix="/chat", tags=["Chat"])
+security = HTTPBearer()
+
+JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key')
+
+
+# Pydantic models for API
+class CreateSessionRequest(BaseModel):
+    session_type: str = "general"  # general, image, video, website
+    title: Optional[str] = None
+
+
+class SendMessageRequest(BaseModel):
+    message: str
+    settings: Dict[str, Any] = {}
+
+
+class SessionResponse(BaseModel):
+    id: str
+    title: str
+    session_type: str
+    status: str
+    created_at: str
+    updated_at: str
+    message_count: int = 0
+
+
+# Dependency to get current user
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    try:
+        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=['HS256'])
+        user_id = payload.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return {'user_id': user_id}
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
+# Global AI assistant instance (will be set from main server)
+ai_assistant = None
+
+
+def set_ai_assistant(assistant):
+    """Set the AI assistant instance"""
+    global ai_assistant
+    ai_assistant = assistant
+
+
+@router.post("/sessions", response_model=SessionResponse)
+async def create_session(
+    request: CreateSessionRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """إنشاء جلسة محادثة جديدة"""
+    if not ai_assistant:
+        raise HTTPException(status_code=503, detail="AI service not available")
+    
+    session = await ai_assistant.create_session(
+        user_id=current_user['user_id'],
+        session_type=request.session_type,
+        title=request.title
+    )
+    
+    return SessionResponse(
+        id=session['id'],
+        title=session['title'],
+        session_type=session['session_type'],
+        status=session['status'],
+        created_at=session['created_at'],
+        updated_at=session['updated_at'],
+        message_count=len(session.get('messages', []))
+    )
+
+
+@router.get("/sessions")
+async def get_sessions(
+    limit: int = 50,
+    current_user: dict = Depends(get_current_user)
+):
+    """استرجاع جلسات المستخدم"""
+    if not ai_assistant:
+        raise HTTPException(status_code=503, detail="AI service not available")
+    
+    sessions = await ai_assistant.get_user_sessions(
+        user_id=current_user['user_id'],
+        limit=limit
+    )
+    
+    return [
+        {
+            "id": s['id'],
+            "title": s['title'],
+            "session_type": s['session_type'],
+            "status": s['status'],
+            "created_at": s['created_at'],
+            "updated_at": s['updated_at'],
+            "message_count": len(s.get('messages', [])),
+            "last_message": s.get('messages', [{}])[-1].get('content', '')[:100] if s.get('messages') else None
+        }
+        for s in sessions
+    ]
+
+
+@router.get("/sessions/{session_id}")
+async def get_session(
+    session_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """استرجاع جلسة محددة مع رسائلها"""
+    if not ai_assistant:
+        raise HTTPException(status_code=503, detail="AI service not available")
+    
+    session = await ai_assistant.get_session(
+        session_id=session_id,
+        user_id=current_user['user_id']
+    )
+    
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    return session
+
+
+@router.post("/sessions/{session_id}/messages")
+async def send_message(
+    session_id: str,
+    request: SendMessageRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """إرسال رسالة في جلسة"""
+    if not ai_assistant:
+        raise HTTPException(status_code=503, detail="AI service not available")
+    
+    try:
+        result = await ai_assistant.process_message(
+            session_id=session_id,
+            user_id=current_user['user_id'],
+            message=request.message,
+            settings=request.settings
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing message: {str(e)}")
+
+
+@router.delete("/sessions/{session_id}")
+async def delete_session(
+    session_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """حذف (أرشفة) جلسة"""
+    if not ai_assistant:
+        raise HTTPException(status_code=503, detail="AI service not available")
+    
+    success = await ai_assistant.delete_session(
+        session_id=session_id,
+        user_id=current_user['user_id']
+    )
+    
+    if not success:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    return {"message": "Session archived"}
+
+
+@router.get("/sessions/{session_id}/assets")
+async def get_session_assets(
+    session_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """استرجاع أصول الجلسة (صور، فيديوهات، ملفات)"""
+    if not ai_assistant:
+        raise HTTPException(status_code=503, detail="AI service not available")
+    
+    assets = await ai_assistant.get_session_assets(
+        session_id=session_id,
+        user_id=current_user['user_id']
+    )
+    
+    return assets
+
+
+@router.get("/voices")
+async def get_available_voices(
+    current_user: dict = Depends(get_current_user)
+):
+    """استرجاع الأصوات المتاحة"""
+    # قائمة الأصوات المتاحة
+    voices = [
+        {"voice_id": "21m00Tcm4TlvDq8ikWAM", "name": "Rachel", "gender": "female", "language": "en", "accent": "American"},
+        {"voice_id": "AZnzlk1XvdvUeBnXmlld", "name": "Domi", "gender": "female", "language": "en", "accent": "American"},
+        {"voice_id": "EXAVITQu4vr4xnSDxMaL", "name": "Bella", "gender": "female", "language": "en", "accent": "American"},
+        {"voice_id": "ErXwobaYiN019PkySvjV", "name": "Antoni", "gender": "male", "language": "en", "accent": "American"},
+        {"voice_id": "VR6AewLTigWG4xSOukaG", "name": "Arnold", "gender": "male", "language": "en", "accent": "American"},
+        {"voice_id": "pNInz6obpgDQGcFmaJgB", "name": "Adam", "gender": "male", "language": "en", "accent": "American"},
+        {"voice_id": "yoZ06aMxZJJ28mfd3POQ", "name": "Sam", "gender": "male", "language": "en", "accent": "American"},
+        {"voice_id": "onwK4e9ZLuTAKqWW03F9", "name": "Daniel", "gender": "male", "language": "en", "accent": "British"},
+        {"voice_id": "XB0fDUnXU5powFXDhCwa", "name": "Charlotte", "gender": "female", "language": "en", "accent": "British"},
+    ]
+    return {"voices": voices}
+
+
+
+@router.get("/video-requests")
+async def get_video_requests(
+    session_id: str = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """استرجاع طلبات الفيديو"""
+    if not ai_assistant:
+        raise HTTPException(status_code=503, detail="AI service not available")
+    
+    requests = await ai_assistant.get_video_requests(
+        user_id=current_user['user_id'],
+        session_id=session_id
+    )
+    return requests
+
+
+@router.get("/video-requests/{request_id}")
+async def get_video_request(
+    request_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """استرجاع طلب فيديو محدد"""
+    if not ai_assistant:
+        raise HTTPException(status_code=503, detail="AI service not available")
+    
+    request = await ai_assistant.db.video_requests.find_one(
+        {"id": request_id, "user_id": current_user['user_id']},
+        {"_id": 0}
+    )
+    
+    if not request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    
+    return request
