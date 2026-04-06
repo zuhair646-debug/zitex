@@ -1,5 +1,6 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -13,7 +14,8 @@ from datetime import datetime, timezone, timedelta
 import bcrypt
 import jwt
 from emergentintegrations.llm.chat import LlmChat, UserMessage
-from elevenlabs import ElevenLabs
+from emergentintegrations.llm.openai import OpenAITextToSpeech
+from elevenlabs.client import ElevenLabs
 from elevenlabs.types import VoiceSettings
 import base64
 import httpx
@@ -35,6 +37,9 @@ JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key')
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 OWNER_WHATSAPP = os.environ.get('OWNER_WHATSAPP', '966507374438')
 ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY')
+
+# Initialize OpenAI TTS via emergentintegrations
+openai_tts = OpenAITextToSpeech(api_key=EMERGENT_LLM_KEY) if EMERGENT_LLM_KEY else None
 
 # Initialize ElevenLabs client
 eleven_client = ElevenLabs(api_key=ELEVENLABS_API_KEY) if ELEVENLABS_API_KEY else None
@@ -97,11 +102,19 @@ class VoiceInfo(BaseModel):
     language: str
     accent: str
 
+# TTS Models
 class TTSRequest(BaseModel):
     text: str
-    voice_id: str
-    stability: float = 0.5
-    similarity_boost: float = 0.75
+    provider: Literal["openai", "elevenlabs"] = "openai"
+    voice: str = "alloy"
+    speed: float = 1.0
+
+class TTSVoice(BaseModel):
+    id: str
+    name: str
+    provider: str
+    language: str = "ar"
+    preview_url: Optional[str] = None
 
 class ImageEditRequest(BaseModel):
     image_base64: str
@@ -417,41 +430,68 @@ async def get_voices(current_user: dict = Depends(get_current_user)):
 
 @api_router.post("/tts/generate")
 async def generate_tts(request: TTSRequest, current_user: dict = Depends(get_current_user)):
-    """Generate text-to-speech audio"""
-    if not eleven_client:
-        raise HTTPException(status_code=503, detail="TTS service not available")
-    
+    """Generate text-to-speech audio - supports OpenAI and ElevenLabs"""
     try:
-        voice_settings = VoiceSettings(
-            stability=request.stability,
-            similarity_boost=request.similarity_boost
-        )
+        audio_data = None
         
-        audio_generator = eleven_client.text_to_speech.convert(
-            text=request.text,
-            voice_id=request.voice_id,
-            model_id="eleven_multilingual_v2",
-            voice_settings=voice_settings
-        )
+        if request.provider == "openai":
+            if not openai_tts:
+                raise HTTPException(status_code=400, detail="OpenAI TTS غير متاح")
+            
+            # Generate speech with OpenAI via emergentintegrations
+            audio_base64 = await openai_tts.generate_speech_base64(
+                text=request.text,
+                model="tts-1",
+                voice=request.voice,
+                speed=request.speed
+            )
+            audio_data = f"data:audio/mp3;base64,{audio_base64}"
+            
+        elif request.provider == "elevenlabs":
+            if not eleven_client:
+                raise HTTPException(status_code=400, detail="ElevenLabs غير متاح")
+            
+            voice_settings = VoiceSettings(
+                stability=0.5,
+                similarity_boost=0.75,
+                style=0.5,
+                use_speaker_boost=True
+            )
+            
+            audio_generator = eleven_client.text_to_speech.convert(
+                text=request.text,
+                voice_id=request.voice,
+                model_id="eleven_multilingual_v2",
+                voice_settings=voice_settings
+            )
+            
+            audio_bytes = b""
+            for chunk in audio_generator:
+                audio_bytes += chunk
+            
+            audio_b64 = base64.b64encode(audio_bytes).decode()
+            audio_data = f"data:audio/mpeg;base64,{audio_b64}"
         
-        audio_data = b""
-        for chunk in audio_generator:
-            audio_data += chunk
-        
-        audio_b64 = base64.b64encode(audio_data).decode()
-        audio_url = f"data:audio/mpeg;base64,{audio_b64}"
+        else:
+            raise HTTPException(status_code=400, detail="مزود غير معروف")
         
         await log_activity(
-            current_user['user_id'], 
-            "tts_generated", 
-            "create", 
-            f"Generated TTS: {request.text[:50]}...",
-            {"voice_id": request.voice_id, "text_length": len(request.text)}
+            current_user['user_id'],
+            "tts_generated",
+            "create",
+            f"Generated speech ({request.provider}): {request.text[:50]}...",
+            {"provider": request.provider, "voice": request.voice, "chars": len(request.text)}
         )
         
-        return {"audio_url": audio_url, "text": request.text, "voice_id": request.voice_id}
+        return {
+            "audio_url": audio_data,
+            "provider": request.provider,
+            "voice": request.voice,
+            "chars": len(request.text)
+        }
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generating TTS: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"خطأ في توليد الصوت: {str(e)}")
 
 # ============== IMAGE GENERATION & EDITING ==============
 

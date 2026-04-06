@@ -11,32 +11,40 @@
   - GPT-4o (المحادثة الذكية)
   - Gemini Nano Banana (توليد الصور)
   - Sora 2 (فيديوهات سينمائية - 2-5 دقائق للتوليد)
-  - ElevenLabs (تحويل النص إلى صوت)
+  - OpenAI TTS (تحويل النص إلى صوت - جديد!)
+  - ElevenLabs (تحويل النص إلى صوت - جودة عالية)
 
 ## الميزات المكتملة
 
 ### ✅ المرحلة 1+2: الشات الذكي
 - [x] شات AI تفاعلي باللغة العربية
 - [x] توليد صور فوري عبر المحادثة
-- [x] توليد فيديوهات سينمائية (Sora 2) - **تم إصلاحه March 23, 2026**
+- [x] توليد فيديوهات سينمائية (Sora 2)
 - [x] بناء مواقع عبر الشات
 - [x] حفظ جميع المحادثات والمشاريع
 - [x] أزرار تحميل لجميع الأصول
 
-### ✅ إصلاحات March 23, 2026
-- [x] **إصلاح توليد الفيديو**: تم تحويله إلى background task مع polling
-- [x] **إضافة آلية Polling**: Frontend يتحقق من حالة الفيديو كل 5 ثواني
-- [x] **شريط حالة الفيديو**: يظهر عند وجود طلبات معلقة
-- [x] **إصلاح layout**: تصحيح مشكلة عرض الرسائل في منطقة الدردشة
+### ✅ الرد الصوتي (جديد - April 6, 2026)
+- [x] **OpenAI TTS** - تحويل الردود إلى صوت ($0.015/1000 حرف)
+- [x] **ElevenLabs** - جودة صوت عالية ($0.30/1000 حرف)
+- [x] **9 أصوات OpenAI**: alloy, ash, coral, echo, fable, nova, onyx, sage, shimmer
+- [x] **9 أصوات ElevenLabs**: Rachel, Domi, Bella, Antoni, Elli, Josh, Arnold, Adam, Sam
+- [x] **زر تشغيل الصوت** على كل رسالة
+- [x] **لوحة إعدادات الصوت** (المزود، الصوت، السرعة)
+- [x] **تفعيل/إيقاف** الرد الصوتي التلقائي
 
-### ✅ المرحلة 3: النشر والتوزيع
-- [x] صفحة المشاريع `/projects`
-- [x] روابط منصات النشر (Vercel, Netlify, GitHub Pages)
-- [x] تحميل المشاريع كـ ZIP
-- [x] تعليمات النشر خطوة بخطوة
-- [x] دليل "3 خطوات للنشر"
+### ✅ إصلاحات سابقة
+- [x] إصلاح توليد الفيديو (Polling + Background Task)
+- [x] إضافة خيارات المدة (50 ثانية + دقيقة كاملة)
+- [x] إصلاح الـ AI Prompt ليُولّد الفيديو مباشرة
 
 ## API Endpoints
+
+### TTS API (جديد)
+```
+GET  /api/tts/voices    - قائمة الأصوات المتاحة
+POST /api/tts/generate  - توليد صوت من نص
+```
 
 ### Chat API
 ```
@@ -44,89 +52,42 @@ POST /api/chat/sessions          - إنشاء جلسة جديدة
 GET  /api/chat/sessions          - قائمة الجلسات
 GET  /api/chat/sessions/{id}     - جلسة محددة
 POST /api/chat/sessions/{id}/messages - إرسال رسالة
-DELETE /api/chat/sessions/{id}   - حذف جلسة
-GET  /api/chat/video-requests    - طلبات الفيديو المعلقة (جديد)
-GET  /api/chat/video-requests/{id} - حالة طلب فيديو محدد (جديد)
+GET  /api/chat/video-requests    - طلبات الفيديو المعلقة
 ```
 
-### Deployment API
-```
-POST /api/deploy/projects        - إنشاء مشروع
-GET  /api/deploy/projects        - قائمة المشاريع
-GET  /api/deploy/projects/{id}   - مشروع محدد
-GET  /api/deploy/projects/{id}/download - تحميل ZIP
-```
+## إعدادات الصوت (TTS)
 
-## إعدادات الفيديو (Sora 2)
-- **المدة**: 4، 8، أو 12 ثانية
-- **الدقة**: 
-  - 1280x720 (HD)
-  - 1792x1024 (عريض)
-  - 1024x1792 (عمودي)
-  - 1024x1024 (مربع)
-- **الوقت**: 2-5 دقائق للتوليد (Background Task)
+### OpenAI TTS
+- **Model**: tts-1 (سريع) أو tts-1-hd (جودة عالية)
+- **الأصوات**: alloy, ash, coral, echo, fable, nova, onyx, sage, shimmer
+- **السرعة**: 0.25 إلى 4.0
+- **التكلفة**: $0.015/1000 حرف
 
-## نظام توليد الفيديو (محدث)
-1. المستخدم يطلب فيديو عبر الشات
-2. Backend يُنشئ `video_request` في قاعدة البيانات
-3. يُرسل رسالة فورية للمستخدم "جاري التوليد..."
-4. يبدأ توليد الفيديو في الخلفية (Background Task)
-5. Frontend يبدأ polling كل 5 ثواني للتحقق من الحالة
-6. عند الانتهاء، يُحفظ الفيديو ويُضاف كرسالة جديدة
-7. Frontend يُحدث الشاشة تلقائياً لعرض الفيديو
+### ElevenLabs
+- **Model**: eleven_multilingual_v2
+- **الأصوات**: Rachel, Domi, Bella, Antoni, Elli, Josh, Arnold, Adam, Sam
+- **التكلفة**: ~$0.30/1000 حرف
 
 ## الصفحات
 - `/` - الصفحة الرئيسية
 - `/login` - تسجيل الدخول
 - `/register` - التسجيل
 - `/chat` - الشات الذكي ⭐
-- `/projects` - مشاريعي والنشر ⭐
-- `/dashboard` - لوحة تحكم العميل
-- `/admin` - لوحة تحكم الأدمن
+- `/projects` - مشاريعي والنشر
 
 ## بيانات الدخول
 - **Email**: owner@zitex.com
 - **Password**: owner123
 
 ## ملاحظات تقنية
-- توليد الفيديو يستغرق 2-5 دقائق (Sora 2) - يعمل في الخلفية
-- الصور تُنشأ فوراً (Gemini)
-- المواقع تُنشأ في ثوانٍ (GPT-4o)
-- Polling يتحقق من حالة الفيديو كل 5 ثواني
+- TTS يعمل مع Emergent LLM Key (لا حاجة لمفتاح OpenAI منفصل)
+- ElevenLabs يحتاج مفتاح API منفصل
+- الصوت يُرسل كـ base64 data URL
 
 ## المهام المتبقية
 - [ ] تكامل PayPal للدفع الدولي
 - [ ] نظام النقاط/الرصيد
 - [ ] إشعارات WhatsApp حقيقية
-- [ ] إصلاح مشكلة تسجيل الخروج (قد لا يمسح الـ token بشكل صحيح)
-- [ ] إضافة toast لأخطاء تسجيل الدخول
-
-## Code Architecture
-```
-/app/
-├── backend/
-│   ├── .env
-│   ├── requirements.txt
-│   ├── server.py
-│   ├── models/
-│   │   └── chat_models.py
-│   ├── services/
-│   │   ├── ai_chat_service.py  # Video background task + polling
-│   │   └── deployment_service.py
-│   ├── routers/
-│   │   ├── chat_router.py      # Video-requests endpoints
-│   │   └── deployment_router.py
-│   └── tests/
-│       └── test_video_polling.py
-├── frontend/
-│   ├── .env
-│   ├── package.json
-│   └── src/
-│       └── pages/
-│           └── AIChat.js       # Polling logic + pending video indicator
-└── memory/
-    └── PRD.md
-```
 
 ## آخر تحديث
-March 23, 2026 - إصلاح كامل لتوليد الفيديو مع آلية Polling
+April 6, 2026 - إضافة الرد الصوتي (OpenAI TTS + ElevenLabs)

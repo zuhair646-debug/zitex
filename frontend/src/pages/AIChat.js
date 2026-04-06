@@ -7,7 +7,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { 
   Send, Plus, MessageSquare, Image, Video, Globe, 
-  Loader2, Download, Trash2, Mic, ChevronLeft, ChevronRight, Sparkles
+  Loader2, Download, Trash2, Mic, ChevronLeft, ChevronRight, Sparkles,
+  Volume2, VolumeX, Settings
 } from 'lucide-react';
 
 // ============== Loading Skeleton ==============
@@ -70,7 +71,7 @@ const SessionItem = memo(({ session, isActive, onSelect, onDelete, getIcon }) =>
   </div>
 ));
 
-const ChatMessage = memo(({ msg, idx, renderAttachment }) => (
+const ChatMessage = memo(({ msg, idx, renderAttachment, onPlayAudio, onGenerateTTS, playingAudio, ttsEnabled }) => (
   <div
     className={`flex ${msg.role === 'user' ? 'justify-start' : 'justify-end'} animate-fadeIn`}
     data-testid={`message-${idx}`}
@@ -84,9 +85,28 @@ const ChatMessage = memo(({ msg, idx, renderAttachment }) => (
       {msg.attachments?.map((attachment, aIdx) => (
         <div key={aIdx}>{renderAttachment(attachment)}</div>
       ))}
-      <p className="text-xs text-gray-400 mt-2 opacity-70">
-        {new Date(msg.created_at).toLocaleTimeString('ar-SA')}
-      </p>
+      <div className="flex items-center justify-between mt-2">
+        <p className="text-xs text-gray-400 opacity-70">
+          {new Date(msg.created_at).toLocaleTimeString('ar-SA')}
+        </p>
+        {msg.role === 'assistant' && (
+          <button
+            onClick={() => msg.audio_url ? onPlayAudio(msg.audio_url, msg.id) : onGenerateTTS(msg.content, msg.id)}
+            className={`p-1.5 rounded-full transition-all ${
+              playingAudio === msg.id 
+                ? 'bg-purple-500 text-white' 
+                : 'bg-slate-600 hover:bg-slate-500 text-gray-300'
+            }`}
+            title={msg.audio_url ? 'تشغيل الصوت' : 'توليد صوت'}
+          >
+            {playingAudio === msg.id ? (
+              <VolumeX className="w-4 h-4" />
+            ) : (
+              <Volume2 className="w-4 h-4" />
+            )}
+          </button>
+        )}
+      </div>
     </div>
   </div>
 ));
@@ -102,10 +122,19 @@ const AIChat = ({ user }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isTyping, setIsTyping] = useState(false);
   const [pendingVideoRequests, setPendingVideoRequests] = useState([]);
+  const [showTTSSettings, setShowTTSSettings] = useState(false);
+  const [availableVoices, setAvailableVoices] = useState([]);
+  const [playingAudio, setPlayingAudio] = useState(null);
   const [generationSettings, setGenerationSettings] = useState({
     duration: 4,
     size: '1280x720',
     voice_id: '21m00Tcm4TlvDq8ikWAM'
+  });
+  const [ttsSettings, setTtsSettings] = useState({
+    enabled: false,
+    provider: 'openai',
+    voice: 'alloy',
+    speed: 1.0
   });
   
   const messagesEndRef = useRef(null);
@@ -115,7 +144,68 @@ const AIChat = ({ user }) => {
 
   useEffect(() => {
     fetchSessions();
+    fetchVoices();
   }, []);
+
+  const fetchVoices = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/tts/voices`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAvailableVoices(data.voices || []);
+      }
+    } catch (error) {
+      console.error('Error fetching voices:', error);
+    }
+  };
+
+  const playAudio = (audioUrl, messageId) => {
+    if (playingAudio === messageId) {
+      audioRef.current?.pause();
+      setPlayingAudio(null);
+    } else {
+      if (audioRef.current) {
+        audioRef.current.src = audioUrl;
+        audioRef.current.play();
+        setPlayingAudio(messageId);
+        audioRef.current.onended = () => setPlayingAudio(null);
+      }
+    }
+  };
+
+  const generateTTS = async (text, messageId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/tts/generate`, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          text: text.replace(/[✅🎬⏱️📩💡🖼️🌐📁]/g, '').replace(/\[.*?\]/g, '').trim(),
+          provider: ttsSettings.provider,
+          voice: ttsSettings.voice,
+          speed: ttsSettings.speed
+        })
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        playAudio(data.audio_url, messageId);
+        
+        // Update message with audio
+        setMessages(prev => prev.map(m => 
+          m.id === messageId ? { ...m, audio_url: data.audio_url } : m
+        ));
+      }
+    } catch (error) {
+      toast.error('فشل توليد الصوت');
+    }
+  };
 
   // Polling for video requests status
   useEffect(() => {
@@ -291,7 +381,10 @@ const AIChat = ({ user }) => {
           },
           body: JSON.stringify({
             message: userMessage,
-            settings: generationSettings
+            settings: {
+              ...generationSettings,
+              tts: ttsSettings
+            }
           })
         }
       );
@@ -303,6 +396,11 @@ const AIChat = ({ user }) => {
           const filtered = prev.filter(m => m.id !== tempUserMsg.id);
           return [...filtered, data.user_message, data.assistant_message];
         });
+        
+        // Auto-play audio if TTS is enabled and audio is available
+        if (ttsSettings.enabled && data.assistant_message?.audio_url) {
+          playAudio(data.assistant_message.audio_url, data.assistant_message.id);
+        }
 
         // Check for pending video requests in the response
         const videoPendingAttachment = data.assistant_message?.attachments?.find(
@@ -672,6 +770,10 @@ const AIChat = ({ user }) => {
                       msg={msg} 
                       idx={idx} 
                       renderAttachment={renderAttachment}
+                      onPlayAudio={playAudio}
+                      onGenerateTTS={generateTTS}
+                      playingAudio={playingAudio}
+                      ttsEnabled={ttsSettings.enabled}
                     />
                   ))}
                   
@@ -697,6 +799,72 @@ const AIChat = ({ user }) => {
               {/* Input Area */}
               <div className="border-t border-slate-700 p-4 bg-slate-800/50 backdrop-blur">
                 <div className="max-w-4xl mx-auto">
+                  {/* Audio Element for TTS */}
+                  <audio ref={audioRef} className="hidden" />
+                  
+                  {/* TTS Settings Panel */}
+                  {showTTSSettings && (
+                    <div className="mb-3 p-4 bg-slate-700/50 border border-slate-600 rounded-lg animate-fadeIn">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-white font-medium flex items-center gap-2">
+                          <Volume2 className="w-5 h-5 text-purple-400" />
+                          إعدادات الرد الصوتي
+                        </h4>
+                        <button 
+                          onClick={() => setShowTTSSettings(false)}
+                          className="text-gray-400 hover:text-white"
+                        >✕</button>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm text-gray-400 mb-1">المزود</label>
+                          <select
+                            value={ttsSettings.provider}
+                            onChange={(e) => setTtsSettings({...ttsSettings, provider: e.target.value, voice: e.target.value === 'openai' ? 'alloy' : '21m00Tcm4TlvDq8ikWAM'})}
+                            className="w-full bg-slate-600 border-slate-500 text-white rounded px-3 py-2 text-sm"
+                          >
+                            <option value="openai">OpenAI TTS (أرخص)</option>
+                            <option value="elevenlabs">ElevenLabs (جودة أعلى)</option>
+                          </select>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm text-gray-400 mb-1">الصوت</label>
+                          <select
+                            value={ttsSettings.voice}
+                            onChange={(e) => setTtsSettings({...ttsSettings, voice: e.target.value})}
+                            className="w-full bg-slate-600 border-slate-500 text-white rounded px-3 py-2 text-sm"
+                          >
+                            {availableVoices
+                              .filter(v => v.provider === ttsSettings.provider)
+                              .map(voice => (
+                                <option key={voice.id} value={voice.id}>{voice.name}</option>
+                              ))
+                            }
+                          </select>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm text-gray-400 mb-1">السرعة: {ttsSettings.speed}x</label>
+                          <input
+                            type="range"
+                            min="0.5"
+                            max="2"
+                            step="0.1"
+                            value={ttsSettings.speed}
+                            onChange={(e) => setTtsSettings({...ttsSettings, speed: parseFloat(e.target.value)})}
+                            className="w-full"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="mt-3 text-xs text-gray-500">
+                        💰 التكلفة: {ttsSettings.provider === 'openai' ? '$0.015/1000 حرف' : '$0.30/1000 حرف'}
+                      </div>
+                    </div>
+                  )}
+                  
                   {/* Pending Video Requests Indicator */}
                   {pendingVideoRequests.length > 0 && (
                     <div className="mb-3 p-3 bg-orange-500/20 border border-orange-500/40 rounded-lg flex items-center gap-3">
@@ -765,6 +933,31 @@ const AIChat = ({ user }) => {
                       disabled={loading}
                       data-testid="chat-input"
                     />
+                    
+                    {/* TTS Toggle Button */}
+                    <Button
+                      variant="outline"
+                      onClick={() => setTtsSettings({...ttsSettings, enabled: !ttsSettings.enabled})}
+                      className={`px-4 transition-all ${
+                        ttsSettings.enabled 
+                          ? 'bg-purple-500/20 border-purple-500 text-purple-400' 
+                          : 'border-slate-600 text-gray-400 hover:text-white'
+                      }`}
+                      title={ttsSettings.enabled ? 'الرد الصوتي مفعّل' : 'تفعيل الرد الصوتي'}
+                    >
+                      <Volume2 className="w-5 h-5" />
+                    </Button>
+                    
+                    {/* TTS Settings Button */}
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowTTSSettings(!showTTSSettings)}
+                      className="px-4 border-slate-600 text-gray-400 hover:text-white transition-all"
+                      title="إعدادات الصوت"
+                    >
+                      <Settings className="w-5 h-5" />
+                    </Button>
+                    
                     <Button
                       onClick={sendMessage}
                       disabled={loading || !inputMessage.trim()}
@@ -778,6 +971,14 @@ const AIChat = ({ user }) => {
                       )}
                     </Button>
                   </div>
+                  
+                  {/* TTS Status */}
+                  {ttsSettings.enabled && (
+                    <div className="mt-2 text-xs text-purple-400 flex items-center gap-2">
+                      <Volume2 className="w-3 h-3" />
+                      <span>الرد الصوتي مفعّل ({ttsSettings.provider === 'openai' ? 'OpenAI' : 'ElevenLabs'})</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </>

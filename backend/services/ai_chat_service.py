@@ -13,7 +13,8 @@ from typing import Optional, Dict, Any, Tuple, List
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from emergentintegrations.llm.openai.video_generation import OpenAIVideoGeneration
-from elevenlabs import ElevenLabs
+from openai import OpenAI
+from elevenlabs.client import ElevenLabs
 from elevenlabs.types import VoiceSettings
 from PIL import Image, ImageDraw, ImageFont
 import io
@@ -100,12 +101,48 @@ SYSTEM_PROMPTS = {
 class AIAssistant:
     """مساعد الذكاء الاصطناعي"""
     
-    def __init__(self, db: AsyncIOMotorDatabase, api_key: str, elevenlabs_key: str = None):
+    def __init__(self, db: AsyncIOMotorDatabase, api_key: str, elevenlabs_key: str = None, openai_key: str = None):
         self.db = db
         self.api_key = api_key
         self.elevenlabs_key = elevenlabs_key
+        self.openai_key = openai_key or api_key
         self.eleven_client = ElevenLabs(api_key=elevenlabs_key) if elevenlabs_key else None
+        self.openai_client = OpenAI(api_key=self.openai_key) if self.openai_key else None
         self.chat_instances: Dict[str, LlmChat] = {}
+    
+    async def generate_tts(self, text: str, provider: str = "openai", voice: str = "alloy", speed: float = 1.0) -> Optional[str]:
+        """توليد صوت من النص"""
+        try:
+            if provider == "openai" and self.openai_client:
+                response = self.openai_client.audio.speech.create(
+                    model="tts-1",
+                    voice=voice,
+                    input=text,
+                    speed=speed
+                )
+                audio_bytes = response.content
+                audio_b64 = base64.b64encode(audio_bytes).decode()
+                return f"data:audio/mpeg;base64,{audio_b64}"
+            
+            elif provider == "elevenlabs" and self.eleven_client:
+                voice_settings = VoiceSettings(
+                    stability=0.5,
+                    similarity_boost=0.75
+                )
+                audio_generator = self.eleven_client.text_to_speech.convert(
+                    text=text,
+                    voice_id=voice,
+                    model_id="eleven_multilingual_v2",
+                    voice_settings=voice_settings
+                )
+                audio_bytes = b""
+                for chunk in audio_generator:
+                    audio_bytes += chunk
+                audio_b64 = base64.b64encode(audio_bytes).decode()
+                return f"data:audio/mpeg;base64,{audio_b64}"
+        except Exception as e:
+            logger.error(f"TTS generation error: {e}")
+        return None
     
     def _get_chat_instance(self, session_id: str, session_type: str = "general") -> LlmChat:
         """إنشاء أو استرجاع مثيل الشات"""
@@ -291,6 +328,28 @@ class AIAssistant:
             "metadata": {},
             "created_at": datetime.now(timezone.utc).isoformat()
         }
+        
+        # توليد صوت للرد إذا كان مطلوباً
+        tts_settings = settings.get("tts", {})
+        if tts_settings.get("enabled", False):
+            tts_provider = tts_settings.get("provider", "openai")
+            tts_voice = tts_settings.get("voice", "alloy")
+            tts_speed = tts_settings.get("speed", 1.0)
+            
+            # تنظيف النص من الرموز للصوت
+            clean_text = re.sub(r'[✅🎬⏱️📩💡🖼️🌐📁]', '', ai_response.strip())
+            clean_text = re.sub(r'\[.*?\]', '', clean_text)
+            clean_text = clean_text.strip()
+            
+            if clean_text and len(clean_text) > 5:
+                audio_url = await self.generate_tts(clean_text, tts_provider, tts_voice, tts_speed)
+                if audio_url:
+                    assistant_msg["audio_url"] = audio_url
+                    assistant_msg["metadata"]["tts"] = {
+                        "provider": tts_provider,
+                        "voice": tts_voice,
+                        "chars": len(clean_text)
+                    }
         
         # تحديث الجلسة
         await self.db.chat_sessions.update_one(
