@@ -13,14 +13,39 @@ import uuid
 from datetime import datetime, timezone, timedelta
 import bcrypt
 import jwt
-from emergentintegrations.llm.chat import LlmChat, UserMessage
-from emergentintegrations.llm.openai import OpenAITextToSpeech, OpenAISpeechToText
-from elevenlabs.client import ElevenLabs
-from elevenlabs.types import VoiceSettings
 import base64
 import httpx
-from PIL import Image, ImageDraw, ImageFont
 import io
+
+# AI Features disabled for independent hosting
+# To enable: install openai, elevenlabs, Pillow and configure API keys
+AI_FEATURES_ENABLED = False
+
+# Optional imports for AI features
+try:
+    from elevenlabs.client import ElevenLabs
+    from elevenlabs.types import VoiceSettings
+    ELEVENLABS_AVAILABLE = True
+except ImportError:
+    ELEVENLABS_AVAILABLE = False
+    ElevenLabs = None
+    VoiceSettings = None
+
+try:
+    from PIL import Image, ImageDraw, ImageFont
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+    Image = None
+    ImageDraw = None
+    ImageFont = None
+
+try:
+    import openai
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+    openai = None
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -34,29 +59,35 @@ api_router = APIRouter(prefix="/api")
 
 security = HTTPBearer()
 JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key')
-EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 OWNER_WHATSAPP = os.environ.get('OWNER_WHATSAPP', '966507374438')
 ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY')
 PAYPAL_CLIENT_ID = os.environ.get('PAYPAL_CLIENT_ID')
 PAYPAL_SECRET = os.environ.get('PAYPAL_SECRET')
 
 # Initialize PayPal
-import paypalrestsdk
-if PAYPAL_CLIENT_ID and PAYPAL_SECRET:
-    paypalrestsdk.configure({
-        "mode": "live",  # LIVE MODE - Production
-        "client_id": PAYPAL_CLIENT_ID,
-        "client_secret": PAYPAL_SECRET
-    })
+try:
+    import paypalrestsdk
+    PAYPAL_AVAILABLE = True
+    if PAYPAL_CLIENT_ID and PAYPAL_SECRET:
+        paypalrestsdk.configure({
+            "mode": "live",  # LIVE MODE - Production
+            "client_id": PAYPAL_CLIENT_ID,
+            "client_secret": PAYPAL_SECRET
+        })
+except ImportError:
+    PAYPAL_AVAILABLE = False
+    paypalrestsdk = None
 
-# Initialize OpenAI TTS via emergentintegrations
-openai_tts = OpenAITextToSpeech(api_key=EMERGENT_LLM_KEY) if EMERGENT_LLM_KEY else None
-
-# Initialize OpenAI STT (Speech-to-Text) via emergentintegrations
-openai_stt = OpenAISpeechToText(api_key=EMERGENT_LLM_KEY) if EMERGENT_LLM_KEY else None
+# Initialize OpenAI client (for TTS/STT when enabled)
+openai_client = None
+if OPENAI_AVAILABLE and OPENAI_API_KEY:
+    openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 # Initialize ElevenLabs client
-eleven_client = ElevenLabs(api_key=ELEVENLABS_API_KEY) if ELEVENLABS_API_KEY else None
+eleven_client = None
+if ELEVENLABS_AVAILABLE and ELEVENLABS_API_KEY:
+    eleven_client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
 
 # ============== MODELS ==============
 
@@ -547,20 +578,25 @@ async def get_voices(current_user: dict = Depends(get_current_user)):
 @api_router.post("/tts/generate")
 async def generate_tts(request: TTSRequest, current_user: dict = Depends(get_current_user)):
     """Generate text-to-speech audio - supports OpenAI and ElevenLabs"""
+    if not AI_FEATURES_ENABLED:
+        raise HTTPException(status_code=503, detail="ميزة تحويل النص لصوت معطلة مؤقتاً. ستتوفر قريباً!")
+    
     try:
         audio_data = None
         
         if request.provider == "openai":
-            if not openai_tts:
-                raise HTTPException(status_code=400, detail="OpenAI TTS غير متاح")
+            if not openai_client:
+                raise HTTPException(status_code=400, detail="OpenAI TTS غير متاح - يرجى إضافة OPENAI_API_KEY")
             
-            # Generate speech with OpenAI via emergentintegrations
-            audio_base64 = await openai_tts.generate_speech_base64(
-                text=request.text,
+            # Generate speech with OpenAI
+            response = openai_client.audio.speech.create(
                 model="tts-1",
                 voice=request.voice,
+                input=request.text,
                 speed=request.speed
             )
+            audio_bytes = response.content
+            audio_base64 = base64.b64encode(audio_bytes).decode()
             audio_data = f"data:audio/mp3;base64,{audio_base64}"
             
         elif request.provider == "elevenlabs":
@@ -618,8 +654,11 @@ async def transcribe_audio(
     current_user: dict = Depends(get_current_user)
 ):
     """Convert speech to text using OpenAI Whisper"""
-    if not openai_stt:
-        raise HTTPException(status_code=400, detail="خدمة التحويل الصوتي غير متاحة")
+    if not AI_FEATURES_ENABLED:
+        raise HTTPException(status_code=503, detail="ميزة تحويل الصوت للنص معطلة مؤقتاً. ستتوفر قريباً!")
+    
+    if not openai_client:
+        raise HTTPException(status_code=400, detail="خدمة التحويل الصوتي غير متاحة - يرجى إضافة OPENAI_API_KEY")
     
     # Check file size (max 25MB)
     content = await audio.read()
@@ -640,7 +679,7 @@ async def transcribe_audio(
         
         # Transcribe using OpenAI Whisper
         with open(tmp_file_path, 'rb') as audio_file:
-            response = await openai_stt.transcribe(
+            response = openai_client.audio.transcriptions.create(
                 file=audio_file,
                 model="whisper-1",
                 language=language,
@@ -672,6 +711,10 @@ async def transcribe_audio(
 
 @api_router.post("/generate/image")
 async def generate_image(prompt: str, current_user: dict = Depends(get_current_user)):
+    """Generate image - TEMPORARILY DISABLED for independent hosting"""
+    if not AI_FEATURES_ENABLED:
+        raise HTTPException(status_code=503, detail="ميزة توليد الصور معطلة مؤقتاً. ستتوفر قريباً بعد إعداد OpenAI API!")
+    
     user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0})
     
     is_owner = user_doc.get('is_owner', False)
@@ -694,24 +737,25 @@ async def generate_image(prompt: str, current_user: dict = Depends(get_current_u
         raise HTTPException(status_code=403, detail="لا يوجد لديك رصيد مجاني أو اشتراك")
     
     try:
-        chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=f"img-gen-{uuid.uuid4()}",
-            system_message="You are an image generation assistant."
-        ).with_model("gemini", "gemini-3-pro-image-preview").with_params(modalities=["image", "text"])
+        # Use OpenAI DALL-E for image generation
+        if not openai_client:
+            raise HTTPException(status_code=400, detail="خدمة توليد الصور غير متاحة - يرجى إضافة OPENAI_API_KEY")
         
-        msg = UserMessage(text=prompt)
-        text, images = await chat.send_message_multimodal_response(msg)
+        response = openai_client.images.generate(
+            model="dall-e-3",
+            prompt=prompt,
+            size="1024x1024",
+            quality="standard",
+            n=1,
+        )
         
-        image_data = None
-        if images and len(images) > 0:
-            image_data = f"data:{images[0]['mime_type']};base64,{images[0]['data']}"
+        image_url = response.data[0].url
         
         gen_record = ImageGeneration(
             user_id=current_user['user_id'],
             prompt=prompt,
-            image_url=image_data,
-            status="completed" if image_data else "failed",
+            image_url=image_url,
+            status="completed" if image_url else "failed",
             is_free=is_free_use
         )
         
@@ -731,8 +775,8 @@ async def generate_image(prompt: str, current_user: dict = Depends(get_current_u
         
         return {
             "id": gen_record.id, 
-            "image_url": image_data, 
-            "text": text,
+            "image_url": image_url, 
+            "text": "تم توليد الصورة بنجاح",
             "free_images_remaining": updated_user.get('free_images', 0),
             "was_free": is_free_use
         }
@@ -742,6 +786,9 @@ async def generate_image(prompt: str, current_user: dict = Depends(get_current_u
 @api_router.post("/images/edit")
 async def edit_image(request: ImageEditRequest, current_user: dict = Depends(get_current_user)):
     """Add text to an image"""
+    if not PIL_AVAILABLE:
+        raise HTTPException(status_code=503, detail="ميزة تحرير الصور معطلة مؤقتاً - Pillow غير مثبتة")
+    
     try:
         # Decode base64 image
         if request.image_base64.startswith('data:'):
@@ -1035,6 +1082,10 @@ async def create_request(request_data: WebsiteRequestCreate, current_user: dict 
 
 @api_router.post("/requests/{request_id}/generate-suggestions")
 async def generate_suggestions(request_id: str, current_user: dict = Depends(get_current_user)):
+    """Generate AI suggestions for website - TEMPORARILY DISABLED"""
+    if not AI_FEATURES_ENABLED:
+        raise HTTPException(status_code=503, detail="ميزة اقتراحات الذكاء الاصطناعي معطلة مؤقتاً. ستتوفر قريباً!")
+    
     request_doc = await db.website_requests.find_one({"id": request_id}, {"_id": 0})
     if not request_doc:
         raise HTTPException(status_code=404, detail="Request not found")
@@ -1045,16 +1096,13 @@ async def generate_suggestions(request_id: str, current_user: dict = Depends(get
     is_trial = request_doc.get('is_trial', False)
     
     try:
+        if not openai_client:
+            raise HTTPException(status_code=400, detail="خدمة الذكاء الاصطناعي غير متاحة - يرجى إضافة OPENAI_API_KEY")
+        
         system_msg = "أنت مصمم مواقع محترف. قم بتقديم اقتراحات تفصيلية لتصميم الموقع بناءً على متطلبات العميل. أجب بالعربية."
         
         if is_trial:
             system_msg += " هذه تجربة مجانية، قدم ملخصاً موجزاً فقط."
-        
-        chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=f"website-gen-{request_id}",
-            system_message=system_msg
-        ).with_model("openai", "gpt-5.2")
         
         prompt = f"""العميل يريد موقع بالمواصفات التالية:
 العنوان: {request_doc['title']}
@@ -1066,8 +1114,14 @@ async def generate_suggestions(request_id: str, current_user: dict = Depends(get
 
 {"تجربة مجانية - ملخص موجز فقط." if is_trial else "قدم اقتراحات احترافية كاملة."}"""
         
-        user_message = UserMessage(text=prompt)
-        response = await chat.send_message(user_message)
+        completion = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        response = completion.choices[0].message.content
         
         if is_trial:
             response += "\n\n---\n🔒 **معاينة محدودة**\nللحصول على التصميم الكامل، يرجى شراء نقاط."
@@ -1866,8 +1920,9 @@ from services import AIAssistant, DeploymentService
 # Initialize AI Assistant
 ai_assistant = AIAssistant(
     db=db,
-    api_key=EMERGENT_LLM_KEY,
-    elevenlabs_key=ELEVENLABS_API_KEY
+    api_key=OPENAI_API_KEY,
+    elevenlabs_key=ELEVENLABS_API_KEY,
+    openai_key=OPENAI_API_KEY
 )
 set_ai_assistant(ai_assistant)
 
