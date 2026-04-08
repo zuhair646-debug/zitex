@@ -1930,6 +1930,11 @@ set_ai_assistant(ai_assistant)
 deployment_service = DeploymentService(db=db)
 set_deployment_service(deployment_service)
 
+# Health check endpoint - MUST be before other routers
+@app.get("/api/health")
+async def health_check():
+    return {"status": "healthy", "service": "zitex-api"}
+
 # Include routers
 app.include_router(api_router)
 app.include_router(chat_router, prefix="/api")
