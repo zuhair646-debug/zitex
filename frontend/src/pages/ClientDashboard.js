@@ -12,9 +12,13 @@ const ClientDashboard = ({ user, setUser }) => {
 
   useEffect(() => {
     const fetchStats = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+      
       try {
-        const token = localStorage.getItem('token');
-        
         const [requestsRes, websitesRes, userRes] = await Promise.all([
           fetch(`${process.env.REACT_APP_BACKEND_URL}/api/requests`, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -27,25 +31,24 @@ const ClientDashboard = ({ user, setUser }) => {
           })
         ]);
 
-        const requests = await requestsRes.json();
-        const websites = await websitesRes.json();
-        const userData = await userRes.json();
+        const requests = requestsRes.ok ? await requestsRes.json() : [];
+        const websites = websitesRes.ok ? await websitesRes.json() : [];
+        const userData = userRes.ok ? await userRes.json() : null;
         
-        if (userData.id) {
+        if (userData && userData.id) {
           setUser(userData);
         }
 
         setStats({
-          requests: requests.length || 0,
-          pending: (requests.filter?.(r => r.status === 'pending') || []).length,
-          completed: (requests.filter?.(r => r.status === 'completed') || []).length,
-          websites: websites.length || 0
+          requests: Array.isArray(requests) ? requests.length : 0,
+          pending: Array.isArray(requests) ? requests.filter(r => r.status === 'pending').length : 0,
+          completed: Array.isArray(requests) ? requests.filter(r => r.status === 'completed').length : 0,
+          websites: Array.isArray(websites) ? websites.length : 0
         });
       } catch (error) {
         console.error('Error fetching stats:', error);
-      } finally {
-        setLoading(false);
       }
+      setLoading(false);
     };
 
     fetchStats();
