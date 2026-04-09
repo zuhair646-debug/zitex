@@ -1915,6 +1915,7 @@ async def add_free_trials(user_id: str, images: int = 0, videos: int = 0, admin:
 
 # Import and setup chat router
 from routers import chat_router, set_ai_assistant, deployment_router, set_deployment_service
+from routers.websocket_router import router as websocket_router, set_ai_assistant as set_ws_ai_assistant
 from services import AIAssistant, DeploymentService
 
 # Initialize AI Assistant
@@ -1925,6 +1926,7 @@ ai_assistant = AIAssistant(
     openai_key=OPENAI_API_KEY
 )
 set_ai_assistant(ai_assistant)
+set_ws_ai_assistant(ai_assistant)
 
 # Initialize Deployment Service
 deployment_service = DeploymentService(db=db)
@@ -1939,6 +1941,7 @@ async def health_check():
 app.include_router(api_router)
 app.include_router(chat_router, prefix="/api")
 app.include_router(deployment_router, prefix="/api")
+app.include_router(websocket_router, prefix="/api")
 
 app.add_middleware(
     CORSMiddleware,
