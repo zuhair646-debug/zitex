@@ -16,7 +16,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 logger = logging.getLogger(__name__)
 
 # Check if AI features are enabled
-AI_FEATURES_ENABLED = False
+AI_FEATURES_ENABLED = True
 
 # Optional imports
 try:
@@ -140,51 +140,72 @@ class AIAssistant:
         attachments = []
         
         if not AI_FEATURES_ENABLED or not self.openai_client:
-            ai_response = """مرحباً! 👋
-
-أنا زيتكس، مساعدك الذكي.
-
-⚠️ **ملاحظة مهمة:** ميزات الذكاء الاصطناعي (توليد الصور والفيديو) معطلة مؤقتاً.
-
-لتفعيلها، يرجى إضافة مفتاح OpenAI API في إعدادات Render:
-1. اذهب إلى dashboard.render.com
-2. اختر مشروع zitex-backend
-3. اذهب إلى Environment
-4. أضف: `OPENAI_API_KEY = sk-proj-xxxxx`
-
-بعد ذلك، ستتمكن من:
-- توليد صور بالذكاء الاصطناعي
-- إنشاء فيديوهات سينمائية
-- تحويل النص لصوت
-- بناء مواقع ويب
-
-كيف يمكنني مساعدتك اليوم؟"""
+            ai_response = "عذراً، خدمات الذكاء الاصطناعي غير متاحة حالياً."
         else:
-            # استخدام OpenAI للرد
-            try:
-                system_prompt = SYSTEM_PROMPTS.get(session.get("session_type", "general"), SYSTEM_PROMPTS["general"])
+            # Check if user wants to generate an image
+            image_keywords = ['صورة', 'صور', 'أنشئ صورة', 'اصنع صورة', 'ارسم', 'توليد صورة', 'image', 'generate image', 'create image', 'draw']
+            is_image_request = any(kw in message.lower() for kw in image_keywords) or session.get("session_type") == "image"
+            
+            if is_image_request:
+                # Generate image using DALL-E
+                try:
+                    # Create image prompt
+                    image_response = self.openai_client.images.generate(
+                        model="dall-e-3",
+                        prompt=message,
+                        size="1024x1024",
+                        quality="standard",
+                        n=1,
+                    )
+                    image_url = image_response.data[0].url
+                    
+                    # Save to database
+                    asset = {
+                        "id": str(uuid.uuid4()),
+                        "user_id": user_id,
+                        "session_id": session_id,
+                        "asset_type": "image",
+                        "url": image_url,
+                        "prompt": message,
+                        "created_at": datetime.now(timezone.utc).isoformat()
+                    }
+                    await self.db.generated_assets.insert_one(asset)
+                    
+                    ai_response = "تم إنشاء الصورة بنجاح! 🎨"
+                    attachments = [{
+                        "type": "image",
+                        "url": image_url,
+                        "prompt": message
+                    }]
+                except Exception as e:
+                    logger.error(f"Image generation error: {e}")
+                    ai_response = f"عذراً، حدث خطأ في توليد الصورة: {str(e)[:100]}"
+            else:
+                # Regular chat - use OpenAI for response
+                try:
+                    system_prompt = SYSTEM_PROMPTS.get(session.get("session_type", "general"), SYSTEM_PROMPTS["general"])
                 
-                # بناء سياق المحادثة
-                messages = [{"role": "system", "content": system_prompt}]
-                
-                # إضافة آخر 10 رسائل من المحادثة
-                for msg in session.get("messages", [])[-10:]:
-                    messages.append({
-                        "role": msg["role"],
-                        "content": msg["content"]
-                    })
-                
-                messages.append({"role": "user", "content": message})
-                
-                completion = self.openai_client.chat.completions.create(
-                    model="gpt-4o",
-                    messages=messages
-                )
-                ai_response = completion.choices[0].message.content
-                
-            except Exception as e:
-                logger.error(f"OpenAI error: {e}")
-                ai_response = f"عذراً، حدث خطأ في معالجة رسالتك. يرجى المحاولة مرة أخرى.\n\nتفاصيل الخطأ: {str(e)[:100]}"
+                    # بناء سياق المحادثة
+                    messages = [{"role": "system", "content": system_prompt}]
+                    
+                    # إضافة آخر 10 رسائل من المحادثة
+                    for msg in session.get("messages", [])[-10:]:
+                        messages.append({
+                            "role": msg["role"],
+                            "content": msg["content"]
+                        })
+                    
+                    messages.append({"role": "user", "content": message})
+                    
+                    completion = self.openai_client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=messages
+                    )
+                    ai_response = completion.choices[0].message.content
+                    
+                except Exception as e:
+                    logger.error(f"OpenAI error: {e}")
+                    ai_response = f"عذراً، حدث خطأ في معالجة رسالتك: {str(e)[:100]}"
         
         # إنشاء رسالة المساعد
         assistant_msg = {
