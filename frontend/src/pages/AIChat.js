@@ -322,7 +322,7 @@ const AIChat = ({ user }) => {
   const [inputMessage, setInputMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [sessionsLoading, setSessionsLoading] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false); // مخفي بشكل افتراضي
   const [isTyping, setIsTyping] = useState(false);
   const [playingAudio, setPlayingAudio] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -723,82 +723,94 @@ const AIChat = ({ user }) => {
       <audio ref={audioRef} className="hidden" />
       
       <div className="flex-1 flex mt-16 overflow-hidden">
-        {/* Mobile Menu Button */}
-        {!sidebarOpen && (
-          <button onClick={() => setSidebarOpen(true)} className="md:hidden fixed top-20 right-4 z-30 p-2 bg-slate-800 rounded-lg shadow-lg border border-slate-700">
-            <MessageSquare className="w-5 h-5 text-white" />
+        {/* Sessions Dropdown Button - Always visible */}
+        <div className="fixed top-20 right-4 z-30">
+          <button 
+            onClick={() => setSidebarOpen(!sidebarOpen)} 
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl shadow-lg border transition-all ${sidebarOpen ? 'bg-amber-600 border-amber-500 text-white' : 'bg-slate-800 border-slate-700 text-white hover:bg-slate-700'}`}
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span className="text-sm font-medium">المحادثات</span>
+            <span className="bg-amber-500/20 text-amber-300 text-xs px-2 py-0.5 rounded-full">{sessions.length}</span>
           </button>
-        )}
-        
-        {/* Sidebar Overlay */}
-        {sidebarOpen && <div className="md:hidden fixed inset-0 bg-black/60 z-10 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />}
-        
-        {/* Sidebar */}
-        <div className={`${sidebarOpen ? 'w-64' : 'w-0'} ${sidebarOpen ? 'fixed md:relative inset-y-0 right-0 z-20 mt-16 md:mt-0' : ''} flex-shrink-0 transition-all duration-300 overflow-hidden bg-[#0d0d18] border-l border-slate-800/50 flex flex-col`}>
-          {/* User Credits */}
-          <div className="p-3 border-b border-slate-800/50">
-            <div className="flex items-center justify-between p-2 bg-slate-800/30 rounded-xl">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                  <span className="text-white text-xs font-bold">{user?.email?.[0]?.toUpperCase() || 'U'}</span>
-                </div>
-                <div>
-                  <p className="text-white text-xs font-medium truncate max-w-[100px]">{user?.role === 'owner' ? 'مالك' : 'مستخدم'}</p>
-                  <p className="text-[10px] text-amber-400 flex items-center gap-1">
-                    <Coins className="w-3 h-3" />
-                    {user?.role === 'owner' ? '∞' : userCredits}
-                  </p>
-                </div>
-              </div>
-              <button className="p-1.5 rounded-lg hover:bg-slate-700/50 text-gray-400" title="المكافآت (قريباً)">
-                <Gift className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
           
-          {/* New Chat Button */}
-          <div className="p-3 border-b border-slate-800/50">
-            <Button onClick={() => createSession('general')} className="w-full bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 shadow-lg shadow-amber-500/20" data-testid="new-chat-btn">
-              <Plus className="w-4 h-4 me-2" /> محادثة جديدة
-            </Button>
-            <div className="grid grid-cols-4 gap-1.5 mt-2">
-              {[
-                { type: 'image', icon: Image, color: 'purple' },
-                { type: 'video', icon: Video, color: 'orange' },
-                { type: 'website', icon: Globe, color: 'green' },
-                { type: 'game', icon: Gamepad2, color: 'cyan' }
-              ].map(({ type, icon: Icon, color }) => (
-                <button key={type} onClick={() => createSession(type)} className={`p-2 rounded-lg border border-${color}-500/30 bg-${color}-500/10 hover:bg-${color}-500/20 transition-all`}>
-                  <Icon className={`w-4 h-4 text-${color}-400 mx-auto`} />
-                </button>
-              ))}
+          {/* Dropdown Panel */}
+          {sidebarOpen && (
+            <div className="absolute top-12 right-0 w-80 bg-[#0d0d18] border border-slate-700/50 rounded-2xl shadow-2xl overflow-hidden animate-fadeIn">
+              {/* User Credits Header */}
+              <div className="p-3 border-b border-slate-800/50 bg-gradient-to-r from-slate-800/50 to-slate-900/50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-500 to-yellow-500 flex items-center justify-center">
+                      <span className="text-black text-sm font-bold">{user?.email?.[0]?.toUpperCase() || 'U'}</span>
+                    </div>
+                    <div>
+                      <p className="text-white text-sm font-medium">{user?.role === 'owner' ? 'مالك' : 'مستخدم'}</p>
+                      <p className="text-xs text-amber-400 flex items-center gap-1">
+                        <Coins className="w-3 h-3" />
+                        <span className="font-bold">{user?.role === 'owner' ? '∞' : userCredits}</span> نقطة
+                      </p>
+                    </div>
+                  </div>
+                  <button onClick={() => setSidebarOpen(false)} className="p-2 rounded-lg hover:bg-slate-700/50 text-gray-400">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              
+              {/* New Chat Button */}
+              <div className="p-3 border-b border-slate-800/50">
+                <Button onClick={() => { createSession('general'); setSidebarOpen(false); }} className="w-full bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 shadow-lg shadow-amber-500/20" data-testid="new-chat-btn">
+                  <Plus className="w-4 h-4 me-2" /> محادثة جديدة
+                </Button>
+                <div className="grid grid-cols-4 gap-1.5 mt-2">
+                  {[
+                    { type: 'image', icon: Image, color: 'purple', label: 'صورة' },
+                    { type: 'video', icon: Video, color: 'orange', label: 'فيديو' },
+                    { type: 'website', icon: Globe, color: 'green', label: 'موقع' },
+                    { type: 'game', icon: Gamepad2, color: 'cyan', label: 'لعبة' }
+                  ].map(({ type, icon: Icon, color, label }) => (
+                    <button 
+                      key={type} 
+                      onClick={() => { createSession(type); setSidebarOpen(false); }} 
+                      className={`p-2 rounded-lg border border-${color}-500/30 bg-${color}-500/10 hover:bg-${color}-500/20 transition-all flex flex-col items-center gap-1`}
+                      title={label}
+                    >
+                      <Icon className={`w-4 h-4 text-${color}-400`} />
+                      <span className={`text-[10px] text-${color}-400`}>{label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Sessions List */}
+              <div className="max-h-80 overflow-y-auto">
+                {sessionsLoading ? <SessionSkeleton /> : sessions.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <Sparkles className="w-10 h-10 mx-auto mb-2 opacity-20" />
+                    <p className="text-sm">لا توجد محادثات سابقة</p>
+                    <p className="text-xs text-gray-600">ابدأ محادثة جديدة!</p>
+                  </div>
+                ) : (
+                  <div className="p-2 space-y-1">
+                    <p className="text-xs text-gray-500 px-2 py-1">المحادثات السابقة ({sessions.length})</p>
+                    {sessions.map(session => (
+                      <div key={session.id} onClick={() => { loadSession(session.id); setSidebarOpen(false); }}>
+                        <SessionItem session={session} isActive={currentSession?.id === session.id} onSelect={() => {}} onDelete={deleteSession} getIcon={getSessionIcon} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-          
-          {/* Sessions */}
-          <ScrollArea className="flex-1 p-2">
-            {sessionsLoading ? <SessionSkeleton /> : sessions.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <Sparkles className="w-10 h-10 mx-auto mb-2 opacity-20" />
-                <p className="text-xs">لا توجد محادثات</p>
-              </div>
-            ) : (
-              <div className="space-y-1">
-                {sessions.map(session => (
-                  <SessionItem key={session.id} session={session} isActive={currentSession?.id === session.id} onSelect={loadSession} onDelete={deleteSession} getIcon={getSessionIcon} />
-                ))}
-              </div>
-            )}
-          </ScrollArea>
+          )}
         </div>
+        
+        {/* Overlay when dropdown is open */}
+        {sidebarOpen && <div className="fixed inset-0 z-20" onClick={() => setSidebarOpen(false)} />}
 
-        {/* Sidebar Toggle */}
-        <Button size="icon" variant="ghost" onClick={() => setSidebarOpen(!sidebarOpen)} className="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-slate-800 hover:bg-slate-700 rounded-r-none">
-          {sidebarOpen ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-        </Button>
-
-        {/* Main Area */}
-        <div className={`flex-1 flex ${previewOpen ? 'flex-row' : 'flex-col'} overflow-hidden`}>
+        {/* Main Area - Full Width */}
+        <div className={`flex-1 flex ${previewOpen ? 'flex-row' : 'flex-col'} overflow-hidden w-full`}>
           {/* Chat Column */}
           <div className={`${previewOpen ? 'w-1/2 border-l border-slate-800/50' : 'w-full'} flex flex-col overflow-hidden`}>
             {!currentSession ? (
