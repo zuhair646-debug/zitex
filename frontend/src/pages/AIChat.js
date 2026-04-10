@@ -1,25 +1,87 @@
-import React, { useState, useEffect, useRef, useCallback, memo, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { 
   Send, Plus, MessageSquare, Image, Video, Globe, 
   Loader2, Download, Trash2, Mic, ChevronLeft, ChevronRight, Sparkles,
-  Volume2, VolumeX, Settings
+  Volume2, VolumeX, Settings, Copy, Check, Play, Pause, X,
+  Code, Eye, EyeOff, Gamepad2, RefreshCw, Maximize2, Minimize2,
+  Coins, Zap
 } from 'lucide-react';
+
+// ============== Code Block Component with Copy ==============
+const CodeBlock = memo(({ code, language = 'html', filename }) => {
+  const [copied, setCopied] = useState(false);
+  
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(code);
+    setCopied(true);
+    toast.success('تم نسخ الكود!');
+    setTimeout(() => setCopied(false), 2000);
+  };
+  
+  return (
+    <div className="my-3 rounded-xl overflow-hidden bg-[#1a1a2e] border border-slate-700">
+      <div className="flex items-center justify-between px-4 py-2 bg-slate-800/80 border-b border-slate-700">
+        <div className="flex items-center gap-2">
+          <Code className="w-4 h-4 text-purple-400" />
+          <span className="text-xs text-gray-400 font-mono">{filename || language}</span>
+        </div>
+        <button
+          onClick={handleCopy}
+          className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all hover:bg-slate-700"
+          style={{ color: copied ? '#10b981' : '#94a3b8' }}
+        >
+          {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+          {copied ? 'تم!' : 'نسخ'}
+        </button>
+      </div>
+      <pre className="p-4 overflow-x-auto text-sm">
+        <code className="text-gray-300 font-mono leading-relaxed whitespace-pre-wrap">{code}</code>
+      </pre>
+    </div>
+  );
+});
+
+// ============== Message Content Parser ==============
+const parseMessageContent = (content) => {
+  if (!content) return [];
+  
+  const parts = [];
+  const codeBlockRegex = /```(\w+)?\n?([\s\S]*?)```/g;
+  let lastIndex = 0;
+  let match;
+  
+  while ((match = codeBlockRegex.exec(content)) !== null) {
+    // Add text before code block
+    if (match.index > lastIndex) {
+      parts.push({ type: 'text', content: content.slice(lastIndex, match.index) });
+    }
+    // Add code block
+    parts.push({ type: 'code', language: match[1] || 'code', content: match[2].trim() });
+    lastIndex = match.index + match[0].length;
+  }
+  
+  // Add remaining text
+  if (lastIndex < content.length) {
+    parts.push({ type: 'text', content: content.slice(lastIndex) });
+  }
+  
+  return parts.length > 0 ? parts : [{ type: 'text', content }];
+};
 
 // ============== Loading Skeleton ==============
 const SkeletonPulse = ({ className }) => (
-  <div className={`animate-pulse bg-slate-700 rounded ${className}`} />
+  <div className={`animate-pulse bg-slate-700/50 rounded ${className}`} />
 );
 
 const SessionSkeleton = () => (
   <div className="space-y-2 p-2">
     {[1, 2, 3].map(i => (
-      <div key={i} className="flex items-center gap-2 p-3 rounded-lg bg-slate-700/30">
+      <div key={i} className="flex items-center gap-2 p-3 rounded-lg bg-slate-700/20">
         <SkeletonPulse className="w-10 h-10 rounded-lg" />
         <div className="flex-1">
           <SkeletonPulse className="h-4 w-3/4 mb-2" />
@@ -30,20 +92,13 @@ const SessionSkeleton = () => (
   </div>
 );
 
-const MessageSkeleton = () => (
-  <div className="flex justify-end">
-    <div className="bg-slate-700 rounded-2xl rounded-tl-md p-4 max-w-[60%]">
-      <SkeletonPulse className="h-4 w-48 mb-2" />
-      <SkeletonPulse className="h-4 w-32" />
-    </div>
-  </div>
-);
-
-// ============== Memoized Components ==============
+// ============== Session Item ==============
 const SessionItem = memo(({ session, isActive, onSelect, onDelete, getIcon }) => (
   <div
-    className={`group flex items-center gap-2 p-3 rounded-lg cursor-pointer transition-all duration-200 ${
-      isActive ? 'bg-slate-700 shadow-lg' : 'hover:bg-slate-700/50'
+    className={`group flex items-center gap-2 p-3 rounded-xl cursor-pointer transition-all duration-200 ${
+      isActive 
+        ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 shadow-lg shadow-purple-500/10' 
+        : 'hover:bg-slate-700/50 border border-transparent'
     }`}
     onClick={() => onSelect(session.id)}
     data-testid={`session-${session.id}`}
@@ -52,86 +107,220 @@ const SessionItem = memo(({ session, isActive, onSelect, onDelete, getIcon }) =>
       session.session_type === 'image' ? 'bg-purple-500/20 text-purple-400' :
       session.session_type === 'video' ? 'bg-orange-500/20 text-orange-400' :
       session.session_type === 'website' ? 'bg-green-500/20 text-green-400' :
+      session.session_type === 'game' ? 'bg-cyan-500/20 text-cyan-400' :
       'bg-slate-600 text-gray-400'
     }`}>
       {getIcon(session.session_type)}
     </div>
     <div className="flex-1 min-w-0">
-      <p className="text-white text-sm truncate">{session.title}</p>
+      <p className="text-white text-sm truncate font-medium">{session.title}</p>
       <p className="text-xs text-gray-500">{session.message_count || 0} رسالة</p>
     </div>
     <Button
       size="icon"
       variant="ghost"
       onClick={(e) => { e.stopPropagation(); onDelete(session.id); }}
-      className="opacity-0 group-hover:opacity-100 h-8 w-8 text-gray-400 hover:text-red-400 transition-opacity"
+      className="opacity-0 group-hover:opacity-100 h-7 w-7 text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
     >
-      <Trash2 className="w-4 h-4" />
+      <Trash2 className="w-3.5 h-3.5" />
     </Button>
   </div>
 ));
 
-const ChatMessage = memo(({ msg, idx, renderAttachment, onPlayAudio, onGenerateTTS, playingAudio, ttsEnabled }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const maxLength = 300; // الحد الأقصى للأحرف قبل "المزيد"
-  const shouldTruncate = msg.content && msg.content.length > maxLength;
-  const displayContent = shouldTruncate && !isExpanded 
-    ? msg.content.slice(0, maxLength) + '...' 
-    : msg.content;
-
+// ============== Chat Message ==============
+const ChatMessage = memo(({ msg, idx, renderAttachment, onPlayAudio, onGenerateTTS, playingAudio, onPreview }) => {
+  const parsedContent = parseMessageContent(msg.content);
+  const hasCode = parsedContent.some(p => p.type === 'code');
+  
   return (
     <div
-      className={`flex ${msg.role === 'user' ? 'justify-start' : 'justify-end'} animate-fadeIn px-2 md:px-0`}
+      className={`flex ${msg.role === 'user' ? 'justify-start' : 'justify-end'} animate-fadeIn`}
       data-testid={`message-${idx}`}
     >
-      <div className={`max-w-[95%] md:max-w-[80%] ${
+      <div className={`max-w-[90%] md:max-w-[75%] ${
         msg.role === 'user' 
-          ? 'bg-blue-600 rounded-2xl rounded-tr-md' 
-          : 'bg-slate-700 rounded-2xl rounded-tl-md'
-      } p-3 md:p-4 shadow-lg`}>
-        <p className="text-white whitespace-pre-wrap leading-relaxed text-sm md:text-base">
-          {displayContent}
-        </p>
-        {shouldTruncate && (
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="text-purple-400 hover:text-purple-300 text-xs md:text-sm mt-2 font-medium transition-colors"
-          >
-            {isExpanded ? '🔼 عرض أقل' : '🔽 عرض المزيد'}
-          </button>
-        )}
+          ? 'bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl rounded-tr-md shadow-lg shadow-blue-500/20' 
+          : 'bg-slate-800/90 backdrop-blur border border-slate-700/50 rounded-2xl rounded-tl-md shadow-lg'
+      } p-4`}>
+        
+        {/* Message Content */}
+        <div className="text-white">
+          {parsedContent.map((part, i) => (
+            part.type === 'code' ? (
+              <CodeBlock key={i} code={part.content} language={part.language} />
+            ) : (
+              <p key={i} className="whitespace-pre-wrap leading-relaxed text-sm md:text-base">
+                {part.content}
+              </p>
+            )
+          ))}
+        </div>
+        
+        {/* Attachments */}
         {msg.attachments?.map((attachment, aIdx) => (
-          <div key={aIdx}>{renderAttachment(attachment)}</div>
+          <div key={aIdx}>{renderAttachment(attachment, onPreview)}</div>
         ))}
-        <div className="flex items-center justify-between mt-2 gap-2">
-          <p className="text-xs text-gray-400 opacity-70">
-            {new Date(msg.created_at).toLocaleTimeString('ar-SA')}
+        
+        {/* Footer */}
+        <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-600/30">
+          <p className="text-xs text-gray-400">
+            {new Date(msg.created_at).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}
           </p>
-          {msg.role === 'assistant' && (
-            <button
-              onClick={() => msg.audio_url ? onPlayAudio(msg.audio_url, msg.id) : onGenerateTTS(msg.content, msg.id)}
-              className={`p-1.5 rounded-full transition-all ${
-                playingAudio === msg.id 
-                  ? 'bg-purple-500 text-white' 
-                  : 'bg-slate-600 hover:bg-slate-500 text-gray-300'
-              }`}
-              title={msg.audio_url ? 'تشغيل الصوت' : 'توليد صوت'}
-            >
-              {playingAudio === msg.id ? (
-                <VolumeX className="w-4 h-4" />
-              ) : (
-                <Volume2 className="w-4 h-4" />
-              )}
-            </button>
-          )}
+          
+          <div className="flex items-center gap-2">
+            {/* Preview Button for code */}
+            {hasCode && msg.role === 'assistant' && (
+              <button
+                onClick={() => {
+                  const codeContent = parsedContent.find(p => p.type === 'code')?.content;
+                  if (codeContent) onPreview(codeContent);
+                }}
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-all"
+              >
+                <Eye className="w-3 h-3" />
+                معاينة
+              </button>
+            )}
+            
+            {/* TTS Button */}
+            {msg.role === 'assistant' && (
+              <button
+                onClick={() => msg.audio_url ? onPlayAudio(msg.audio_url, msg.id) : onGenerateTTS(msg.content, msg.id)}
+                className={`p-1.5 rounded-full transition-all ${
+                  playingAudio === msg.id 
+                    ? 'bg-purple-500 text-white animate-pulse' 
+                    : 'bg-slate-700 hover:bg-slate-600 text-gray-300'
+                }`}
+              >
+                {playingAudio === msg.id ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
 });
 
+// ============== Live Preview Panel ==============
+const LivePreviewPanel = memo(({ code, isOpen, onClose, onRefresh, isFullscreen, onToggleFullscreen }) => {
+  const iframeRef = useRef(null);
+  
+  useEffect(() => {
+    if (code && iframeRef.current) {
+      const iframe = iframeRef.current;
+      const doc = iframe.contentDocument || iframe.contentWindow.document;
+      doc.open();
+      doc.write(code);
+      doc.close();
+    }
+  }, [code]);
+  
+  if (!isOpen) return null;
+  
+  return (
+    <div className={`${isFullscreen ? 'fixed inset-0 z-50' : 'relative'} bg-slate-900 border-r border-slate-700 flex flex-col`}>
+      {/* Header */}
+      <div className="flex items-center justify-between p-3 bg-slate-800/80 border-b border-slate-700">
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1.5">
+            <span className="w-3 h-3 rounded-full bg-red-500"></span>
+            <span className="w-3 h-3 rounded-full bg-yellow-500"></span>
+            <span className="w-3 h-3 rounded-full bg-green-500"></span>
+          </div>
+          <span className="text-sm text-gray-400 font-medium mr-3">معاينة مباشرة</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <button onClick={onRefresh} className="p-1.5 rounded hover:bg-slate-700 text-gray-400 hover:text-white transition-colors">
+            <RefreshCw className="w-4 h-4" />
+          </button>
+          <button onClick={onToggleFullscreen} className="p-1.5 rounded hover:bg-slate-700 text-gray-400 hover:text-white transition-colors">
+            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+          </button>
+          <button onClick={onClose} className="p-1.5 rounded hover:bg-slate-700 text-gray-400 hover:text-red-400 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+      
+      {/* Preview Content */}
+      <div className="flex-1 bg-white">
+        {code ? (
+          <iframe
+            ref={iframeRef}
+            className="w-full h-full border-0"
+            title="Live Preview"
+            sandbox="allow-scripts allow-same-origin"
+          />
+        ) : (
+          <div className="h-full flex items-center justify-center text-gray-500 bg-slate-900">
+            <div className="text-center">
+              <Eye className="w-16 h-16 mx-auto mb-4 opacity-30" />
+              <p className="text-lg">لا يوجد محتوى للمعاينة</p>
+              <p className="text-sm mt-2 text-gray-600">اطلب من الذكاء الاصطناعي إنشاء موقع أو لعبة</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+
+// ============== Recording Visualizer ==============
+const RecordingVisualizer = memo(({ isRecording, recordingTime }) => {
+  if (!isRecording) return null;
+  
+  return (
+    <div className="absolute bottom-full left-0 right-0 mb-2 flex items-center justify-center">
+      <div className="bg-slate-800/95 backdrop-blur border border-red-500/30 rounded-2xl px-6 py-3 flex items-center gap-4 shadow-xl animate-fadeIn">
+        {/* Waveform Animation */}
+        <div className="flex items-center gap-1 h-8">
+          {[...Array(7)].map((_, i) => (
+            <div
+              key={i}
+              className="w-1 bg-red-500 rounded-full animate-wave"
+              style={{
+                animationDelay: `${i * 0.1}s`,
+                height: `${Math.random() * 24 + 8}px`
+              }}
+            />
+          ))}
+        </div>
+        
+        {/* Recording Time */}
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+          <span className="text-white font-mono text-lg">
+            {Math.floor(recordingTime / 60).toString().padStart(2, '0')}:
+            {(recordingTime % 60).toString().padStart(2, '0')}
+          </span>
+        </div>
+        
+        <span className="text-gray-400 text-sm">اضغط للإيقاف</span>
+      </div>
+    </div>
+  );
+});
+
+// ============== Credits Display ==============
+const CreditsDisplay = memo(({ credits, isOwner }) => (
+  <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20 rounded-xl">
+    <Coins className="w-5 h-5 text-amber-400" />
+    <div className="flex flex-col">
+      <span className="text-xs text-gray-400">رصيدك</span>
+      <span className="text-lg font-bold text-amber-400">
+        {isOwner ? '∞' : (credits || 0).toLocaleString()}
+      </span>
+    </div>
+    {isOwner && (
+      <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 text-xs rounded-full mr-2">مالك</span>
+    )}
+  </div>
+));
+
 // ============== Main Component ==============
 const AIChat = ({ user }) => {
+  // State
   const [sessions, setSessions] = useState([]);
   const [currentSession, setCurrentSession] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -140,18 +329,18 @@ const AIChat = ({ user }) => {
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isTyping, setIsTyping] = useState(false);
-  const [pendingVideoRequests, setPendingVideoRequests] = useState([]);
-  const [showTTSSettings, setShowTTSSettings] = useState(false);
-  const [availableVoices, setAvailableVoices] = useState([]);
   const [playingAudio, setPlayingAudio] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [recordingTime, setRecordingTime] = useState(0);
-  const [generationSettings, setGenerationSettings] = useState({
-    duration: 4,
-    size: '1280x720',
-    voice_id: '21m00Tcm4TlvDq8ikWAM'
-  });
+  const [userCredits, setUserCredits] = useState(user?.credits || 0);
+  
+  // Preview State
+  const [previewCode, setPreviewCode] = useState('');
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewFullscreen, setPreviewFullscreen] = useState(false);
+  
+  // Settings
   const [ttsSettings, setTtsSettings] = useState({
     enabled: false,
     provider: 'openai',
@@ -159,345 +348,57 @@ const AIChat = ({ user }) => {
     speed: 1.0
   });
   
+  // Refs
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const audioRef = useRef(null);
-  const pollingIntervalRef = useRef(null);
   const recordingTimerRef = useRef(null);
   const audioChunksRef = useRef([]);
+  const textareaRef = useRef(null);
 
+  // Auto-resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 150) + 'px';
+    }
+  }, [inputMessage]);
+
+  // Fetch sessions on mount
   useEffect(() => {
     fetchSessions();
-    fetchVoices();
+    fetchUserCredits();
   }, []);
 
-  const fetchVoices = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/voices`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setAvailableVoices(data.voices || []);
-      }
-    } catch (error) {
-      console.error('Error fetching voices:', error);
-    }
-  };
-
-  const playAudio = (audioUrl, messageId) => {
-    if (playingAudio === messageId) {
-      audioRef.current?.pause();
-      setPlayingAudio(null);
-    } else {
-      if (audioRef.current) {
-        audioRef.current.src = audioUrl;
-        audioRef.current.play();
-        setPlayingAudio(messageId);
-        audioRef.current.onended = () => setPlayingAudio(null);
-      }
-    }
-  };
-
-  const generateTTS = async (text, messageId) => {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/tts/generate`, {
-        method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          text: text.replace(/[✅🎬⏱️📩💡🖼️🌐📁]/g, '').replace(/\[.*?\]/g, '').trim(),
-          provider: ttsSettings.provider,
-          voice: ttsSettings.voice,
-          speed: ttsSettings.speed
-        })
-      });
-      
-      if (res.ok) {
-        const data = await res.json();
-        playAudio(data.audio_url, messageId);
-        
-        // Update message with audio
-        setMessages(prev => prev.map(m => 
-          m.id === messageId ? { ...m, audio_url: data.audio_url } : m
-        ));
-      }
-    } catch (error) {
-      toast.error('فشل توليد الصوت');
-    }
-  };
-
-  // ============== Voice Recording Functions ==============
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-      
-      audioChunksRef.current = [];
-      
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          audioChunksRef.current.push(e.data);
-        }
-      };
-      
-      recorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        stream.getTracks().forEach(track => track.stop());
-        await transcribeAudio(audioBlob);
-      };
-      
-      recorder.start(100); // Collect data every 100ms
-      setMediaRecorder(recorder);
-      setIsRecording(true);
-      setRecordingTime(0);
-      
-      // Start timer
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingTime(prev => prev + 1);
-      }, 1000);
-      
-      toast.info('🎤 جاري التسجيل... اضغط مرة أخرى للإيقاف');
-    } catch (error) {
-      console.error('Recording error:', error);
-      toast.error('فشل الوصول للمايكروفون. تأكد من إعطاء الصلاحية.');
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-      mediaRecorder.stop();
-      setIsRecording(false);
-      
-      // Stop timer
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-        recordingTimerRef.current = null;
-      }
-    }
-  };
-
-  const transcribeAudio = async (audioBlob) => {
-    if (!currentSession) {
-      toast.error('اختر محادثة أولاً');
-      return;
-    }
-    
-    setLoading(true);
-    toast.info('🔄 جاري تحويل الصوت إلى نص...');
-    
-    try {
-      const token = localStorage.getItem('token');
-      const formData = new FormData();
-      formData.append('audio', audioBlob, 'recording.webm');
-      formData.append('language', 'ar');
-      
-      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/stt/transcribe`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formData
-      });
-      
-      if (res.ok) {
-        const data = await res.json();
-        if (data.text && data.text.trim()) {
-          // Set the transcribed text as input and auto-send
-          setInputMessage(data.text);
-          toast.success('✅ تم تحويل الصوت!');
-          
-          // Auto-send after a short delay
-          setTimeout(() => {
-            sendMessageWithText(data.text);
-          }, 500);
-        } else {
-          toast.error('لم يتم التعرف على أي كلام');
-        }
-      } else {
-        const error = await res.json();
-        toast.error(error.detail || 'فشل تحويل الصوت');
-      }
-    } catch (error) {
-      console.error('Transcription error:', error);
-      toast.error('خطأ في تحويل الصوت');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const sendMessageWithText = async (text) => {
-    if (!text.trim() || !currentSession) return;
-    
-    const userMessage = text.trim();
-    setInputMessage('');
-    setLoading(true);
-    setIsTyping(true);
-
-    const tempUserMsg = {
-      id: `temp-${Date.now()}`,
-      role: 'user',
-      content: userMessage,
-      message_type: 'text',
-      attachments: [],
-      created_at: new Date().toISOString()
-    };
-    setMessages(prev => [...prev, tempUserMsg]);
-
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(
-        `${process.env.REACT_APP_BACKEND_URL}/api/chat/sessions/${currentSession.id}/messages`,
-        {
-          method: 'POST',
-          headers: { 
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            message: userMessage,
-            settings: {
-              ...generationSettings,
-              tts: ttsSettings
-            }
-          })
-        }
-      );
-
-      const data = await res.json();
-
-      if (res.ok) {
-        setMessages(prev => {
-          const filtered = prev.filter(m => m.id !== tempUserMsg.id);
-          return [...filtered, data.user_message, data.assistant_message];
-        });
-        
-        // Auto-play audio if TTS is enabled
-        if (ttsSettings.enabled && data.assistant_message?.audio_url) {
-          playAudio(data.assistant_message.audio_url, data.assistant_message.id);
-        }
-
-        // Check for pending video requests
-        const videoPendingAttachment = data.assistant_message?.attachments?.find(
-          a => a.type === 'video_pending'
-        );
-        if (videoPendingAttachment && videoPendingAttachment.requests) {
-          setPendingVideoRequests(prev => [...prev, ...videoPendingAttachment.requests]);
-          toast.info('🎬 جاري توليد الفيديو في الخلفية...');
-        }
-      } else {
-        toast.error(data.detail || 'فشل إرسال الرسالة');
-        setMessages(prev => prev.filter(m => m.id !== tempUserMsg.id));
-      }
-    } catch (error) {
-      toast.error('خطأ في الاتصال');
-      setMessages(prev => prev.filter(m => m.id !== tempUserMsg.id));
-    } finally {
-      setLoading(false);
-      setIsTyping(false);
-    }
-  };
-
-  const toggleRecording = () => {
-    if (isRecording) {
-      stopRecording();
-    } else {
-      startRecording();
-    }
-  };
-
-  // Cleanup recording on unmount
-  useEffect(() => {
-    return () => {
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-      }
-      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        mediaRecorder.stop();
-      }
-    };
-  }, [mediaRecorder]);
-
-  // Polling for video requests status
-  useEffect(() => {
-    if (pendingVideoRequests.length > 0 && currentSession) {
-      // Start polling every 5 seconds
-      pollingIntervalRef.current = setInterval(async () => {
-        await checkVideoRequestsStatus();
-      }, 5000);
-      
-      return () => {
-        if (pollingIntervalRef.current) {
-          clearInterval(pollingIntervalRef.current);
-        }
-      };
-    }
-  }, [pendingVideoRequests, currentSession]);
-
-  const checkVideoRequestsStatus = useCallback(async () => {
-    if (!currentSession || pendingVideoRequests.length === 0) return;
-    
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(
-        `${process.env.REACT_APP_BACKEND_URL}/api/chat/video-requests?session_id=${currentSession.id}`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
-      );
-      
-      if (res.ok) {
-        const requests = await res.json();
-        const completedRequests = requests.filter(r => r.status === 'completed');
-        const stillPending = requests.filter(r => r.status === 'pending' || r.status === 'processing');
-        const failedRequests = requests.filter(r => r.status === 'failed');
-        
-        // Handle completed videos - reload session to get new messages
-        if (completedRequests.length > 0) {
-          const newlyCompleted = completedRequests.filter(
-            r => pendingVideoRequests.some(p => p.id === r.id)
-          );
-          
-          if (newlyCompleted.length > 0) {
-            toast.success(`✅ تم توليد ${newlyCompleted.length} فيديو بنجاح!`);
-            // Reload the session to get new messages with videos
-            await loadSession(currentSession.id);
-          }
-        }
-        
-        // Handle failed requests
-        if (failedRequests.length > 0) {
-          const newlyFailed = failedRequests.filter(
-            r => pendingVideoRequests.some(p => p.id === r.id)
-          );
-          
-          if (newlyFailed.length > 0) {
-            newlyFailed.forEach(r => {
-              toast.error(`❌ فشل توليد الفيديو: ${r.error || 'خطأ غير معروف'}`);
-            });
-          }
-        }
-        
-        // Update pending requests
-        const stillPendingIds = stillPending.map(r => r.id);
-        setPendingVideoRequests(prev => prev.filter(p => stillPendingIds.includes(p.id)));
-        
-        // Stop polling if no more pending requests
-        if (stillPending.length === 0 && pollingIntervalRef.current) {
-          clearInterval(pollingIntervalRef.current);
-          pollingIntervalRef.current = null;
-        }
-      }
-    } catch (error) {
-      console.error('Error checking video requests:', error);
-    }
-  }, [currentSession, pendingVideoRequests]);
-
+  // Scroll to bottom on new messages
   useEffect(() => {
     if (messages.length > 0) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
+
+  // Cleanup recording on unmount
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+    };
+  }, [mediaRecorder]);
+
+  const fetchUserCredits = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/auth/me`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUserCredits(data.credits || 0);
+      }
+    } catch (error) {
+      console.error('Error fetching credits:', error);
+    }
+  };
 
   const fetchSessions = useCallback(async () => {
     setSessionsLoading(true);
@@ -532,8 +433,9 @@ const AIChat = ({ user }) => {
       setSessions(prev => [session, ...prev]);
       setCurrentSession(session);
       setMessages([]);
-      setPendingVideoRequests([]); // Clear pending requests for new session
+      setPreviewCode('');
       toast.success('تم إنشاء محادثة جديدة');
+      if (window.innerWidth < 768) setSidebarOpen(false);
     } catch (error) {
       toast.error('فشل إنشاء المحادثة');
     }
@@ -548,17 +450,8 @@ const AIChat = ({ user }) => {
       const session = await res.json();
       setCurrentSession(session);
       setMessages(session.messages || []);
-      
-      // Check for pending video requests when loading session
-      const videoRes = await fetch(
-        `${process.env.REACT_APP_BACKEND_URL}/api/chat/video-requests?session_id=${sessionId}`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
-      );
-      if (videoRes.ok) {
-        const requests = await videoRes.json();
-        const pending = requests.filter(r => r.status === 'pending' || r.status === 'processing');
-        setPendingVideoRequests(pending);
-      }
+      setPreviewCode('');
+      if (window.innerWidth < 768) setSidebarOpen(false);
     } catch (error) {
       toast.error('فشل تحميل المحادثة');
     }
@@ -576,7 +469,6 @@ const AIChat = ({ user }) => {
       id: Date.now().toString(),
       role: 'user',
       content: userMessage,
-      message_type: 'text',
       attachments: [],
       created_at: new Date().toISOString()
     };
@@ -594,10 +486,7 @@ const AIChat = ({ user }) => {
           },
           body: JSON.stringify({
             message: userMessage,
-            settings: {
-              ...generationSettings,
-              tts: ttsSettings
-            }
+            settings: { tts: ttsSettings }
           })
         }
       );
@@ -610,20 +499,25 @@ const AIChat = ({ user }) => {
           return [...filtered, data.user_message, data.assistant_message];
         });
         
-        // Auto-play audio if TTS is enabled and audio is available
+        // Update credits
+        if (data.credits_used) {
+          setUserCredits(prev => Math.max(0, prev - data.credits_used));
+        }
+        
+        // Auto-play TTS
         if (ttsSettings.enabled && data.assistant_message?.audio_url) {
           playAudio(data.assistant_message.audio_url, data.assistant_message.id);
         }
 
-        // Check for pending video requests in the response
-        const videoPendingAttachment = data.assistant_message?.attachments?.find(
-          a => a.type === 'video_pending'
-        );
-        if (videoPendingAttachment && videoPendingAttachment.requests) {
-          setPendingVideoRequests(prev => [...prev, ...videoPendingAttachment.requests]);
-          toast.info('🎬 جاري توليد الفيديو في الخلفية... سيظهر تلقائياً عند الانتهاء');
+        // Check for previewable code
+        const assistantContent = data.assistant_message?.content || '';
+        const codeMatch = assistantContent.match(/```(?:html|javascript|js)?\n?([\s\S]*?)```/);
+        if (codeMatch) {
+          setPreviewCode(codeMatch[1]);
+          setPreviewOpen(true);
         }
 
+        // Update session title
         if (sessions.find(s => s.id === currentSession.id)?.message_count === 0) {
           setSessions(prev => prev.map(s => 
             s.id === currentSession.id 
@@ -643,7 +537,7 @@ const AIChat = ({ user }) => {
       setIsTyping(false);
       inputRef.current?.focus();
     }
-  }, [inputMessage, currentSession, loading, generationSettings, sessions]);
+  }, [inputMessage, currentSession, loading, ttsSettings, sessions]);
 
   const deleteSession = useCallback(async (sessionId) => {
     if (!window.confirm('هل تريد حذف هذه المحادثة؟')) return;
@@ -659,12 +553,155 @@ const AIChat = ({ user }) => {
       if (currentSession?.id === sessionId) {
         setCurrentSession(null);
         setMessages([]);
+        setPreviewCode('');
       }
       toast.success('تم حذف المحادثة');
     } catch (error) {
       toast.error('فشل حذف المحادثة');
     }
   }, [currentSession]);
+
+  // Voice Recording
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      
+      audioChunksRef.current = [];
+      
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        stream.getTracks().forEach(track => track.stop());
+        await transcribeAudio(audioBlob);
+      };
+      
+      recorder.start(100);
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+      setRecordingTime(0);
+      
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+      
+    } catch (error) {
+      toast.error('فشل الوصول للمايكروفون');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+      setIsRecording(false);
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+    }
+  };
+
+  const transcribeAudio = async (audioBlob) => {
+    if (!currentSession) {
+      toast.error('اختر محادثة أولا');
+      return;
+    }
+    
+    setLoading(true);
+    toast.info('جاري تحويل الصوت...');
+    
+    try {
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'recording.webm');
+      formData.append('language', 'ar');
+      
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/stt/transcribe`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        if (data.text && data.text.trim()) {
+          setInputMessage(data.text);
+          toast.success('تم تحويل الصوت!');
+          setTimeout(() => {
+            setInputMessage(prev => {
+              if (prev === data.text) sendMessageWithText(data.text);
+              return prev;
+            });
+          }, 500);
+        } else {
+          toast.error('لم يتم التعرف على أي كلام');
+        }
+      } else {
+        toast.error('فشل تحويل الصوت');
+      }
+    } catch (error) {
+      toast.error('خطأ في تحويل الصوت');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const sendMessageWithText = async (text) => {
+    if (!text.trim() || !currentSession) return;
+    setInputMessage(text);
+    setTimeout(() => sendMessage(), 100);
+  };
+
+  const toggleRecording = () => {
+    if (isRecording) stopRecording();
+    else startRecording();
+  };
+
+  const playAudio = (audioUrl, messageId) => {
+    if (playingAudio === messageId) {
+      audioRef.current?.pause();
+      setPlayingAudio(null);
+    } else {
+      if (audioRef.current) {
+        audioRef.current.src = audioUrl;
+        audioRef.current.play();
+        setPlayingAudio(messageId);
+        audioRef.current.onended = () => setPlayingAudio(null);
+      }
+    }
+  };
+
+  const generateTTS = async (text, messageId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/tts/generate`, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          text: text.replace(/```[\s\S]*?```/g, '').replace(/[*#_]/g, '').trim(),
+          provider: ttsSettings.provider,
+          voice: ttsSettings.voice,
+          speed: ttsSettings.speed
+        })
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        playAudio(data.audio_url, messageId);
+        setMessages(prev => prev.map(m => 
+          m.id === messageId ? { ...m, audio_url: data.audio_url } : m
+        ));
+      }
+    } catch (error) {
+      toast.error('فشل توليد الصوت');
+    }
+  };
 
   const downloadAsset = useCallback((url, filename) => {
     const link = document.createElement('a');
@@ -688,49 +725,52 @@ const AIChat = ({ user }) => {
       case 'image': return <Image className="w-4 h-4" />;
       case 'video': return <Video className="w-4 h-4" />;
       case 'website': return <Globe className="w-4 h-4" />;
+      case 'game': return <Gamepad2 className="w-4 h-4" />;
       default: return <MessageSquare className="w-4 h-4" />;
     }
   }, []);
 
-  const renderAttachment = useCallback((attachment) => {
+  const handlePreview = useCallback((code) => {
+    setPreviewCode(code);
+    setPreviewOpen(true);
+  }, []);
+
+  const renderAttachment = useCallback((attachment, onPreview) => {
     switch (attachment.type) {
       case 'image':
         return (
-          <div className="mt-3 relative group">
+          <div className="mt-3 relative group rounded-xl overflow-hidden">
             <img 
               src={attachment.url} 
               alt={attachment.prompt || 'Generated image'}
-              className="max-w-md rounded-xl shadow-lg"
+              className="max-w-full rounded-xl shadow-lg"
               loading="lazy"
             />
-            <Button
-              size="sm"
-              onClick={() => downloadAsset(attachment.url, `zitex-image-${attachment.id}.png`)}
-              className="absolute bottom-2 left-2 bg-black/50 hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity"
-            >
-              <Download className="w-4 h-4 me-1" />
-              تحميل
-            </Button>
+            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+              <Button
+                size="sm"
+                onClick={() => downloadAsset(attachment.url, `zitex-image.png`)}
+                className="bg-white/20 hover:bg-white/30 backdrop-blur"
+              >
+                <Download className="w-4 h-4 me-1" />
+                تحميل
+              </Button>
+            </div>
           </div>
         );
       
       case 'video':
         return (
-          <div className="mt-3 relative group">
+          <div className="mt-3">
             <video 
               src={attachment.url}
               controls
-              className="max-w-lg rounded-xl shadow-lg"
+              className="max-w-full rounded-xl shadow-lg"
               preload="metadata"
             />
-            <div className="mt-2 flex items-center gap-2 text-xs text-gray-400">
-              <span>المدة: {attachment.duration} ثانية</span>
-              <span>•</span>
-              <span>الدقة: {attachment.size}</span>
-            </div>
             <Button
               size="sm"
-              onClick={() => downloadAsset(attachment.url, `zitex-video-${attachment.id}.mp4`)}
+              onClick={() => downloadAsset(attachment.url, `zitex-video.mp4`)}
               className="mt-2 bg-orange-500 hover:bg-orange-600"
             >
               <Download className="w-4 h-4 me-1" />
@@ -739,90 +779,57 @@ const AIChat = ({ user }) => {
           </div>
         );
       
-      case 'audio':
-        return (
-          <div className="mt-3 p-4 bg-slate-700/50 rounded-xl">
-            <div className="flex items-center gap-3">
-              <Mic className="w-8 h-8 text-blue-400" />
-              <audio 
-                ref={audioRef}
-                src={attachment.url}
-                controls
-                className="w-full"
-                preload="metadata"
-              />
-            </div>
-            <Button
-              size="sm"
-              onClick={() => downloadAsset(attachment.url, `zitex-audio-${attachment.id}.mp3`)}
-              className="mt-2 bg-blue-500 hover:bg-blue-600"
-            >
-              <Download className="w-4 h-4 me-1" />
-              تحميل الصوت
-            </Button>
-          </div>
-        );
-      
       case 'website':
+      case 'game':
         return (
-          <div className="mt-3 p-4 bg-slate-700/50 rounded-xl">
+          <div className="mt-3 p-4 bg-slate-700/50 rounded-xl border border-slate-600">
             <div className="flex items-center gap-2 mb-3">
-              <Globe className="w-6 h-6 text-green-400" />
-              <span className="text-white font-semibold">موقع جاهز للتحميل</span>
+              {attachment.type === 'game' ? (
+                <Gamepad2 className="w-6 h-6 text-cyan-400" />
+              ) : (
+                <Globe className="w-6 h-6 text-green-400" />
+              )}
+              <span className="text-white font-semibold">
+                {attachment.type === 'game' ? 'لعبة جاهزة!' : 'موقع جاهز!'}
+              </span>
             </div>
-            <div className="space-y-1 text-sm text-gray-400 max-h-32 overflow-y-auto">
-              {Object.keys(attachment.files || {}).map(filename => (
-                <div key={filename} className="flex items-center gap-2">
-                  <span className="text-green-400">📄</span>
-                  <span className="truncate">{filename}</span>
-                </div>
-              ))}
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={() => onPreview(attachment.code || Object.values(attachment.files || {})[0])}
+                className="bg-green-500 hover:bg-green-600"
+              >
+                <Eye className="w-4 h-4 me-1" />
+                معاينة
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const content = attachment.code || JSON.stringify(attachment.files, null, 2);
+                  const blob = new Blob([content], { type: 'text/html' });
+                  const url = URL.createObjectURL(blob);
+                  downloadAsset(url, `zitex-${attachment.type}.html`);
+                }}
+                className="border-slate-500"
+              >
+                <Download className="w-4 h-4 me-1" />
+                تحميل
+              </Button>
             </div>
-            <Button
-              size="sm"
-              onClick={() => {
-                const content = JSON.stringify(attachment.files, null, 2);
-                const blob = new Blob([content], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                downloadAsset(url, `zitex-website-${attachment.id}.json`);
-              }}
-              className="mt-3 bg-green-500 hover:bg-green-600"
-            >
-              <Download className="w-4 h-4 me-1" />
-              تحميل الكود
-            </Button>
           </div>
         );
       
       case 'video_pending':
         return (
-          <div className="mt-3 p-4 bg-orange-500/20 border border-orange-500/50 rounded-xl animate-pulse">
-            <div className="flex items-center gap-3 mb-2">
+          <div className="mt-3 p-4 bg-orange-500/10 border border-orange-500/30 rounded-xl">
+            <div className="flex items-center gap-3">
               <Loader2 className="w-6 h-6 text-orange-400 animate-spin" />
-              <span className="text-orange-300 font-semibold">جاري توليد الفيديو...</span>
+              <div>
+                <span className="text-orange-300 font-semibold">جاري توليد الفيديو...</span>
+                <p className="text-sm text-orange-200/70 mt-1">{attachment.message || 'يستغرق 2-5 دقائق'}</p>
+              </div>
             </div>
-            <p className="text-sm text-orange-200/80">{attachment.message || 'يستغرق التوليد 2-5 دقائق'}</p>
-            <div className="mt-3 space-y-2">
-              {attachment.requests?.map((req, i) => (
-                <div key={req.id} className="flex items-center gap-2 text-xs text-orange-200/60">
-                  <span className="w-2 h-2 bg-orange-400 rounded-full animate-pulse"></span>
-                  <span>فيديو {i + 1}: {req.prompt?.slice(0, 40)}... ({req.duration}ث)</span>
-                </div>
-              ))}
-            </div>
-            <p className="text-xs text-orange-300/50 mt-3">💡 يمكنك متابعة المحادثة - سيظهر الفيديو تلقائياً</p>
-          </div>
-        );
-      
-      case 'video_error':
-        return (
-          <div className="mt-3 p-4 bg-red-500/20 border border-red-500/50 rounded-xl">
-            <div className="flex items-center gap-2 mb-2">
-              <Video className="w-6 h-6 text-red-400" />
-              <span className="text-red-300 font-semibold">فشل توليد الفيديو</span>
-            </div>
-            <p className="text-sm text-red-200">{attachment.message || 'حدث خطأ غير متوقع'}</p>
-            <p className="text-xs text-red-300/70 mt-2">💡 نصيحة: حاول مرة أخرى أو استخدم وصف أبسط</p>
           </div>
         );
       
@@ -832,73 +839,75 @@ const AIChat = ({ user }) => {
   }, [downloadAsset]);
 
   return (
-    <div className="h-screen bg-slate-900 flex flex-col overflow-hidden" data-testid="ai-chat-page">
+    <div className="h-screen bg-[#0a0a1a] flex flex-col overflow-hidden" data-testid="ai-chat-page">
       <Navbar user={user} transparent />
       
+      {/* Hidden Audio Element */}
+      <audio ref={audioRef} className="hidden" />
+      
       <div className="flex-1 flex mt-16 overflow-hidden">
-        {/* Mobile Hamburger Menu Button */}
-        {!sidebarOpen && currentSession && (
+        {/* Mobile Menu Button */}
+        {!sidebarOpen && (
           <button
             onClick={() => setSidebarOpen(true)}
-            className="md:hidden fixed top-20 right-4 z-30 p-2 bg-slate-700 rounded-lg shadow-lg border border-slate-600"
-            data-testid="mobile-menu-btn"
+            className="md:hidden fixed top-20 right-4 z-30 p-2 bg-slate-800 rounded-lg shadow-lg border border-slate-700"
           >
             <MessageSquare className="w-5 h-5 text-white" />
           </button>
         )}
         
-        {/* Sidebar Overlay for Mobile */}
+        {/* Sidebar Overlay */}
         {sidebarOpen && (
-          <div 
-            className="md:hidden fixed inset-0 bg-black/50 z-10"
-            onClick={() => setSidebarOpen(false)}
-          />
+          <div className="md:hidden fixed inset-0 bg-black/60 z-10 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
         )}
         
         {/* Sidebar */}
-        <div className={`${sidebarOpen ? 'w-80' : 'w-0'} ${sidebarOpen ? 'fixed md:relative inset-y-0 right-0 z-20 mt-16 md:mt-0' : ''} flex-shrink-0 transition-all duration-300 overflow-hidden bg-slate-800 border-l border-slate-700 flex flex-col`}>
-          <div className="p-3 md:p-4 border-b border-slate-700">
-            {/* Mobile close button */}
-            <div className="flex md:hidden justify-between items-center mb-3">
-              <span className="text-white font-semibold">المحادثات</span>
-              <Button size="sm" variant="ghost" onClick={() => setSidebarOpen(false)}>
-                <ChevronRight className="w-5 h-5 text-white" />
-              </Button>
-            </div>
-            
+        <div className={`${sidebarOpen ? 'w-72' : 'w-0'} ${sidebarOpen ? 'fixed md:relative inset-y-0 right-0 z-20 mt-16 md:mt-0' : ''} flex-shrink-0 transition-all duration-300 overflow-hidden bg-[#0d0d20] border-l border-slate-800 flex flex-col`}>
+          {/* Credits Display */}
+          <div className="p-3 border-b border-slate-800">
+            <CreditsDisplay credits={userCredits} isOwner={user?.role === 'owner'} />
+          </div>
+          
+          {/* New Chat Buttons */}
+          <div className="p-3 border-b border-slate-800">
             <Button
-              onClick={() => { createSession('general'); if(window.innerWidth < 768) setSidebarOpen(false); }}
-              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 transition-all text-sm md:text-base"
+              onClick={() => createSession('general')}
+              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-lg shadow-purple-500/25 transition-all"
               data-testid="new-chat-btn"
             >
               <Plus className="w-4 h-4 me-2" />
               محادثة جديدة
             </Button>
             
-            <div className="flex gap-2 mt-3">
-              <Button size="sm" variant="outline" onClick={() => { createSession('image'); if(window.innerWidth < 768) setSidebarOpen(false); }}
-                className="flex-1 border-purple-500/50 text-purple-400 hover:bg-purple-500/20 transition-colors">
-                <Image className="w-4 h-4" />
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => { createSession('video'); if(window.innerWidth < 768) setSidebarOpen(false); }}
-                className="flex-1 border-orange-500/50 text-orange-400 hover:bg-orange-500/20 transition-colors">
-                <Video className="w-4 h-4" />
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => { createSession('website'); if(window.innerWidth < 768) setSidebarOpen(false); }}
-                className="flex-1 border-green-500/50 text-green-400 hover:bg-green-500/20 transition-colors">
-                <Globe className="w-4 h-4" />
-              </Button>
+            <div className="grid grid-cols-4 gap-2 mt-3">
+              {[
+                { type: 'image', icon: Image, color: 'purple', label: 'صورة' },
+                { type: 'video', icon: Video, color: 'orange', label: 'فيديو' },
+                { type: 'website', icon: Globe, color: 'green', label: 'موقع' },
+                { type: 'game', icon: Gamepad2, color: 'cyan', label: 'لعبة' }
+              ].map(({ type, icon: Icon, color, label }) => (
+                <button
+                  key={type}
+                  onClick={() => createSession(type)}
+                  className={`flex flex-col items-center gap-1 p-2 rounded-lg border border-${color}-500/30 bg-${color}-500/10 hover:bg-${color}-500/20 transition-all`}
+                  title={label}
+                >
+                  <Icon className={`w-4 h-4 text-${color}-400`} />
+                  <span className={`text-[10px] text-${color}-400`}>{label}</span>
+                </button>
+              ))}
             </div>
           </div>
           
+          {/* Sessions List */}
           <ScrollArea className="flex-1 p-2">
             {sessionsLoading ? (
               <SessionSkeleton />
             ) : sessions.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
-                <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p>لا توجد محادثات</p>
-                <p className="text-sm mt-1">ابدأ محادثة جديدة!</p>
+                <Sparkles className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">لا توجد محادثات</p>
+                <p className="text-xs mt-1">ابدأ محادثة جديدة!</p>
               </div>
             ) : (
               <div className="space-y-1">
@@ -907,7 +916,7 @@ const AIChat = ({ user }) => {
                     key={session.id}
                     session={session}
                     isActive={currentSession?.id === session.id}
-                    onSelect={(id) => { loadSession(id); if(window.innerWidth < 768) setSidebarOpen(false); }}
+                    onSelect={loadSession}
                     onDelete={deleteSession}
                     getIcon={getSessionIcon}
                   />
@@ -917,335 +926,249 @@ const AIChat = ({ user }) => {
           </ScrollArea>
         </div>
 
-        {/* Toggle sidebar - Desktop */}
+        {/* Desktop Sidebar Toggle */}
         <Button
           size="icon"
           variant="ghost"
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="hidden md:flex absolute right-0 top-1/2 transform -translate-y-1/2 z-10 bg-slate-700 rounded-r-none hover:bg-slate-600"
+          className="hidden md:flex absolute right-0 top-1/2 transform -translate-y-1/2 z-10 bg-slate-800 hover:bg-slate-700 rounded-r-none border-l-0"
         >
           {sidebarOpen ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </Button>
 
-        {/* Chat Area */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {!currentSession ? (
-            // Welcome screen
-            <div className="flex-1 flex items-center justify-center p-4 md:p-8">
-              <div className="text-center max-w-2xl animate-fadeIn">
-                <div className="w-20 h-20 md:w-24 md:h-24 mx-auto mb-6 bg-gradient-to-br from-purple-500 to-pink-500 rounded-3xl flex items-center justify-center shadow-2xl">
-                  <Sparkles className="w-10 h-10 md:w-12 md:h-12 text-white" />
-                </div>
-                <h1 className="text-2xl md:text-4xl font-bold text-white mb-4">مرحباً بك في زيتكس</h1>
-                <p className="text-xl text-gray-400 mb-8">
-                  مساعدك الإبداعي الذكي لتوليد الصور والفيديوهات وبناء المواقع
-                </p>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                  <Card 
-                    className="bg-slate-800 border-purple-500/30 cursor-pointer hover:bg-slate-700 hover:scale-105 transition-all duration-300"
-                    onClick={() => createSession('image')}
-                  >
-                    <CardContent className="p-6 text-center">
-                      <Image className="w-10 h-10 text-purple-400 mx-auto mb-3" />
-                      <h3 className="text-white font-semibold mb-1">توليد صور</h3>
-                      <p className="text-sm text-gray-400">صور احترافية بالذكاء الاصطناعي</p>
-                    </CardContent>
-                  </Card>
+        {/* Main Chat Area */}
+        <div className={`flex-1 flex ${previewOpen ? 'flex-row' : 'flex-col'} overflow-hidden transition-all`}>
+          
+          {/* Chat Column */}
+          <div className={`${previewOpen ? 'w-1/2 border-l border-slate-800' : 'w-full'} flex flex-col overflow-hidden transition-all`}>
+            {!currentSession ? (
+              // Welcome Screen
+              <div className="flex-1 flex items-center justify-center p-4">
+                <div className="text-center max-w-2xl animate-fadeIn">
+                  <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-purple-600 to-pink-600 rounded-3xl flex items-center justify-center shadow-2xl shadow-purple-500/30">
+                    <Sparkles className="w-12 h-12 text-white" />
+                  </div>
+                  <h1 className="text-3xl md:text-4xl font-bold text-white mb-4">
+                    مرحبا بك في <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">زيتكس</span>
+                  </h1>
+                  <p className="text-lg text-gray-400 mb-8">
+                    مساعدك الإبداعي الذكي - صور، فيديوهات، مواقع، وألعاب
+                  </p>
                   
-                  <Card 
-                    className="bg-slate-800 border-orange-500/30 cursor-pointer hover:bg-slate-700 hover:scale-105 transition-all duration-300"
-                    onClick={() => createSession('video')}
-                  >
-                    <CardContent className="p-6 text-center">
-                      <Video className="w-10 h-10 text-orange-400 mx-auto mb-3" />
-                      <h3 className="text-white font-semibold mb-1">فيديوهات سينمائية</h3>
-                      <p className="text-sm text-gray-400">مع Sora 2 وتعليق صوتي</p>
-                    </CardContent>
-                  </Card>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+                    {[
+                      { type: 'image', icon: Image, color: 'purple', title: 'صور', desc: 'GPT Image 1' },
+                      { type: 'video', icon: Video, color: 'orange', title: 'فيديو', desc: 'Sora 2' },
+                      { type: 'website', icon: Globe, color: 'green', title: 'مواقع', desc: 'GPT-5.2' },
+                      { type: 'game', icon: Gamepad2, color: 'cyan', title: 'ألعاب', desc: 'Babylon.js' }
+                    ].map(({ type, icon: Icon, color, title, desc }) => (
+                      <Card
+                        key={type}
+                        className={`bg-slate-800/50 border-${color}-500/30 cursor-pointer hover:bg-slate-700/50 hover:scale-105 hover:border-${color}-500/50 transition-all duration-300`}
+                        onClick={() => createSession(type)}
+                      >
+                        <CardContent className="p-4 text-center">
+                          <Icon className={`w-8 h-8 text-${color}-400 mx-auto mb-2`} />
+                          <h3 className="text-white font-semibold text-sm">{title}</h3>
+                          <p className="text-xs text-gray-500 mt-1">{desc}</p>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
                   
-                  <Card 
-                    className="bg-slate-800 border-green-500/30 cursor-pointer hover:bg-slate-700 hover:scale-105 transition-all duration-300"
-                    onClick={() => createSession('website')}
+                  <Button
+                    size="lg"
+                    onClick={() => createSession('general')}
+                    className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-lg shadow-purple-500/30"
                   >
-                    <CardContent className="p-6 text-center">
-                      <Globe className="w-10 h-10 text-green-400 mx-auto mb-3" />
-                      <h3 className="text-white font-semibold mb-1">بناء مواقع</h3>
-                      <p className="text-sm text-gray-400">مواقع احترافية قابلة للتحميل</p>
-                    </CardContent>
-                  </Card>
+                    <Zap className="w-5 h-5 me-2" />
+                    ابدأ الآن
+                  </Button>
                 </div>
-                
-                <Button
-                  size="lg"
-                  onClick={() => createSession('general')}
-                  className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 shadow-lg hover:shadow-xl transition-all"
-                >
-                  <Plus className="w-5 h-5 me-2" />
-                  ابدأ محادثة جديدة
-                </Button>
               </div>
-            </div>
-          ) : (
-            <>
-              {/* Messages */}
-              <ScrollArea className="flex-1 p-4 overflow-y-auto">
-                <div className="max-w-4xl mx-auto space-y-4">
-                  {messages.length === 0 && (
-                    <div className="text-center py-12 text-gray-500 animate-fadeIn">
-                      <MessageSquare className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                      <p className="text-lg">ابدأ المحادثة!</p>
-                      <p className="text-sm mt-2">
-                        {currentSession.session_type === 'image' && 'قل لي ما الصورة التي تريدها...'}
-                        {currentSession.session_type === 'video' && 'أخبرني عن الفيديو الذي تريد إنشاءه...'}
-                        {currentSession.session_type === 'website' && 'صف لي الموقع الذي تريد بناءه...'}
-                        {currentSession.session_type === 'general' && 'كيف يمكنني مساعدتك اليوم؟'}
-                      </p>
-                    </div>
-                  )}
-                  
-                  {messages.map((msg, idx) => (
-                    <ChatMessage 
-                      key={msg.id || idx} 
-                      msg={msg} 
-                      idx={idx} 
-                      renderAttachment={renderAttachment}
-                      onPlayAudio={playAudio}
-                      onGenerateTTS={generateTTS}
-                      playingAudio={playingAudio}
-                      ttsEnabled={ttsSettings.enabled}
-                    />
-                  ))}
-                  
-                  {isTyping && (
-                    <div className="flex justify-end animate-fadeIn">
-                      <div className="bg-slate-700 rounded-2xl rounded-tl-md p-4">
-                        <div className="flex items-center gap-3 text-gray-400">
-                          <div className="flex gap-1">
-                            <span className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{animationDelay: '0ms'}} />
-                            <span className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}} />
-                            <span className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{animationDelay: '300ms'}} />
+            ) : (
+              <>
+                {/* Messages */}
+                <ScrollArea className="flex-1 p-4">
+                  <div className="max-w-3xl mx-auto space-y-4">
+                    {messages.length === 0 && (
+                      <div className="text-center py-16 text-gray-500">
+                        <MessageSquare className="w-16 h-16 mx-auto mb-4 opacity-20" />
+                        <p className="text-lg">ابدأ المحادثة!</p>
+                        <p className="text-sm mt-2 text-gray-600">
+                          {currentSession.session_type === 'image' && 'قل لي ما الصورة التي تريدها...'}
+                          {currentSession.session_type === 'video' && 'أخبرني عن الفيديو الذي تريد إنشاءه...'}
+                          {currentSession.session_type === 'website' && 'صف لي الموقع الذي تريد بناءه...'}
+                          {currentSession.session_type === 'game' && 'ما اللعبة التي تريد إنشاءها؟'}
+                          {currentSession.session_type === 'general' && 'كيف يمكنني مساعدتك اليوم؟'}
+                        </p>
+                      </div>
+                    )}
+                    
+                    {messages.map((msg, idx) => (
+                      <ChatMessage
+                        key={msg.id || idx}
+                        msg={msg}
+                        idx={idx}
+                        renderAttachment={renderAttachment}
+                        onPlayAudio={playAudio}
+                        onGenerateTTS={generateTTS}
+                        playingAudio={playingAudio}
+                        onPreview={handlePreview}
+                      />
+                    ))}
+                    
+                    {isTyping && (
+                      <div className="flex justify-end">
+                        <div className="bg-slate-800 rounded-2xl rounded-tl-md p-4 border border-slate-700">
+                          <div className="flex items-center gap-2">
+                            <div className="flex gap-1">
+                              {[0, 1, 2].map(i => (
+                                <span
+                                  key={i}
+                                  className="w-2 h-2 bg-purple-500 rounded-full animate-bounce"
+                                  style={{ animationDelay: `${i * 150}ms` }}
+                                />
+                              ))}
+                            </div>
+                            <span className="text-gray-400 text-sm">جاري التفكير...</span>
                           </div>
-                          <span>جاري التفكير...</span>
                         </div>
                       </div>
-                    </div>
-                  )}
-                  
-                  <div ref={messagesEndRef} />
-                </div>
-              </ScrollArea>
+                    )}
+                    
+                    <div ref={messagesEndRef} />
+                  </div>
+                </ScrollArea>
 
-              {/* Input Area */}
-              <div className="border-t border-slate-700 p-2 md:p-4 bg-slate-800/50 backdrop-blur">
-                <div className="max-w-4xl mx-auto">
-                  {/* Audio Element for TTS */}
-                  <audio ref={audioRef} className="hidden" />
+                {/* Input Area */}
+                <div className="border-t border-slate-800 p-3 bg-[#0d0d20]/80 backdrop-blur relative">
+                  <RecordingVisualizer isRecording={isRecording} recordingTime={recordingTime} />
                   
-                  {/* TTS Settings Panel */}
-                  {showTTSSettings && (
-                    <div className="mb-3 p-3 md:p-4 bg-slate-700/50 border border-slate-600 rounded-lg animate-fadeIn">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-white font-medium flex items-center gap-2 text-sm md:text-base">
-                          <Volume2 className="w-4 h-4 md:w-5 md:h-5 text-purple-400" />
-                          إعدادات الصوت
-                        </h4>
-                        <button 
-                          onClick={() => setShowTTSSettings(false)}
-                          className="text-gray-400 hover:text-white"
-                        >✕</button>
+                  <div className="max-w-3xl mx-auto">
+                    <div className="flex items-end gap-2 bg-slate-800/50 rounded-2xl border border-slate-700 p-2 focus-within:border-purple-500/50 transition-colors">
+                      {/* Text Input */}
+                      <textarea
+                        ref={textareaRef}
+                        value={inputMessage}
+                        onChange={(e) => setInputMessage(e.target.value)}
+                        onKeyPress={handleKeyPress}
+                        placeholder={
+                          currentSession?.session_type === 'image' ? 'صف الصورة التي تريدها...' :
+                          currentSession?.session_type === 'video' ? 'صف المشهد الذي تريد إنشاءه...' :
+                          currentSession?.session_type === 'website' ? 'صف الموقع الذي تريد بناءه...' :
+                          currentSession?.session_type === 'game' ? 'صف اللعبة التي تريدها...' :
+                          'اكتب رسالتك هنا...'
+                        }
+                        className="flex-1 bg-transparent text-white placeholder:text-gray-500 text-base resize-none focus:outline-none min-h-[44px] max-h-[150px] py-2 px-3"
+                        disabled={loading}
+                        rows={1}
+                        data-testid="chat-input"
+                      />
+                      
+                      {/* Mic Button */}
+                      <button
+                        onClick={toggleRecording}
+                        disabled={loading}
+                        className={`flex-shrink-0 p-3 rounded-xl transition-all ${
+                          isRecording 
+                            ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/50' 
+                            : 'bg-slate-700 text-gray-400 hover:text-white hover:bg-slate-600'
+                        }`}
+                        title={isRecording ? 'إيقاف التسجيل' : 'التسجيل الصوتي'}
+                      >
+                        <Mic className="w-5 h-5" />
+                      </button>
+                      
+                      {/* Send Button */}
+                      <button
+                        onClick={sendMessage}
+                        disabled={loading || !inputMessage.trim() || isRecording}
+                        className="flex-shrink-0 p-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg shadow-purple-500/30"
+                        data-testid="send-btn"
+                      >
+                        {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                      </button>
+                    </div>
+                    
+                    {/* Bottom Tools */}
+                    <div className="flex items-center justify-between mt-2 px-1">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setTtsSettings(prev => ({ ...prev, enabled: !prev.enabled }))}
+                          className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs transition-all ${
+                            ttsSettings.enabled 
+                              ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' 
+                              : 'text-gray-500 hover:text-gray-300'
+                          }`}
+                        >
+                          <Volume2 className="w-3.5 h-3.5" />
+                          صوت
+                        </button>
+                        
+                        {previewCode && (
+                          <button
+                            onClick={() => setPreviewOpen(!previewOpen)}
+                            className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs transition-all ${
+                              previewOpen 
+                                ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
+                                : 'text-gray-500 hover:text-gray-300'
+                            }`}
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            معاينة
+                          </button>
+                        )}
                       </div>
                       
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div>
-                          <label className="block text-xs text-gray-400 mb-1">المزود</label>
-                          <select
-                            value={ttsSettings.provider}
-                            onChange={(e) => setTtsSettings({...ttsSettings, provider: e.target.value, voice: e.target.value === 'openai' ? 'alloy' : '21m00Tcm4TlvDq8ikWAM'})}
-                            className="w-full bg-slate-600 border-slate-500 text-white rounded px-2 py-1.5 text-sm"
-                          >
-                            <option value="openai">OpenAI TTS</option>
-                            <option value="elevenlabs">ElevenLabs</option>
-                          </select>
-                        </div>
-                        
-                        <div>
-                          <label className="block text-xs text-gray-400 mb-1">الصوت</label>
-                          <select
-                            value={ttsSettings.voice}
-                            onChange={(e) => setTtsSettings({...ttsSettings, voice: e.target.value})}
-                            className="w-full bg-slate-600 border-slate-500 text-white rounded px-2 py-1.5 text-sm"
-                          >
-                            {availableVoices
-                              .filter(v => v.provider === ttsSettings.provider)
-                              .map(voice => (
-                                <option key={voice.id} value={voice.id}>{voice.name}</option>
-                              ))
-                            }
-                          </select>
-                        </div>
-                        
-                        <div>
-                          <label className="block text-xs text-gray-400 mb-1">السرعة: {ttsSettings.speed}x</label>
-                          <input
-                            type="range"
-                            min="0.5"
-                            max="2"
-                            step="0.1"
-                            value={ttsSettings.speed}
-                            onChange={(e) => setTtsSettings({...ttsSettings, speed: parseFloat(e.target.value)})}
-                            className="w-full"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Pending Video Requests Indicator */}
-                  {pendingVideoRequests.length > 0 && (
-                    <div className="mb-2 p-2 bg-orange-500/20 border border-orange-500/40 rounded-lg flex items-center gap-2 text-sm">
-                      <Loader2 className="w-4 h-4 text-orange-400 animate-spin flex-shrink-0" />
-                      <span className="text-orange-300 text-xs md:text-sm">
-                        جاري توليد {pendingVideoRequests.length} فيديو... (2-5 دقائق)
+                      <span className="text-xs text-gray-600">
+                        Shift+Enter للسطر الجديد
                       </span>
                     </div>
-                  )}
-                  
-                  {/* Main Input Row */}
-                  <div className="flex gap-2">
-                    <Input
-                      ref={inputRef}
-                      value={inputMessage}
-                      onChange={(e) => setInputMessage(e.target.value)}
-                      onKeyPress={handleKeyPress}
-                      placeholder={
-                        currentSession?.session_type === 'image' ? 'صف الصورة التي تريدها...' :
-                        currentSession?.session_type === 'video' ? 'صف المشهد الذي تريد إنشاءه...' :
-                        currentSession?.session_type === 'website' ? 'صف الموقع الذي تريد بناءه...' :
-                        'اكتب رسالتك هنا...'
-                      }
-                      className="flex-1 bg-slate-700 border-slate-600 text-white placeholder:text-gray-400 text-base py-3 focus:ring-2 focus:ring-purple-500 transition-all"
-                      disabled={loading}
-                      data-testid="chat-input"
-                    />
-                    
-                    {/* Microphone Button */}
-                    <Button
-                      variant="outline"
-                      onClick={toggleRecording}
-                      disabled={loading}
-                      size="icon"
-                      className={`flex-shrink-0 transition-all ${
-                        isRecording 
-                          ? 'bg-red-500/20 border-red-500 text-red-400 animate-pulse' 
-                          : 'border-slate-600 text-gray-400 hover:text-white hover:border-green-500'
-                      }`}
-                      title={isRecording ? `جاري التسجيل... ${recordingTime}ث` : 'تحدث بالصوت'}
-                    >
-                      <Mic className={`w-5 h-5 ${isRecording ? 'text-red-400' : ''}`} />
-                    </Button>
-                    
-                    {/* Send Button */}
-                    <Button
-                      onClick={sendMessage}
-                      disabled={loading || !inputMessage.trim() || isRecording}
-                      size="icon"
-                      className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 flex-shrink-0 transition-all disabled:opacity-50"
-                      data-testid="send-btn"
-                    >
-                      {loading ? (
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                      ) : (
-                        <Send className="w-5 h-5" />
-                      )}
-                    </Button>
-                  </div>
-                  
-                  {/* Recording indicator */}
-                  {isRecording && (
-                    <div className="mt-2 flex items-center gap-2 px-3 py-1.5 bg-red-500/20 border border-red-500/50 rounded-lg w-fit">
-                      <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-                      <span className="text-red-400 text-sm font-medium">{recordingTime}ث - اضغط للإيقاف</span>
-                    </div>
-                  )}
-                  
-                  {/* Tools Bar - Bottom */}
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    {/* Video Settings */}
-                    {currentSession?.session_type === 'video' && (
-                      <>
-                        <select
-                          value={generationSettings.duration}
-                          onChange={(e) => setGenerationSettings({...generationSettings, duration: parseInt(e.target.value)})}
-                          className="bg-slate-700 border-slate-600 text-white rounded px-2 py-1 text-xs"
-                        >
-                          <option value={4}>4 ثواني</option>
-                          <option value={8}>8 ثواني</option>
-                          <option value={12}>12 ثانية</option>
-                          <option value={50}>50 ثانية</option>
-                          <option value={60}>دقيقة</option>
-                        </select>
-                        <select
-                          value={generationSettings.size}
-                          onChange={(e) => setGenerationSettings({...generationSettings, size: e.target.value})}
-                          className="bg-slate-700 border-slate-600 text-white rounded px-2 py-1 text-xs"
-                        >
-                          <option value="1280x720">HD</option>
-                          <option value="1792x1024">عريض</option>
-                          <option value="1024x1792">عمودي</option>
-                          <option value="1024x1024">مربع</option>
-                        </select>
-                      </>
-                    )}
-                    
-                    {/* TTS Toggle */}
-                    <button
-                      onClick={() => setTtsSettings({...ttsSettings, enabled: !ttsSettings.enabled})}
-                      className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-all ${
-                        ttsSettings.enabled 
-                          ? 'bg-purple-500/20 border border-purple-500/50 text-purple-400' 
-                          : 'bg-slate-700 text-gray-400 hover:text-white'
-                      }`}
-                      title={ttsSettings.enabled ? 'إيقاف الرد الصوتي' : 'تفعيل الرد الصوتي'}
-                    >
-                      <Volume2 className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">صوت</span>
-                    </button>
-                    
-                    {/* TTS Settings */}
-                    <button
-                      onClick={() => setShowTTSSettings(!showTTSSettings)}
-                      className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-slate-700 text-gray-400 hover:text-white transition-all"
-                      title="إعدادات الصوت"
-                    >
-                      <Settings className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">إعدادات</span>
-                    </button>
-                    
-                    {/* Status Indicators */}
-                    {ttsSettings.enabled && (
-                      <span className="text-purple-400 text-xs flex items-center gap-1 mr-auto">
-                        <Volume2 className="w-3 h-3" />
-                        {ttsSettings.provider === 'openai' ? 'OpenAI' : 'ElevenLabs'}
-                      </span>
-                    )}
                   </div>
                 </div>
-              </div>
-            </>
+              </>
+            )}
+          </div>
+          
+          {/* Preview Panel */}
+          {previewOpen && (
+            <div className={`${previewFullscreen ? 'fixed inset-0 z-50' : 'w-1/2'} transition-all`}>
+              <LivePreviewPanel
+                code={previewCode}
+                isOpen={previewOpen}
+                onClose={() => setPreviewOpen(false)}
+                onRefresh={() => {
+                  const iframe = document.querySelector('iframe');
+                  if (iframe) iframe.src = iframe.src;
+                }}
+                isFullscreen={previewFullscreen}
+                onToggleFullscreen={() => setPreviewFullscreen(!previewFullscreen)}
+              />
+            </div>
           )}
         </div>
       </div>
       
-      {/* CSS Animation */}
+      {/* Animations */}
       <style>{`
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(10px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        .animate-fadeIn {
-          animation: fadeIn 0.3s ease-out;
+        .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
+        
+        @keyframes wave {
+          0%, 100% { height: 8px; }
+          50% { height: 24px; }
         }
+        .animate-wave { animation: wave 0.6s ease-in-out infinite; }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
       `}</style>
     </div>
   );
