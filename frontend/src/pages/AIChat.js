@@ -13,16 +13,26 @@ import {
 } from 'lucide-react';
 
 // ============== Zitex Logo Animation ==============
+const ZITEX_LOGO_URL = "https://static.prod-images.emergentagent.com/jobs/d28c1cbc-c039-46df-a176-2e32ebb0f715/images/f7f88c5a96c3a3978fb84a31dd4d6b922be1568a9083c93bf3cef363e8c17387.png";
+
 const ZitexLogo = memo(({ isAnimating, size = 'md' }) => {
   const sizeClasses = {
-    sm: 'w-6 h-6 text-sm',
-    md: 'w-8 h-8 text-base',
-    lg: 'w-12 h-12 text-xl'
+    sm: 'w-8 h-8',
+    md: 'w-10 h-10',
+    lg: 'w-16 h-16',
+    xl: 'w-24 h-24'
   };
   
   return (
-    <div className={`${sizeClasses[size]} rounded-xl bg-gradient-to-br from-purple-600 via-violet-600 to-indigo-600 flex items-center justify-center font-bold text-white shadow-lg ${isAnimating ? 'animate-pulse shadow-purple-500/50' : ''}`}>
-      Z
+    <div className={`${sizeClasses[size]} relative flex-shrink-0`}>
+      <img 
+        src={ZITEX_LOGO_URL} 
+        alt="Zitex" 
+        className={`w-full h-full object-contain rounded-full ${isAnimating ? 'animate-spin-slow' : ''}`}
+      />
+      {isAnimating && (
+        <div className="absolute inset-0 rounded-full bg-amber-500/20 animate-ping" />
+      )}
     </div>
   );
 });
@@ -104,7 +114,7 @@ const SessionItem = memo(({ session, isActive, onSelect, onDelete, getIcon }) =>
   <div
     className={`group flex items-center gap-2 p-2.5 rounded-xl cursor-pointer transition-all duration-200 ${
       isActive 
-        ? 'bg-gradient-to-r from-purple-500/20 to-indigo-500/20 border border-purple-500/30' 
+        ? 'bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border border-amber-500/30' 
         : 'hover:bg-slate-800/50 border border-transparent'
     }`}
     onClick={() => onSelect(session.id)}
@@ -748,7 +758,7 @@ const AIChat = ({ user }) => {
           
           {/* New Chat Button */}
           <div className="p-3 border-b border-slate-800/50">
-            <Button onClick={() => createSession('general')} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 shadow-lg" data-testid="new-chat-btn">
+            <Button onClick={() => createSession('general')} className="w-full bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 shadow-lg shadow-amber-500/20" data-testid="new-chat-btn">
               <Plus className="w-4 h-4 me-2" /> محادثة جديدة
             </Button>
             <div className="grid grid-cols-4 gap-1.5 mt-2">
@@ -795,9 +805,9 @@ const AIChat = ({ user }) => {
               /* Welcome Screen */
               <div className="flex-1 flex items-center justify-center p-4">
                 <div className="text-center max-w-lg">
-                  <ZitexLogo size="lg" isAnimating={false} />
+                  <ZitexLogo size="xl" isAnimating={false} />
                   <h1 className="text-3xl font-bold text-white mt-6 mb-2">
-                    مرحباً في <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">Zitex</span>
+                    مرحباً في <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-500">Zitex</span>
                   </h1>
                   <p className="text-gray-400 mb-8">منصة الإبداع بالذكاء الاصطناعي</p>
                   <div className="grid grid-cols-2 gap-3 mb-6">
@@ -816,7 +826,7 @@ const AIChat = ({ user }) => {
                       </Card>
                     ))}
                   </div>
-                  <Button size="lg" onClick={() => createSession('general')} className="bg-gradient-to-r from-purple-600 to-indigo-600">
+                  <Button size="lg" onClick={() => createSession('general')} className="bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 shadow-lg shadow-amber-500/20">
                     <Zap className="w-5 h-5 me-2" /> ابدأ الآن
                   </Button>
                 </div>
@@ -840,7 +850,7 @@ const AIChat = ({ user }) => {
                         <div className="flex items-start gap-3">
                           <div className="bg-slate-800 rounded-2xl rounded-tr-md p-4 border border-slate-700/50">
                             <div className="flex items-center gap-2">
-                              {[0, 1, 2].map(i => <span key={i} className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: `${i * 150}ms` }} />)}
+                              {[0, 1, 2].map(i => <span key={i} className="w-2 h-2 bg-amber-500 rounded-full animate-bounce" style={{ animationDelay: `${i * 150}ms` }} />)}
                               <span className="text-gray-400 text-sm mr-2">جاري التفكير...</span>
                             </div>
                           </div>
@@ -907,12 +917,12 @@ const AIChat = ({ user }) => {
                           {/* Ultra Mode */}
                           <button 
                             onClick={() => setUltraMode(!ultraMode)}
-                            className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs transition-all ${ultraMode ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'text-gray-500 hover:text-gray-400 hover:bg-slate-700/50'}`}
+                            className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs transition-all ${ultraMode ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'text-gray-500 hover:text-gray-400 hover:bg-slate-700/50'}`}
                             title="وضع Ultra"
                           >
                             <Zap className="w-3.5 h-3.5" />
                             <span className="hidden sm:inline">Ultra</span>
-                            <div className={`w-6 h-3.5 rounded-full transition-colors ${ultraMode ? 'bg-purple-500' : 'bg-slate-600'}`}>
+                            <div className={`w-6 h-3.5 rounded-full transition-colors ${ultraMode ? 'bg-amber-500' : 'bg-slate-600'}`}>
                               <div className={`w-2.5 h-2.5 rounded-full bg-white transition-transform mt-0.5 ${ultraMode ? 'translate-x-3' : 'translate-x-0.5'}`} />
                             </div>
                           </button>
@@ -932,7 +942,7 @@ const AIChat = ({ user }) => {
                           <button
                             onClick={sendMessage}
                             disabled={loading || !inputMessage.trim() || isRecording}
-                            className="p-2 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 text-white disabled:opacity-50 hover:from-purple-700 hover:to-indigo-700 transition-all"
+                            className="p-2 rounded-lg bg-gradient-to-r from-amber-600 to-yellow-600 text-white disabled:opacity-50 hover:from-amber-700 hover:to-yellow-700 transition-all shadow-lg shadow-amber-500/20"
                             data-testid="send-btn"
                           >
                             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowUp className="w-5 h-5" />}
@@ -959,6 +969,8 @@ const AIChat = ({ user }) => {
       <style>{`
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
+        @keyframes spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .animate-spin-slow { animation: spin-slow 2s linear infinite; }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
