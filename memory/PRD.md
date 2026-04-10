@@ -1,206 +1,73 @@
-# Zitex - منصة الإبداع بالذكاء الاصطناعي
+# Zitex AI Platform - PRD
 
-## الوصف
-منصة متكاملة للمحادثة مع الذكاء الاصطناعي لتوليد الصور والفيديوهات السينمائية وبناء المواقع، مع نظام نقاط ودعوات ودفع متكامل.
+## Original Problem Statement
+منصة ذكاء اصطناعي احترافية باسم "Zitex" لإنشاء المواقع، توليد الصور، وإنتاج الفيديوهات للعملاء. تتضمن لوحة تحكم إدارية، إدارة العملاء، تخصيص المحتوى بالذكاء الاصطناعي، ونظام دفع.
 
-## Architecture
-- **Frontend**: React 19 + Tailwind CSS + Shadcn UI + @paypal/react-paypal-js
-- **Backend**: FastAPI (Python) + Modular Services
-- **Database**: MongoDB
-- **AI Integration**: 
-  - GPT-4o (المحادثة الذكية)
-  - Gemini (توليد الصور)
-  - Sora 2 (فيديوهات سينمائية - 2-5 دقائق للتوليد)
-  - OpenAI TTS (تحويل النص إلى صوت)
-  - OpenAI Whisper (تحويل الصوت إلى نص)
-  - ElevenLabs (تحويل النص إلى صوت - جودة عالية)
+## Current Architecture
+- **Frontend:** React + Tailwind CSS + Shadcn UI (Vercel)
+- **Backend:** FastAPI + Motor (Railway)
+- **Database:** MongoDB (Railway)
+- **AI Models:** GPT-5.2, GPT Image 1, Sora 2
 
----
+## What's Been Implemented ✅
 
-## الميزات المكتملة
+### Core Features (Working)
+1. **🎤 المايكروفون (STT)** - تحويل الصوت لنص باستخدام OpenAI Whisper ✅
+2. **🖼️ توليد الصور** - GPT Image 1 مع base64 encoding ✅
+3. **🌐 إنشاء المواقع** - GPT-5.2 لتوليد HTML/CSS/JS ✅
+4. **🎮 إنشاء الألعاب 3D** - Babylon.js ✅
+5. **📱 تحسين العرض على الجوال** - Responsive design ✅
+6. **💰 خصم النقاط** - 5 نقاط للصور، 20 للفيديو ✅
+7. **🔊 TTS** - تحويل النص لصوت ✅
 
-### ✅ المرحلة 1+2: الشات الذكي
-- [x] شات AI تفاعلي باللغة العربية
-- [x] توليد صور فوري عبر المحادثة
-- [x] توليد فيديوهات سينمائية (Sora 2)
-- [x] بناء مواقع عبر الشات
-- [x] حفظ جميع المحادثات والمشاريع
-- [x] أزرار تحميل لجميع الأصول
+### Fixed Issues (This Session)
+- ✅ إصلاح خطأ `openai_client is not defined` في STT
+- ✅ إصلاح خطأ `security is not defined`
+- ✅ تغيير `max_tokens` إلى `max_completion_tokens` لـ GPT-5.2
+- ✅ إصلاح IndentationError في ai_chat_service.py
+- ✅ إصلاح `elif is_game` المكرر
+- ✅ إصلاح صور base64 (gpt-image-1 returns b64_json not url)
+- ✅ تحسين عرض الجوال (max-width للصور والفيديو)
 
-### ✅ الرد الصوتي (TTS)
-- [x] **OpenAI TTS** - تحويل الردود إلى صوت
-- [x] **ElevenLabs** - جودة صوت عالية
-- [x] **9 أصوات OpenAI**: alloy, ash, coral, echo, fable, nova, onyx, sage, shimmer
-- [x] **زر تشغيل الصوت** على كل رسالة
-- [x] **لوحة إعدادات الصوت** (المزود، الصوت، السرعة)
+## Pending Issues ❌
 
-### ✅ الإدخال الصوتي (STT)
-- [x] **زر المايكروفون** للتحدث مباشرة
-- [x] **OpenAI Whisper** - تحويل الكلام لنص
-- [x] **عداد وقت التسجيل**
-- [x] **إرسال تلقائي** بعد تحويل الصوت
-- [x] **دعم اللغة العربية** في التعرف على الكلام
+### P0 - Critical
+1. **🎬 الفيديو (Sora 2)** - `Video generation returned no data`
+   - السبب: مشكلة في EMERGENT_LLM_KEY
+   - الحل: إنشاء مفتاح جديد من https://www.emergentagent.com → Profile → Universal Key
 
-### ✅ نظام التسعير والنقاط (April 6, 2026)
-- [x] **3 باقات نقاط**: المبتدئ (100 نقطة/50 ر.س)، المحترف (500+50 هدية/200 ر.س)، الأعمال (2000+300 هدية/700 ر.س)
-- [x] **3 اشتراكات شهرية**: الصور (100 ر.س)، الفيديو (150 ر.س)، الشامل (300 ر.س)
-- [x] **تكلفة الخدمات بالنقاط**: صورة=5، فيديو 12ث=25، فيديو دقيقة=100، موقع=50
-- [x] **صفحة التسعير** الجديدة /pricing
+## Technical Details
 
-### ✅ نظام الدعوات (April 6, 2026)
-- [x] **كود دعوة فريد** لكل مستخدم (8 أحرف)
-- [x] **رابط دعوة قابل للمشاركة**
-- [x] **مكافأة الداعي**: 30 نقطة لكل صديق
-- [x] **مكافأة المدعو**: 20 نقطة إضافية
-- [x] **عداد الدعوات الناجحة**
-- [x] **API كاملة**: /api/referral/info, /api/referral/apply
+### Key Files
+- `/backend/server.py` - Main FastAPI app
+- `/backend/services/ai_chat_service.py` - AI generation logic
+- `/frontend/src/pages/AIChat.js` - Chat interface
 
-### ✅ مكافأة التسجيل (April 6, 2026)
-- [x] **20 نقطة مجانية** عند التسجيل
-- [x] **3 صور مجانية**
-- [x] **2 فيديو مجاني**
-- [x] **موقع تجريبي مجاني**
-- [x] **رسالة ترحيب** مع النقاط المكتسبة
+### Environment Variables (Railway)
+- `OPENAI_API_KEY` - لـ GPT-5.2, GPT Image 1, Whisper, TTS
+- `EMERGENT_LLM_KEY` - لـ Sora 2 video generation
+- `MONGO_URL` - MongoDB connection
+- `JWT_SECRET` - Authentication
 
-### ✅ خصم النقاط التلقائي (April 6, 2026 - جديد)
-- [x] **خصم تلقائي** عند توليد الصور والفيديو
-- [x] **التحقق من الرصيد** قبل التوليد
-- [x] **التحقق من الاشتراك** للمشتركين
-- [x] **استثناء المالك** من الدفع
-- [x] **رسالة واضحة** للنقاط المخصومة (-5 نقطة للصورة)
+### API Endpoints
+- `POST /api/stt/transcribe` - Speech to text
+- `POST /api/tts/generate` - Text to speech
+- `POST /api/chat/sessions` - Create chat session
+- `POST /api/chat/sessions/{id}/messages` - Send message
 
-### ✅ تحسينات الموبايل (April 6, 2026 - جديد)
-- [x] **قائمة hamburger** للموبايل
-- [x] **شريط جانبي قابل للطي**
-- [x] **شريط أدوات في الأسفل** (TTS، الإعدادات)
-- [x] **مساحة أكبر للشات**
-- [x] **تصميم متجاوب** مع جميع الشاشات
+## Deployment
+- **Frontend:** https://zitex.vercel.app
+- **Backend:** https://zitex-production.up.railway.app
+- **GitHub:** https://github.com/zuhair646-debug/zitex
 
-### ✅ نظام الدفع PayPal (April 6, 2026 - جديد)
-- [x] **تكامل PayPal** (sandbox mode)
-- [x] **صفحة دفع متكاملة** /payment
-- [x] **ملخص الطلب** (الباقة، النقاط، السعر)
-- [x] **زر PayPal** للدفع
-- [x] **مكافأة أول شراء** (50 نقطة إضافية)
-- [x] **سجل المدفوعات** /api/payments/history
+## Credentials
+- Email: `owner@zitex.com`
+- Password: `owner123`
 
----
+## Next Steps
+1. إنشاء EMERGENT_LLM_KEY جديد لإصلاح الفيديو
+2. اختبار جميع الميزات
+3. تحسينات إضافية حسب الحاجة
 
-## API Endpoints
-
-### Pricing API
-```
-GET  /api/pricing                    - جميع الأسعار والباقات
-GET  /api/pricing/calculate?service=X&quantity=1  - حساب التكلفة
-```
-
-### Referral API
-```
-GET  /api/referral/info              - معلومات الدعوة الخاصة بك
-POST /api/referral/apply             - تطبيق كود دعوة
-GET  /api/referral/leaderboard       - قائمة أفضل الداعين
-```
-
-### User API
-```
-GET  /api/user/balance               - رصيد المستخدم الحالي
-POST /api/user/claim-signup-bonus    - المطالبة بمكافأة التسجيل
-```
-
-### Payment API (جديد)
-```
-POST /api/payments/create-order      - إنشاء طلب دفع PayPal
-POST /api/payments/capture-order     - تأكيد الدفع وإضافة النقاط
-GET  /api/payments/history           - سجل المدفوعات
-```
-
-### TTS/STT API
-```
-GET  /api/voices                     - قائمة الأصوات المتاحة
-POST /api/tts/generate               - توليد صوت من نص
-POST /api/stt/transcribe             - تحويل صوت إلى نص
-```
-
-### Chat API
-```
-POST /api/chat/sessions              - إنشاء جلسة جديدة
-GET  /api/chat/sessions              - قائمة الجلسات
-GET  /api/chat/sessions/{id}         - جلسة محددة
-POST /api/chat/sessions/{id}/messages - إرسال رسالة
-GET  /api/chat/video-requests        - طلبات الفيديو المعلقة
-```
-
----
-
-## هيكل الأسعار
-
-### باقات النقاط
-| الباقة | النقاط | هدية | السعر (ر.س) | السعر ($) |
-|--------|--------|------|-------------|-----------|
-| المبتدئ | 100 | - | 50 | 13 |
-| المحترف ⭐ | 500 | +50 | 200 | 53 |
-| الأعمال | 2000 | +300 | 700 | 187 |
-
-### تكلفة الخدمات
-| الخدمة | النقاط |
-|--------|--------|
-| صورة واحدة | 5 |
-| فيديو 4 ثواني | 10 |
-| فيديو 8 ثواني | 18 |
-| فيديو 12 ثانية | 25 |
-| فيديو 50 ثانية | 80 |
-| فيديو دقيقة | 100 |
-| موقع بسيط | 50 |
-| موقع متقدم | 150 |
-| متجر إلكتروني | 300 |
-| TTS (1000 حرف) | 2 |
-
-### مكافآت
-| المكافأة | النقاط |
-|----------|--------|
-| للداعي (لكل صديق) | 30 |
-| للمدعو | 20 |
-| أول عملية شراء | 50 |
-| تسجيل جديد | 20 |
-
----
-
-## الصفحات
-- `/` - الصفحة الرئيسية
-- `/login` - تسجيل الدخول
-- `/register` - التسجيل (يدعم كود الدعوة)
-- `/chat` - الشات الذكي ⭐
-- `/pricing` - صفحة التسعير
-- `/payment` - صفحة الدفع (جديد)
-- `/projects` - مشاريعي والنشر
-- `/dashboard` - لوحة تحكم المستخدم
-- `/admin` - لوحة تحكم الأدمن
-
----
-
-## بيانات الدخول للاختبار
-- **Email**: owner@zitex.com
-- **Password**: owner123
-
----
-
-## ملاحظات تقنية
-- جميع الـ AI تعمل مع Emergent LLM Key
-- ElevenLabs يحتاج مفتاح API منفصل
-- PayPal في وضع Sandbox (للتجربة)
-- نظام Background Tasks للفيديوهات الطويلة
-- Polling كل 5 ثواني لتحديث حالة الفيديو
-- خصم النقاط تلقائي عند التوليد
-
----
-
-## المهام القادمة
-- [ ] **P1**: تفعيل PayPal Production (تحتاج Client ID حقيقي)
-- [ ] **P2**: نشر المواقع تلقائياً (Vercel/Netlify)
-- [ ] **P2**: إشعارات WhatsApp حقيقية
-- [ ] **P3**: تطبيق موبايل أصلي
-
----
-
-## آخر تحديث
-**April 6, 2026** - إضافة خصم النقاط التلقائي + تحسينات الموبايل + نظام الدفع PayPal
+## Session Date
+April 10, 2026
