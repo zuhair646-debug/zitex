@@ -1,73 +1,69 @@
 # Zitex AI Platform - PRD
 
 ## Original Problem Statement
-منصة ذكاء اصطناعي احترافية باسم "Zitex" لإنشاء المواقع، توليد الصور، وإنتاج الفيديوهات للعملاء. تتضمن لوحة تحكم إدارية، إدارة العملاء، تخصيص المحتوى بالذكاء الاصطناعي، ونظام دفع.
+منصة ذكاء اصطناعي احترافية باسم "Zitex" لإنشاء المواقع، الألعاب، توليد الصور، وإنتاج الفيديوهات.
 
-## Current Architecture
-- **Frontend:** React + Tailwind CSS + Shadcn UI (Vercel)
-- **Backend:** FastAPI + Motor (Railway)
-- **Database:** MongoDB (Railway)
-- **AI Models:** GPT-5.2, GPT Image 1, Sora 2
+## Current Session Goals (April 10, 2026)
 
-## What's Been Implemented ✅
+### 🎯 الأولوية العالية - الميزات الجديدة:
 
-### Core Features (Working)
-1. **🎤 المايكروفون (STT)** - تحويل الصوت لنص باستخدام OpenAI Whisper ✅
-2. **🖼️ توليد الصور** - GPT Image 1 مع base64 encoding ✅
-3. **🌐 إنشاء المواقع** - GPT-5.2 لتوليد HTML/CSS/JS ✅
-4. **🎮 إنشاء الألعاب 3D** - Babylon.js ✅
-5. **📱 تحسين العرض على الجوال** - Responsive design ✅
-6. **💰 خصم النقاط** - 5 نقاط للصور، 20 للفيديو ✅
-7. **🔊 TTS** - تحويل النص لصوت ✅
+#### 1. Live Preview (معاينة مباشرة)
+- شاشة على اليمين تعرض اللعبة/الموقع فوراً
+- تفاعل مباشر مع المحتوى المُنشأ
+- اختبار قبل النشر
 
-### Fixed Issues (This Session)
-- ✅ إصلاح خطأ `openai_client is not defined` في STT
-- ✅ إصلاح خطأ `security is not defined`
-- ✅ تغيير `max_tokens` إلى `max_completion_tokens` لـ GPT-5.2
-- ✅ إصلاح IndentationError في ai_chat_service.py
-- ✅ إصلاح `elif is_game` المكرر
-- ✅ إصلاح صور base64 (gpt-image-1 returns b64_json not url)
-- ✅ تحسين عرض الجوال (max-width للصور والفيديو)
+#### 2. AI ذكي ومتكامل
+- يقترح أفكار وتصاميم قبل الإنشاء
+- يسأل عن التفاصيل والتفضيلات
+- يعرض خيارات متعددة
+- يصحح الأخطاء تلقائياً
+- يختبر قبل التسليم
 
-## Pending Issues ❌
+#### 3. نظام النقاط المتكامل
+| الخدمة | التكلفة (نقاط) |
+|--------|---------------|
+| محادثة عادية | 1 |
+| توليد صورة | 5 |
+| إنشاء موقع بسيط | 10 |
+| إنشاء موقع متقدم | 25 |
+| إنشاء لعبة بسيطة | 20 |
+| إنشاء لعبة متقدمة | 50 |
+| رفع/نشر مشروع | 15 |
+| فيديو (مؤجل) | TBD |
 
-### P0 - Critical
-1. **🎬 الفيديو (Sora 2)** - `Video generation returned no data`
-   - السبب: مشكلة في EMERGENT_LLM_KEY
-   - الحل: إنشاء مفتاح جديد من https://www.emergentagent.com → Profile → Universal Key
+#### 4. نظام النشر التلقائي
+- رفع لـ Vercel بضغطة زر
+- رابط حقيقي للمشروع
 
-## Technical Details
+---
 
-### Key Files
-- `/backend/server.py` - Main FastAPI app
-- `/backend/services/ai_chat_service.py` - AI generation logic
-- `/frontend/src/pages/AIChat.js` - Chat interface
+## What's Working ✅
+- 🎤 المايكروفون (STT)
+- 🖼️ توليد الصور (GPT Image 1)
+- 🌐 إنشاء المواقع (GPT-5.2)
+- 🎮 إنشاء الألعاب (Babylon.js)
+- 📱 العرض المتجاوب
+- 💰 خصم النقاط الأساسي
 
-### Environment Variables (Railway)
-- `OPENAI_API_KEY` - لـ GPT-5.2, GPT Image 1, Whisper, TTS
-- `EMERGENT_LLM_KEY` - لـ Sora 2 video generation
-- `MONGO_URL` - MongoDB connection
-- `JWT_SECRET` - Authentication
+## Pending ❌
+- 🎬 الفيديو (مؤجل - يحتاج خدمة تدعم فيديو طويل)
+- 👁️ Live Preview
+- 🧠 AI تفاعلي محسّن
 
-### API Endpoints
-- `POST /api/stt/transcribe` - Speech to text
-- `POST /api/tts/generate` - Text to speech
-- `POST /api/chat/sessions` - Create chat session
-- `POST /api/chat/sessions/{id}/messages` - Send message
+---
 
-## Deployment
-- **Frontend:** https://zitex.vercel.app
-- **Backend:** https://zitex-production.up.railway.app
-- **GitHub:** https://github.com/zuhair646-debug/zitex
+## Technical Stack
+- Frontend: React + Tailwind + Shadcn UI (Vercel)
+- Backend: FastAPI + Motor (Railway)
+- Database: MongoDB
+- AI: GPT-5.2, GPT Image 1
+- Deployment: Vercel API
 
 ## Credentials
-- Email: `owner@zitex.com`
-- Password: `owner123`
+- Email: owner@zitex.com
+- Password: owner123
 
-## Next Steps
-1. إنشاء EMERGENT_LLM_KEY جديد لإصلاح الفيديو
-2. اختبار جميع الميزات
-3. تحسينات إضافية حسب الحاجة
-
-## Session Date
-April 10, 2026
+## URLs
+- Frontend: https://zitex.vercel.app
+- Backend: https://zitex-production.up.railway.app
+- GitHub: https://github.com/zuhair646-debug/zitex
