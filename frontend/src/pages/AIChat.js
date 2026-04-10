@@ -809,7 +809,7 @@ const AIChat = ({ user }) => {
                   <h1 className="text-3xl font-bold text-white mt-6 mb-2">
                     مرحباً في <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-500">Zitex</span>
                   </h1>
-                  <p className="text-gray-400 mb-8">منصة الإبداع بالذكاء الاصطناعي</p>
+                  <p className="text-amber-200/80 mb-8">منصة الإبداع بالذكاء الاصطناعي</p>
                   <div className="grid grid-cols-2 gap-3 mb-6">
                     {[
                       { type: 'image', icon: Image, color: 'purple', title: 'صور', desc: 'GPT Image 1' },
