@@ -9,7 +9,8 @@ import {
   Loader2, Download, Trash2, Mic, ChevronLeft, ChevronRight, Sparkles,
   Volume2, VolumeX, Copy, Check, Play, X, ArrowUp,
   Code, Eye, EyeOff, Gamepad2, RefreshCw, Maximize2, Minimize2,
-  Coins, Gift, Paperclip, Zap, Save, GitFork, Settings2, Bot
+  Coins, Gift, Paperclip, Zap, Save, GitFork, Settings2, Bot,
+  Layout, Rocket, Link, ExternalLink, BookMarked
 } from 'lucide-react';
 
 // ============== Zitex Logo Animation ==============
@@ -295,9 +296,15 @@ const ChatMessage = memo(({ msg, idx, renderAttachment, onPlayAudio, onGenerateT
 });
 
 // ============== Live Preview Panel ==============
-const LivePreviewPanel = memo(({ code, isOpen, onClose, onRefresh, isFullscreen, onToggleFullscreen, onExportCode, userCredits }) => {
+const LivePreviewPanel = memo(({ code, isOpen, onClose, onRefresh, isFullscreen, onToggleFullscreen, onExportCode, userCredits, onSaveTemplate, onDeploy, currentSession }) => {
   const iframeRef = useRef(null);
   const [copied, setCopied] = useState(false);
+  const [showDeployModal, setShowDeployModal] = useState(false);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [subdomain, setSubdomain] = useState('');
+  const [templateName, setTemplateName] = useState('');
+  const [deploying, setDeploying] = useState(false);
+  const [saving, setSaving] = useState(false);
   
   useEffect(() => {
     if (code && iframeRef.current) {
@@ -314,6 +321,40 @@ const LivePreviewPanel = memo(({ code, isOpen, onClose, onRefresh, isFullscreen,
     setCopied(true);
     toast.success('تم نسخ الكود!');
     setTimeout(() => setCopied(false), 2000);
+  };
+  
+  const handleDeploy = async () => {
+    if (!subdomain.trim()) {
+      toast.error('أدخل اسم النطاق');
+      return;
+    }
+    setDeploying(true);
+    try {
+      await onDeploy(subdomain);
+      setShowDeployModal(false);
+      setSubdomain('');
+    } catch (e) {
+      // Error handled in parent
+    } finally {
+      setDeploying(false);
+    }
+  };
+  
+  const handleSaveTemplate = async () => {
+    if (!templateName.trim()) {
+      toast.error('أدخل اسم القالب');
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSaveTemplate(templateName);
+      setShowTemplateModal(false);
+      setTemplateName('');
+    } catch (e) {
+      // Error handled in parent
+    } finally {
+      setSaving(false);
+    }
   };
   
   if (!isOpen) return null;
@@ -336,6 +377,26 @@ const LivePreviewPanel = memo(({ code, isOpen, onClose, onRefresh, isFullscreen,
         <div className="flex items-center gap-1">
           {code && (
             <>
+              {/* Save as Template */}
+              <button 
+                onClick={() => setShowTemplateModal(true)} 
+                className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium hover:bg-slate-700 text-gray-400 hover:text-white transition-all"
+                title="حفظ كقالب (10 نقاط)"
+              >
+                <BookMarked className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">قالب</span>
+              </button>
+              
+              {/* Deploy */}
+              <button 
+                onClick={() => setShowDeployModal(true)} 
+                className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium bg-green-500/20 hover:bg-green-500/30 text-green-400 transition-all"
+                title="نشر على الإنترنت (100 نقطة)"
+              >
+                <Rocket className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">نشر</span>
+              </button>
+              
               <button 
                 onClick={handleCopyCode} 
                 className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium hover:bg-slate-700 text-gray-400 hover:text-white transition-all"
@@ -366,6 +427,20 @@ const LivePreviewPanel = memo(({ code, isOpen, onClose, onRefresh, isFullscreen,
         </div>
       </div>
       
+      {/* Deployment Info Bar */}
+      {currentSession?.deployment && (
+        <div className="px-3 py-2 bg-green-500/10 border-b border-green-500/20 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Rocket className="w-4 h-4 text-green-400" />
+            <span className="text-green-300 text-sm">منشور على:</span>
+            <a href={currentSession.deployment.url} target="_blank" rel="noopener noreferrer" className="text-green-400 hover:underline flex items-center gap-1">
+              {currentSession.deployment.url}
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+        </div>
+      )}
+      
       {/* Preview */}
       <div className="flex-1 bg-white overflow-hidden">
         {code ? (
@@ -380,6 +455,107 @@ const LivePreviewPanel = memo(({ code, isOpen, onClose, onRefresh, isFullscreen,
           </div>
         )}
       </div>
+      
+      {/* Deploy Modal */}
+      {showDeployModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 w-full max-w-md mx-4 animate-fadeIn">
+            <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+              <Rocket className="w-6 h-6 text-green-400" />
+              نشر المشروع
+            </h3>
+            <p className="text-gray-400 text-sm mb-4">سيتم نشر مشروعك على رابط دائم</p>
+            
+            <div className="mb-4">
+              <label className="text-gray-300 text-sm mb-2 block">اختر اسم النطاق</label>
+              <div className="flex items-center bg-slate-900 border border-slate-700 rounded-xl overflow-hidden">
+                <span className="px-3 text-gray-500 text-sm">https://</span>
+                <input
+                  type="text"
+                  value={subdomain}
+                  onChange={(e) => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                  placeholder="my-project"
+                  className="flex-1 bg-transparent text-white px-2 py-3 text-sm focus:outline-none"
+                />
+                <span className="px-3 text-gray-500 text-sm">.zitex.app</span>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">حروف إنجليزية صغيرة وأرقام وشرطات فقط</p>
+            </div>
+            
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 mb-4">
+              <p className="text-amber-300 text-sm flex items-center gap-2">
+                <Coins className="w-4 h-4" />
+                التكلفة: <strong>100 نقطة</strong>
+              </p>
+            </div>
+            
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowDeployModal(false)}
+                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-xl text-white transition-all"
+              >
+                إلغاء
+              </button>
+              <button
+                onClick={handleDeploy}
+                disabled={deploying || !subdomain.trim()}
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-xl text-white font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {deploying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Rocket className="w-4 h-4" />}
+                {deploying ? 'جاري النشر...' : 'نشر الآن'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Save Template Modal */}
+      {showTemplateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 w-full max-w-md mx-4 animate-fadeIn">
+            <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+              <BookMarked className="w-6 h-6 text-purple-400" />
+              حفظ كقالب
+            </h3>
+            <p className="text-gray-400 text-sm mb-4">احفظ هذا التصميم كقالب لاستخدامه لاحقاً</p>
+            
+            <div className="mb-4">
+              <label className="text-gray-300 text-sm mb-2 block">اسم القالب</label>
+              <input
+                type="text"
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                placeholder="مثال: متجر إلكتروني أزرق"
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-purple-500"
+              />
+            </div>
+            
+            <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-3 mb-4">
+              <p className="text-purple-300 text-sm flex items-center gap-2">
+                <Coins className="w-4 h-4" />
+                التكلفة: <strong>10 نقاط</strong>
+              </p>
+            </div>
+            
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowTemplateModal(false)}
+                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-xl text-white transition-all"
+              >
+                إلغاء
+              </button>
+              <button
+                onClick={handleSaveTemplate}
+                disabled={saving || !templateName.trim()}
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-xl text-white font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookMarked className="w-4 h-4" />}
+                {saving ? 'جاري الحفظ...' : 'حفظ القالب'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 });
@@ -431,6 +607,10 @@ const AIChat = ({ user }) => {
   const [userCredits, setUserCredits] = useState(user?.credits || 0);
   const [ultraMode, setUltraMode] = useState(false);
   
+  // Templates State
+  const [templates, setTemplates] = useState([]);
+  const [showTemplatesPanel, setShowTemplatesPanel] = useState(false);
+  
   // Preview State
   const [previewCode, setPreviewCode] = useState('');
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -463,6 +643,7 @@ const AIChat = ({ user }) => {
   useEffect(() => {
     fetchSessions();
     fetchUserCredits();
+    fetchTemplates();
   }, []);
 
   useEffect(() => {
@@ -477,6 +658,62 @@ const AIChat = ({ user }) => {
       if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
     };
   }, [mediaRecorder]);
+
+  const fetchTemplates = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/chat/templates`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTemplates(data.templates || []);
+      }
+    } catch (error) {
+      console.error('Error fetching templates:', error);
+    }
+  }, []);
+
+  const handleUseTemplate = useCallback(async (templateId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/chat/templates/use`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ template_id: templateId })
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok) {
+        toast.success(`تم تحميل القالب: ${data.template_name}`);
+        setPreviewCode(data.code);
+        setPreviewOpen(true);
+        setShowTemplatesPanel(false);
+        if (data.cost > 0 && user?.role !== 'owner') {
+          setUserCredits(prev => Math.max(0, prev - data.cost));
+        }
+        // Fetch and load the session
+        const sessionRes = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/chat/sessions/${data.session_id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (sessionRes.ok) {
+          const sessionData = await sessionRes.json();
+          setCurrentSession(sessionData);
+          setMessages(sessionData.messages || []);
+          setSessions(prev => {
+            const exists = prev.find(s => s.id === sessionData.id);
+            if (!exists) return [sessionData, ...prev];
+            return prev;
+          });
+        }
+      } else {
+        toast.error(data.detail || 'فشل تحميل القالب');
+      }
+    } catch (error) {
+      toast.error('حدث خطأ في الاتصال');
+    }
+  }, [user]);
 
   const fetchUserCredits = async () => {
     try {
@@ -872,6 +1109,83 @@ const AIChat = ({ user }) => {
     toast.success('تم تصدير الكود بنجاح! (-50 نقطة)');
   }, [previewCode, userCredits, user]);
 
+  // Handle save as template
+  const handleSaveTemplate = useCallback(async (templateName) => {
+    if (!currentSession) {
+      toast.error('اختر محادثة أولاً');
+      return;
+    }
+    
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/chat/templates/save`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: currentSession.id,
+          name: templateName,
+          category: currentSession.session_type || 'custom'
+        })
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok) {
+        toast.success(data.message || 'تم حفظ القالب بنجاح!');
+        if (user?.role !== 'owner') {
+          setUserCredits(prev => Math.max(0, prev - 10));
+        }
+      } else {
+        toast.error(data.detail || 'فشل حفظ القالب');
+      }
+    } catch (error) {
+      toast.error('حدث خطأ في الاتصال');
+    }
+  }, [currentSession, user]);
+
+  // Handle deploy
+  const handleDeploy = useCallback(async (subdomain) => {
+    if (!currentSession) {
+      toast.error('اختر محادثة أولاً');
+      return;
+    }
+    
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/chat/deploy`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: currentSession.id,
+          subdomain: subdomain
+        })
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok) {
+        toast.success(`🚀 تم النشر بنجاح!\n${data.url}`);
+        if (user?.role !== 'owner') {
+          setUserCredits(prev => Math.max(0, prev - 100));
+        }
+        // Update current session with deployment info
+        setCurrentSession(prev => ({
+          ...prev,
+          deployment: {
+            id: data.id,
+            subdomain: subdomain,
+            url: data.url,
+            status: 'active'
+          }
+        }));
+      } else {
+        toast.error(data.detail || 'فشل النشر');
+      }
+    } catch (error) {
+      toast.error('حدث خطأ في الاتصال');
+    }
+  }, [currentSession, user]);
+
   const renderAttachment = useCallback((attachment, onPreview) => {
     switch (attachment.type) {
       case 'image':
@@ -1045,9 +1359,14 @@ const AIChat = ({ user }) => {
                       </Card>
                     ))}
                   </div>
-                  <Button size="lg" onClick={() => createSession('general')} className="bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 shadow-lg shadow-amber-500/20">
-                    <Zap className="w-5 h-5 me-2" /> ابدأ الآن
-                  </Button>
+                  <div className="flex gap-3 justify-center">
+                    <Button size="lg" onClick={() => createSession('general')} className="bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 shadow-lg shadow-amber-500/20">
+                      <Zap className="w-5 h-5 me-2" /> ابدأ الآن
+                    </Button>
+                    <Button size="lg" variant="outline" onClick={() => setShowTemplatesPanel(true)} className="border-purple-500/50 text-purple-400 hover:bg-purple-500/10">
+                      <Layout className="w-5 h-5 me-2" /> القوالب
+                    </Button>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -1193,6 +1512,9 @@ const AIChat = ({ user }) => {
                 onToggleFullscreen={() => setPreviewFullscreen(!previewFullscreen)}
                 onExportCode={handleExportCode}
                 userCredits={userCredits}
+                onSaveTemplate={handleSaveTemplate}
+                onDeploy={handleDeploy}
+                currentSession={currentSession}
               />
             </div>
           )}
@@ -1209,6 +1531,85 @@ const AIChat = ({ user }) => {
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
       `}</style>
+      
+      {/* Templates Panel */}
+      {showTemplatesPanel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-4xl mx-4 max-h-[85vh] overflow-hidden flex flex-col animate-fadeIn">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                <Layout className="w-7 h-7 text-purple-400" />
+                القوالب الجاهزة
+              </h2>
+              <button onClick={() => setShowTemplatesPanel(false)} className="p-2 rounded-lg hover:bg-slate-800 text-gray-400">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+              {['الكل', 'landing', 'ecommerce', 'portfolio', 'dashboard', 'custom'].map(cat => (
+                <button 
+                  key={cat} 
+                  className="px-4 py-2 rounded-full text-sm whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-gray-300 border border-slate-700"
+                >
+                  {cat === 'الكل' ? cat : cat === 'landing' ? 'صفحات هبوط' : cat === 'ecommerce' ? 'متاجر' : cat === 'portfolio' ? 'معارض' : cat === 'dashboard' ? 'لوحات تحكم' : 'مخصص'}
+                </button>
+              ))}
+            </div>
+            
+            <div className="flex-1 overflow-y-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {templates.map(template => (
+                  <div 
+                    key={template.id} 
+                    className="bg-slate-800/50 border border-slate-700 rounded-xl overflow-hidden hover:border-purple-500/50 transition-all group"
+                  >
+                    <div className="h-40 bg-gradient-to-br from-purple-500/20 to-pink-500/20 relative overflow-hidden">
+                      {template.preview_image ? (
+                        <img src={template.preview_image} alt={template.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-4xl">
+                          {template.category === 'ecommerce' ? '🛒' : template.category === 'dashboard' ? '📊' : template.category === 'portfolio' ? '👤' : '🌐'}
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <button
+                          onClick={() => handleUseTemplate(template.id)}
+                          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-white text-sm font-medium"
+                        >
+                          استخدام القالب
+                        </button>
+                      </div>
+                      {template.is_premium && (
+                        <span className="absolute top-2 left-2 px-2 py-1 bg-amber-500 text-black text-xs font-bold rounded-full">Premium</span>
+                      )}
+                    </div>
+                    <div className="p-4">
+                      <h3 className="text-white font-medium mb-1">{template.name}</h3>
+                      <p className="text-gray-400 text-sm mb-2 line-clamp-2">{template.description}</p>
+                      <div className="flex items-center justify-between">
+                        <span className={`text-xs px-2 py-1 rounded-full ${template.cost > 0 ? 'bg-amber-500/20 text-amber-400' : 'bg-green-500/20 text-green-400'}`}>
+                          {template.cost > 0 ? `${template.cost} نقطة` : 'مجاني'}
+                        </span>
+                        {template.uses_count > 0 && (
+                          <span className="text-xs text-gray-500">{template.uses_count} استخدام</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              {templates.length === 0 && (
+                <div className="text-center py-12 text-gray-500">
+                  <Layout className="w-16 h-16 mx-auto mb-4 opacity-20" />
+                  <p>لا توجد قوالب متاحة</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

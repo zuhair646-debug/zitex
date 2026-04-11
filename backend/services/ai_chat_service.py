@@ -169,8 +169,51 @@ SERVICE_COSTS = {
     "video": 20,
     "modification": 5,
     "export": 50,
-    "deploy": 100
+    "deploy": 100,
+    "save_template": 10,
+    "use_template": 5
 }
+
+
+# ============== Templates System ==============
+DEFAULT_TEMPLATES = [
+    {
+        "id": "landing-dark",
+        "name": "صفحة هبوط داكنة",
+        "category": "landing",
+        "preview_image": "https://via.placeholder.com/400x300/1a1a2e/ffd700?text=Landing+Dark",
+        "description": "صفحة هبوط احترافية بتصميم داكن وأنيق",
+        "is_premium": False,
+        "cost": 0
+    },
+    {
+        "id": "ecommerce-gold",
+        "name": "متجر ذهبي",
+        "category": "ecommerce",
+        "preview_image": "https://via.placeholder.com/400x300/0a0a12/ffd700?text=E-Commerce",
+        "description": "متجر إلكتروني بتصميم ذهبي فاخر",
+        "is_premium": True,
+        "cost": 20
+    },
+    {
+        "id": "portfolio-minimal",
+        "name": "معرض أعمال بسيط",
+        "category": "portfolio",
+        "preview_image": "https://via.placeholder.com/400x300/16213e/ffd700?text=Portfolio",
+        "description": "معرض أعمال بتصميم بسيط وأنيق",
+        "is_premium": False,
+        "cost": 0
+    },
+    {
+        "id": "dashboard-pro",
+        "name": "لوحة تحكم احترافية",
+        "category": "dashboard",
+        "preview_image": "https://via.placeholder.com/400x300/1a1a2e/00d4ff?text=Dashboard",
+        "description": "لوحة تحكم متكاملة مع رسوم بيانية",
+        "is_premium": True,
+        "cost": 25
+    }
+]
 
 
 def detect_request_type(message: str, session_type: str = "general") -> str:
@@ -234,9 +277,6 @@ class AIAssistant:
         self.llm_available = bool(self.emergent_key) or bool(self.openai_client)
     
     async def create_session(self, user_id: str, session_type: str = "general", title: str = None) -> Dict:
-        user = await self.db.users.find_one({"id": user_id}, {"_id": 0})
-        credits = user.get("credits", 0) if user else 0
-        
         welcome_msg = {
             "id": str(uuid.uuid4()),
             "role": "assistant",
@@ -568,3 +608,339 @@ class AIAssistant:
     async def get_session_code(self, session_id: str, user_id: str) -> Optional[str]:
         session = await self.get_session(session_id, user_id)
         return session.get("generated_code") if session else None
+    
+    # ============== Templates System ==============
+    async def save_as_template(self, user_id: str, session_id: str, name: str, description: str = "", category: str = "custom") -> Dict:
+        """حفظ المشروع كقالب"""
+        session = await self.get_session(session_id, user_id)
+        if not session or not session.get("generated_code"):
+            raise ValueError("لا يوجد كود للحفظ")
+        
+        # Check credits
+        credits = await self.get_user_credits(user_id)
+        cost = SERVICE_COSTS["save_template"]
+        if credits < cost:
+            raise ValueError(f"رصيد غير كافٍ. المطلوب: {cost} نقطة")
+        
+        template = {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "name": name,
+            "description": description,
+            "category": category,
+            "code": session["generated_code"],
+            "session_type": session.get("session_type", "website"),
+            "preview_image": None,
+            "is_public": False,
+            "is_premium": False,
+            "cost": 0,
+            "uses_count": 0,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await self.db.templates.insert_one(template)
+        await self.deduct_credits(user_id, cost, "save_template")
+        
+        return {
+            "id": template["id"],
+            "name": template["name"],
+            "message": f"✅ تم حفظ القالب بنجاح! (-{cost} نقطة)"
+        }
+    
+    async def get_templates(self, user_id: str = None, category: str = None, include_public: bool = True) -> List[Dict]:
+        """استرجاع القوالب"""
+        templates = []
+        
+        # Add default templates
+        for t in DEFAULT_TEMPLATES:
+            if category and t["category"] != category:
+                continue
+            templates.append({**t, "is_default": True, "user_id": None})
+        
+        # Add user templates
+        query = {}
+        if user_id:
+            if include_public:
+                query = {"$or": [{"user_id": user_id}, {"is_public": True}]}
+            else:
+                query = {"user_id": user_id}
+        elif include_public:
+            query = {"is_public": True}
+        
+        if category:
+            query["category"] = category
+        
+        user_templates = await self.db.templates.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+        templates.extend([{**t, "is_default": False} for t in user_templates])
+        
+        return templates
+    
+    async def use_template(self, user_id: str, template_id: str, session_id: str = None) -> Dict:
+        """استخدام قالب"""
+        # Check if default template
+        default_template = next((t for t in DEFAULT_TEMPLATES if t["id"] == template_id), None)
+        
+        if default_template:
+            template = default_template
+            code = self._get_default_template_code(template_id)
+        else:
+            template = await self.db.templates.find_one({"id": template_id}, {"_id": 0})
+            if not template:
+                raise ValueError("القالب غير موجود")
+            code = template.get("code", "")
+        
+        # Check credits for premium templates
+        cost = template.get("cost", SERVICE_COSTS["use_template"])
+        if cost > 0:
+            credits = await self.get_user_credits(user_id)
+            if credits < cost:
+                raise ValueError(f"رصيد غير كافٍ. المطلوب: {cost} نقطة")
+            await self.deduct_credits(user_id, cost, "use_template")
+        
+        # Update uses count
+        if not default_template:
+            await self.db.templates.update_one(
+                {"id": template_id},
+                {"$inc": {"uses_count": 1}}
+            )
+        
+        # Create or update session with template code
+        if session_id:
+            await self.update_session_code(session_id, user_id, code)
+        else:
+            session = await self.create_session(user_id, template.get("session_type", "website"), f"من قالب: {template['name']}")
+            session_id = session["id"]
+            await self.update_session_code(session_id, user_id, code)
+        
+        return {
+            "session_id": session_id,
+            "code": inject_zitex_badge(code),
+            "template_name": template["name"],
+            "cost": cost
+        }
+    
+    def _get_default_template_code(self, template_id: str) -> str:
+        """كود القوالب الافتراضية"""
+        templates_code = {
+            "landing-dark": '''<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>صفحة هبوط</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#0a0a12] text-white min-h-screen">
+    <nav class="fixed top-0 w-full bg-black/50 backdrop-blur-xl border-b border-amber-500/20 z-50">
+        <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-500">Logo</h1>
+            <div class="flex gap-6">
+                <a href="#" class="text-gray-300 hover:text-amber-400 transition">الرئيسية</a>
+                <a href="#" class="text-gray-300 hover:text-amber-400 transition">الخدمات</a>
+                <a href="#" class="text-gray-300 hover:text-amber-400 transition">تواصل</a>
+            </div>
+        </div>
+    </nav>
+    <section class="pt-32 pb-20 px-6">
+        <div class="max-w-4xl mx-auto text-center">
+            <h1 class="text-5xl md:text-6xl font-bold mb-6 text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-500">
+                عنوان رئيسي جذاب
+            </h1>
+            <p class="text-xl text-gray-400 mb-8">وصف مختصر يشرح ما تقدمه من خدمات أو منتجات بشكل واضح ومباشر</p>
+            <button class="px-8 py-4 bg-gradient-to-r from-amber-600 to-yellow-600 rounded-full text-lg font-bold hover:from-amber-700 hover:to-yellow-700 transition shadow-lg shadow-amber-500/30">
+                ابدأ الآن
+            </button>
+        </div>
+    </section>
+</body>
+</html>''',
+            "ecommerce-gold": '''<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>متجر إلكتروني</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#0a0a12] text-white min-h-screen">
+    <nav class="bg-black/80 backdrop-blur border-b border-amber-500/20 sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-amber-400">🛒 المتجر</h1>
+            <div class="flex items-center gap-4">
+                <input type="text" placeholder="ابحث..." class="bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-sm">
+                <button class="relative p-2">🛍️<span class="absolute -top-1 -right-1 bg-amber-500 text-black text-xs w-5 h-5 rounded-full flex items-center justify-center">3</span></button>
+            </div>
+        </div>
+    </nav>
+    <section class="py-12 px-6">
+        <div class="max-w-6xl mx-auto">
+            <h2 class="text-3xl font-bold text-amber-400 mb-8">المنتجات المميزة</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-slate-800/50 border border-slate-700 rounded-2xl overflow-hidden hover:border-amber-500/50 transition">
+                    <div class="h-48 bg-gradient-to-br from-amber-500/20 to-yellow-500/20 flex items-center justify-center text-6xl">📱</div>
+                    <div class="p-4">
+                        <h3 class="text-lg font-bold text-white">منتج 1</h3>
+                        <p class="text-gray-400 text-sm mb-3">وصف المنتج</p>
+                        <div class="flex justify-between items-center">
+                            <span class="text-amber-400 font-bold">199 ر.س</span>
+                            <button class="px-4 py-2 bg-amber-600 rounded-lg text-sm hover:bg-amber-700">أضف للسلة</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</body>
+</html>''',
+            "portfolio-minimal": '''<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>معرض الأعمال</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#0a0a12] text-white min-h-screen">
+    <section class="min-h-screen flex items-center justify-center px-6">
+        <div class="text-center">
+            <div class="w-32 h-32 bg-gradient-to-br from-amber-500 to-yellow-500 rounded-full mx-auto mb-6 flex items-center justify-center text-4xl">👤</div>
+            <h1 class="text-4xl font-bold mb-2">اسمك هنا</h1>
+            <p class="text-amber-400 text-xl mb-6">مصمم | مطور | مبدع</p>
+            <p class="text-gray-400 max-w-md mx-auto mb-8">نبذة مختصرة عنك وعن خبراتك ومهاراتك في مجال عملك</p>
+            <div class="flex justify-center gap-4">
+                <a href="#" class="px-6 py-3 bg-amber-600 rounded-lg hover:bg-amber-700 transition">أعمالي</a>
+                <a href="#" class="px-6 py-3 border border-amber-500 rounded-lg hover:bg-amber-500/20 transition">تواصل معي</a>
+            </div>
+        </div>
+    </section>
+</body>
+</html>''',
+            "dashboard-pro": '''<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة التحكم</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#0a0a12] text-white min-h-screen flex">
+    <aside class="w-64 bg-[#0d0d18] border-l border-slate-800 p-4 hidden md:block">
+        <h1 class="text-xl font-bold text-amber-400 mb-8">📊 Dashboard</h1>
+        <nav class="space-y-2">
+            <a href="#" class="flex items-center gap-3 px-4 py-3 bg-amber-500/20 border border-amber-500/30 rounded-xl text-amber-400">🏠 الرئيسية</a>
+            <a href="#" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-800 rounded-xl text-gray-400">📈 الإحصائيات</a>
+            <a href="#" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-800 rounded-xl text-gray-400">👥 المستخدمين</a>
+            <a href="#" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-800 rounded-xl text-gray-400">⚙️ الإعدادات</a>
+        </nav>
+    </aside>
+    <main class="flex-1 p-6">
+        <h2 class="text-2xl font-bold mb-6">مرحباً بك 👋</h2>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div class="bg-gradient-to-br from-amber-500/20 to-yellow-500/20 border border-amber-500/30 rounded-2xl p-6">
+                <p class="text-gray-400 text-sm">إجمالي المبيعات</p>
+                <p class="text-3xl font-bold text-amber-400">12,450</p>
+            </div>
+            <div class="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
+                <p class="text-gray-400 text-sm">المستخدمين</p>
+                <p class="text-3xl font-bold">2,340</p>
+            </div>
+            <div class="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
+                <p class="text-gray-400 text-sm">الطلبات</p>
+                <p class="text-3xl font-bold">456</p>
+            </div>
+            <div class="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
+                <p class="text-gray-400 text-sm">الإيرادات</p>
+                <p class="text-3xl font-bold text-green-400">+15%</p>
+            </div>
+        </div>
+    </main>
+</body>
+</html>'''
+        }
+        return templates_code.get(template_id, templates_code["landing-dark"])
+    
+    # ============== Deployment System ==============
+    async def deploy_project(self, user_id: str, session_id: str, subdomain: str) -> Dict:
+        """نشر المشروع على نطاق فرعي"""
+        import re
+        
+        # Validate subdomain
+        subdomain = subdomain.lower().strip()
+        if not re.match(r'^[a-z0-9][a-z0-9-]{2,30}[a-z0-9]$', subdomain):
+            raise ValueError("اسم النطاق غير صالح. استخدم حروف إنجليزية صغيرة وأرقام وشرطات فقط (4-32 حرف)")
+        
+        # Check if subdomain is taken
+        existing = await self.db.deployments.find_one({"subdomain": subdomain, "status": "active"})
+        if existing:
+            raise ValueError(f"النطاق {subdomain}.zitex.app محجوز بالفعل")
+        
+        # Get session code
+        session = await self.get_session(session_id, user_id)
+        if not session or not session.get("generated_code"):
+            raise ValueError("لا يوجد كود للنشر")
+        
+        # Check credits
+        credits = await self.get_user_credits(user_id)
+        cost = SERVICE_COSTS["deploy"]
+        if credits < cost:
+            raise ValueError(f"رصيد غير كافٍ. المطلوب: {cost} نقطة")
+        
+        # Create deployment record
+        deployment = {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "session_id": session_id,
+            "subdomain": subdomain,
+            "url": f"https://{subdomain}.zitex.app",
+            "code": session["generated_code"],
+            "status": "active",
+            "visits": 0,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "expires_at": None  # No expiry for now
+        }
+        
+        await self.db.deployments.insert_one(deployment)
+        await self.deduct_credits(user_id, cost, f"deploy:{subdomain}")
+        
+        # Update session with deployment info
+        await self.db.chat_sessions.update_one(
+            {"id": session_id},
+            {"$set": {
+                "deployment": {
+                    "id": deployment["id"],
+                    "subdomain": subdomain,
+                    "url": deployment["url"],
+                    "status": "active"
+                }
+            }}
+        )
+        
+        return {
+            "id": deployment["id"],
+            "url": deployment["url"],
+            "subdomain": subdomain,
+            "message": f"🚀 تم نشر المشروع بنجاح!\n\n🔗 الرابط: {deployment['url']}\n\n💰 التكلفة: {cost} نقطة"
+        }
+    
+    async def get_user_deployments(self, user_id: str) -> List[Dict]:
+        """استرجاع مشاريع المستخدم المنشورة"""
+        deployments = await self.db.deployments.find(
+            {"user_id": user_id, "status": "active"},
+            {"_id": 0, "code": 0}
+        ).sort("created_at", -1).to_list(50)
+        return deployments
+    
+    async def get_deployment_by_subdomain(self, subdomain: str) -> Optional[Dict]:
+        """استرجاع مشروع منشور بالنطاق"""
+        return await self.db.deployments.find_one(
+            {"subdomain": subdomain, "status": "active"},
+            {"_id": 0}
+        )
+    
+    async def delete_deployment(self, user_id: str, deployment_id: str) -> bool:
+        """حذف مشروع منشور"""
+        result = await self.db.deployments.update_one(
+            {"id": deployment_id, "user_id": user_id},
+            {"$set": {"status": "deleted"}}
+        )
+        return result.modified_count > 0

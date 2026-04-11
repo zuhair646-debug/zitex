@@ -253,3 +253,144 @@ async def get_video_request(
         raise HTTPException(status_code=404, detail="Request not found")
     
     return request
+
+
+# ============== Templates API ==============
+class SaveTemplateRequest(BaseModel):
+    session_id: str
+    name: str
+    description: str = ""
+    category: str = "custom"
+
+
+class UseTemplateRequest(BaseModel):
+    template_id: str
+    session_id: Optional[str] = None
+
+
+@router.get("/templates")
+async def get_templates(
+    category: str = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """استرجاع القوالب المتاحة"""
+    if not ai_assistant:
+        raise HTTPException(status_code=503, detail="AI service not available")
+    
+    templates = await ai_assistant.get_templates(
+        user_id=current_user['user_id'],
+        category=category,
+        include_public=True
+    )
+    return {"templates": templates}
+
+
+@router.post("/templates/save")
+async def save_template(
+    request: SaveTemplateRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """حفظ المشروع كقالب"""
+    if not ai_assistant:
+        raise HTTPException(status_code=503, detail="AI service not available")
+    
+    try:
+        result = await ai_assistant.save_as_template(
+            user_id=current_user['user_id'],
+            session_id=request.session_id,
+            name=request.name,
+            description=request.description,
+            category=request.category
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/templates/use")
+async def use_template(
+    request: UseTemplateRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """استخدام قالب"""
+    if not ai_assistant:
+        raise HTTPException(status_code=503, detail="AI service not available")
+    
+    try:
+        result = await ai_assistant.use_template(
+            user_id=current_user['user_id'],
+            template_id=request.template_id,
+            session_id=request.session_id
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/templates/my")
+async def get_my_templates(
+    current_user: dict = Depends(get_current_user)
+):
+    """استرجاع قوالبي فقط"""
+    if not ai_assistant:
+        raise HTTPException(status_code=503, detail="AI service not available")
+    
+    templates = await ai_assistant.get_templates(
+        user_id=current_user['user_id'],
+        include_public=False
+    )
+    return {"templates": [t for t in templates if t.get("user_id") == current_user['user_id']]}
+
+
+# ============== Deployment API ==============
+class DeployRequest(BaseModel):
+    session_id: str
+    subdomain: str
+
+
+@router.post("/deploy")
+async def deploy_project(
+    request: DeployRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """نشر المشروع على نطاق فرعي"""
+    if not ai_assistant:
+        raise HTTPException(status_code=503, detail="AI service not available")
+    
+    try:
+        result = await ai_assistant.deploy_project(
+            user_id=current_user['user_id'],
+            session_id=request.session_id,
+            subdomain=request.subdomain
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/deployments")
+async def get_deployments(
+    current_user: dict = Depends(get_current_user)
+):
+    """استرجاع المشاريع المنشورة"""
+    if not ai_assistant:
+        raise HTTPException(status_code=503, detail="AI service not available")
+    
+    deployments = await ai_assistant.get_user_deployments(current_user['user_id'])
+    return {"deployments": deployments}
+
+
+@router.delete("/deployments/{deployment_id}")
+async def delete_deployment(
+    deployment_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """حذف مشروع منشور"""
+    if not ai_assistant:
+        raise HTTPException(status_code=503, detail="AI service not available")
+    
+    success = await ai_assistant.delete_deployment(current_user['user_id'], deployment_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Deployment not found")
+    
+    return {"message": "تم حذف المشروع"}
