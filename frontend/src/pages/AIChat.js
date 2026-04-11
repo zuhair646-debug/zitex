@@ -1189,9 +1189,15 @@ const AIChat = ({ user }) => {
   const renderAttachment = useCallback((attachment, onPreview) => {
     switch (attachment.type) {
       case 'image':
+      case 'image_preview':
         return (
           <div className="mt-3 relative group rounded-xl overflow-hidden">
-            <img src={attachment.url} alt="Generated" className="max-w-full rounded-xl" loading="lazy" />
+            <img src={attachment.url} alt={attachment.prompt || "Generated"} className="max-w-full rounded-xl" loading="lazy" />
+            {attachment.scene && (
+              <div className="absolute top-2 left-2 bg-black/70 px-2 py-1 rounded-lg text-xs text-white">
+                مشهد {attachment.scene}
+              </div>
+            )}
             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
               <Button size="sm" onClick={() => downloadAsset(attachment.url, 'zitex-image.png')} className="bg-white/20 backdrop-blur">
                 <Download className="w-4 h-4 me-1" /> تحميل
@@ -1201,11 +1207,43 @@ const AIChat = ({ user }) => {
         );
       case 'video':
         return (
-          <div className="mt-3">
-            <video src={attachment.url} controls className="max-w-full rounded-xl" preload="metadata" />
-            <Button size="sm" onClick={() => downloadAsset(attachment.url, 'zitex-video.mp4')} className="mt-2 bg-orange-500 hover:bg-orange-600">
-              <Download className="w-4 h-4 me-1" /> تحميل
-            </Button>
+          <div className="mt-3 bg-slate-800/50 rounded-xl p-3 border border-slate-700/50">
+            <div className="flex items-center gap-2 mb-2">
+              <Video className="w-5 h-5 text-orange-400" />
+              <span className="text-white font-medium text-sm">
+                {attachment.video_type === 'cinematic' ? 'فيديو سينمائي' : 
+                 attachment.video_type === 'funny' ? 'فيديو مضحك' : 
+                 attachment.video_type === 'advertising' ? 'فيديو إعلاني' : 'فيديو'}
+              </span>
+              {attachment.duration && (
+                <span className="text-xs text-gray-400">({attachment.duration} ثواني)</span>
+              )}
+            </div>
+            <video src={attachment.url} controls className="w-full rounded-xl" preload="metadata" />
+            <div className="flex gap-2 mt-2">
+              <Button size="sm" onClick={() => downloadAsset(attachment.url, 'zitex-video.mp4')} className="bg-orange-500 hover:bg-orange-600">
+                <Download className="w-4 h-4 me-1" /> تحميل
+              </Button>
+            </div>
+          </div>
+        );
+      case 'audio':
+      case 'audio_preview':
+        return (
+          <div className="mt-3 bg-purple-500/10 border border-purple-500/30 rounded-xl p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Volume2 className="w-5 h-5 text-purple-400" />
+              <span className="text-purple-300 font-medium text-sm">
+                {attachment.type === 'audio_preview' ? 'معاينة التعليق الصوتي' : 'التعليق الصوتي'}
+              </span>
+              {attachment.voice && (
+                <span className="text-xs text-purple-400/60">({attachment.voice})</span>
+              )}
+            </div>
+            <audio src={attachment.url} controls className="w-full" />
+            {attachment.text && (
+              <p className="text-xs text-gray-400 mt-2 italic">"{attachment.text.slice(0, 100)}..."</p>
+            )}
           </div>
         );
       case 'website':

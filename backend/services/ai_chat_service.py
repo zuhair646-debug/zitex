@@ -120,84 +120,200 @@ MASTER_SYSTEM_PROMPT = """أنت "زيتكس" (Zitex) - مهندس ذكاء اص
 - إذا كان الرصيد غير كافٍ، اطلب منه شحن النقاط
 - أخبره بالتكلفة قبل البدء
 
-## 🎬 قسم الفيديوهات:
+---
 
-### أنواع الفيديوهات:
+## 🎬 قسم الفيديوهات المتقدم:
 
-**1. مقاطع قصيرة (ريلز/تيك توك):**
-- المدة: 4-8 ثواني
-- التكلفة: 30-60 نقطة
-- الحجم: عمودي (1024x1792)
+عندما يطلب العميل فيديو، اسأله أولاً عن نوع الفيديو:
 
-**2. فيديوهات سينمائية:**
-- المدة: 8-12 ثانية
-- التكلفة: 100-150 نقطة
-- الحجم: سينمائي (1792x1024)
+[BUTTONS]
+🎬 فيديو سينمائي|😂 فيديو مضحك|📺 فيديو إعلاني/تجاري|✏️ نوع آخر
+[/BUTTONS]
 
-**3. فيديوهات إعلانية (الأهم):**
-خطوات إنشاء فيديو إعلاني متكامل:
+---
 
-الخطوة 1 - جمع المعلومات:
+### 📹 النوع 1: فيديوهات سينمائية (أفلام قصيرة)
+**الوصف:** أفلام أكشن، دراما، خيال علمي، رعب، رومانسي
+
+**الخطوات:**
+1. **اسأل عن النوع:**
+   - أكشن ومغامرات
+   - دراما عاطفية
+   - خيال علمي/فانتازيا
+   - رعب/إثارة
+   - رومانسي
+
+2. **اسأل عن الفكرة:**
+   - ما القصة التي تريد سردها؟
+   - ما المشاعر التي تريد إيصالها؟
+
+3. **اسأل عن المدة:**
+   [BUTTONS]
+   4 ثواني (30 نقطة)|8 ثواني (60 نقطة)|12 ثانية (100 نقطة)
+   [/BUTTONS]
+
+4. **اكتب السيناريو** بتفصيل:
+   ```
+   📝 السيناريو السينمائي:
+   
+   🎬 المشهد 1 (0-4 ثواني):
+   [وصف تفصيلي للمشهد، الإضاءة، الزاوية، الحركة]
+   
+   🎬 المشهد 2 (4-8 ثواني):
+   [وصف تفصيلي]
+   
+   🎵 الموسيقى المقترحة: [نوع الموسيقى]
+   🎨 الأسلوب البصري: [سينمائي، واقعي، خيالي]
+   ```
+
+5. **عند الموافقة، أرسل:**
+   [VIDEO_GENERATE]
+   type: cinematic
+   duration: [4/8/12]
+   prompt: [وصف تفصيلي جداً للمشهد السينمائي بالإنجليزية]
+   size: 1792x1024
+   [/VIDEO_GENERATE]
+
+---
+
+### 😂 النوع 2: فيديوهات مضحكة (كوميدي)
+**الوصف:** محتوى مضحك، ميمز متحركة، مقالب، محاكاة ساخرة
+
+**الخطوات:**
+1. **اسأل عن نوع الكوميديا:**
+   - ميم/موقف مضحك
+   - محاكاة ساخرة
+   - حيوانات مضحكة
+   - مواقف يومية طريفة
+
+2. **اسأل إذا كان لديه فيديو مرجعي:**
+   "هل لديك فيديو مضحك تريد محاكاته؟ صف لي الفيديو أو أعطني الفكرة"
+
+3. **اكتب السيناريو:**
+   ```
+   😂 سيناريو الفيديو المضحك:
+   
+   🎭 الموقف: [وصف الموقف الكوميدي]
+   👤 الشخصيات: [من في المشهد]
+   ⚡ نقطة الذروة: [اللحظة المضحكة]
+   🔊 الصوت: [تعليق صوتي مضحك أو موسيقى]
+   ```
+
+4. **عند الموافقة:**
+   [VIDEO_GENERATE]
+   type: funny
+   duration: [4/8]
+   prompt: [وصف المشهد الكوميدي بالتفصيل بالإنجليزية]
+   size: 1024x1792
+   [/VIDEO_GENERATE]
+
+---
+
+### 📺 النوع 3: فيديوهات إعلانية/تجارية (الأهم!)
+**الوصف:** إعلانات منتجات، حملات تسويقية، فيديوهات ترويجية
+
+**الخطوات التفصيلية:**
+
+**الخطوة 1 - جمع معلومات المنتج/الشركة:**
 ```
-أسئلة إجبارية:
-- ما اسم الشركة/المنتج؟
-- ما رسالتك الإعلانية؟
-- هل لديك شعار (لوغو)؟
-- ما الجمهور المستهدف؟
-- ما المدة المطلوبة؟ (30 ثانية - دقيقة)
+📋 أسئلة إجبارية:
+1. ما اسم الشركة/المنتج؟
+2. ما الخدمة أو المنتج الذي تروج له؟
+3. ما الرسالة الإعلانية الرئيسية؟
+4. من الجمهور المستهدف؟ (عمر، اهتمامات)
+5. هل لديك شعار (لوغو)؟ [نعم/لا]
+6. ما هي ألوان العلامة التجارية؟
 ```
 
-الخطوة 2 - اقتراح السيناريو:
+**الخطوة 2 - اسأل عن المدة:**
 ```
-📝 السيناريو المقترح:
+ما المدة المطلوبة للإعلان؟
 
-المشهد 1 (0-4 ثواني): [وصف المشهد]
-المشهد 2 (4-8 ثواني): [وصف المشهد]
-...
-
-🎙️ النص الصوتي:
-"[النص الذي سيُقرأ]"
-
-🎵 الموسيقى المقترحة:
-[نوع الموسيقى]
+[BUTTONS]
+4 ثواني (إعلان سريع)|8 ثواني (إعلان متوسط)|12 ثانية (إعلان كامل)
+[/BUTTONS]
 ```
 
-الخطوة 3 - عرض الصور للموافقة:
-قبل الإنشاء، استخدم [IMAGE_PREVIEW] لتوليد صور توضيحية:
+**الخطوة 3 - اكتب السيناريو التفصيلي:**
 ```
+📺 السيناريو الإعلاني المقترح:
+
+🎬 المشهد 1 (0-4 ث): جذب الانتباه
+- [وصف المشهد الافتتاحي]
+- النص: "[نص التعليق الصوتي]"
+
+🎬 المشهد 2 (4-8 ث): عرض المنتج
+- [وصف عرض المنتج/الخدمة]
+- النص: "[نص التعليق الصوتي]"
+
+🎬 المشهد 3 (8-12 ث): الدعوة للعمل
+- [وصف الختام والشعار]
+- النص: "[نص التعليق الصوتي]"
+
+🎙️ التعليق الصوتي الكامل:
+"[النص الكامل للتعليق الصوتي]"
+
+🎵 الموسيقى: [نوع الموسيقى المقترحة]
+🎨 الأسلوب: [احترافي/حيوي/فاخر]
+
+[BUTTONS]
+✅ موافق على السيناريو|✏️ عدّل السيناريو|🔊 اسمع التعليق الصوتي
+[/BUTTONS]
+```
+
+**الخطوة 4 - إذا طلب سماع التعليق الصوتي:**
+[VOICE_PREVIEW]
+text: [نص التعليق الصوتي]
+voice: [اختر صوت مناسب: onyx للذكور، nova للإناث]
+[/VOICE_PREVIEW]
+
+**الخطوة 5 - إذا طلب صور تجريبية:**
 [IMAGE_PREVIEW]
-scene_1: وصف المشهد الأول
-scene_2: وصف المشهد الثاني
+scene_1: [وصف المشهد الأول بالإنجليزية]
+scene_2: [وصف المشهد الثاني بالإنجليزية]
 [/IMAGE_PREVIEW]
-```
 
-الخطوة 4 - عرض التكلفة:
+**الخطوة 6 - عرض التكلفة النهائية:**
 ```
 💰 تفاصيل التكلفة:
-- إنشاء [X] صور توضيحية: X نقطة
-- إنشاء الفيديو ([X] ثواني): X نقطة
-- التعليق الصوتي: X نقطة
-━━━━━━━━━━━━━━━━━━
-الإجمالي: X نقطة
-
-رصيدك الحالي: X نقطة
+━━━━━━━━━━━━━━━━━━━━━━
+| الخدمة | التكلفة |
+|--------|---------|
+| إنشاء الفيديو ([X] ثواني) | [X] نقطة |
+| التعليق الصوتي | 10 نقاط |
+| صور تجريبية ([X] صور) | [X] نقطة |
+━━━━━━━━━━━━━━━━━━━━━━
+الإجمالي: [X] نقطة
+رصيدك الحالي: [X] نقطة
 
 [BUTTONS]
 ✅ موافق، ابدأ الإنشاء|📝 عدّل السيناريو|❌ إلغاء
 [/BUTTONS]
 ```
 
-الخطوة 5 - الإنشاء:
-بعد الموافقة، استخدم:
-```
-[VIDEO_CREATE]
+**الخطوة 7 - عند الموافقة النهائية:**
+[VIDEO_GENERATE]
 type: advertising
-duration: 8
-prompt: وصف تفصيلي للفيديو
-voice_text: النص الصوتي
-logo_url: رابط اللوغو (إن وجد)
-[/VIDEO_CREATE]
-```
+duration: [4/8/12]
+prompt: [وصف تفصيلي جداً للإعلان بالإنجليزية، يشمل المنتج والعلامة التجارية]
+voice_text: [نص التعليق الصوتي]
+voice: [الصوت المختار]
+size: 1280x720
+[/VIDEO_GENERATE]
+
+---
+
+## 💰 جدول تكاليف الفيديوهات:
+
+| نوع الفيديو | 4 ثواني | 8 ثواني | 12 ثانية |
+|-------------|---------|---------|----------|
+| سينمائي | 50 نقطة | 80 نقطة | 120 نقطة |
+| مضحك | 30 نقطة | 50 نقطة | 70 نقطة |
+| إعلاني | 60 نقطة | 100 نقطة | 150 نقطة |
+| + تعليق صوتي | +10 نقاط |
+| + صور تجريبية | +5 نقاط/صورة |
+
+---
 
 ## 🖼️ قسم الصور:
 
@@ -210,58 +326,54 @@ logo_url: رابط اللوغو (إن وجد)
 3. اسأل عن الألوان المفضلة
 4. اسأل عن النمط (بسيط، حديث، كلاسيكي)
 5. اقترح 3 أفكار بالوصف
-6. بعد الموافقة، أنشئ الصورة
+6. بعد الموافقة:
+   [IMAGE_GENERATE]
+   type: logo
+   prompt: [وصف الشعار بالتفصيل بالإنجليزية]
+   [/IMAGE_GENERATE]
 
 التكلفة: 10 نقاط
 
-**2. صور متعددة:**
-```
-[IMAGES_CREATE]
-count: 5
-theme: موضوع موحد
-style: نمط التصميم
+**2. صور منتجات:**
+[IMAGE_GENERATE]
+type: product
+prompt: [وصف صورة المنتج]
+[/IMAGE_GENERATE]
+
+التكلفة: 5 نقاط
+
+**3. صور متعددة:**
+[IMAGES_GENERATE]
+count: [عدد الصور]
 prompts:
-- وصف الصورة 1
-- وصف الصورة 2
-- وصف الصورة 3
-[/IMAGES_CREATE]
-```
+- [وصف الصورة 1]
+- [وصف الصورة 2]
+[/IMAGES_GENERATE]
 
 التكلفة: 4 نقاط × عدد الصور
 
-## 💰 جدول التكاليف:
+---
 
-| الخدمة | التكلفة |
-|--------|---------|
-| صورة واحدة | 5 نقاط |
-| شعار (لوغو) | 10 نقاط |
-| صور متعددة | 4 × العدد |
-| فيديو قصير (4ث) | 30 نقطة |
-| فيديو متوسط (8ث) | 60 نقطة |
-| فيديو طويل (12ث) | 100 نقطة |
-| فيديو سينمائي | 150 نقطة |
-| إعلان بسيط | 200 نقطة |
-| إعلان متكامل | 500 نقطة |
+## ⚠️ قواعد صارمة:
 
-## ⚠️ قواعد مهمة:
-
-1. **تحقق من الرصيد دائماً** قبل الإنشاء
-2. **أظهر التكلفة** قبل البدء
-3. **اطلب موافقة العميل** قبل خصم النقاط
-4. **إذا كان الرصيد غير كافٍ:** اعرض رسالة:
-   "⚠️ رصيدك الحالي (X نقطة) غير كافٍ لهذه الخدمة.
+1. **تحقق من الرصيد دائماً** قبل أي إنشاء
+2. **أظهر التكلفة الكاملة** قبل البدء
+3. **اطلب موافقة صريحة** قبل خصم النقاط
+4. **إذا كان الرصيد غير كافٍ:**
+   "⚠️ رصيدك الحالي (X نقطة) غير كافٍ.
    المطلوب: X نقطة
    [BUTTONS]
    💰 شحن النقاط|🔙 رجوع
    [/BUTTONS]"
+5. **لا تولد فيديو أبداً بدون موافقة على السيناريو والتكلفة**
 
 ## 🎨 الأصوات المتاحة للتعليق الصوتي:
-- alloy (أنثوي محايد)
-- echo (ذكوري عميق)
-- fable (أنثوي دافئ)
-- onyx (ذكوري قوي)
-- nova (أنثوي نشط)
-- shimmer (أنثوي ناعم)
+- alloy (أنثوي محايد) - مناسب للإعلانات العامة
+- echo (ذكوري عميق) - مناسب للإعلانات الفاخرة
+- fable (أنثوي دافئ) - مناسب للمنتجات العائلية
+- onyx (ذكوري قوي) - مناسب للإعلانات الرياضية والسيارات
+- nova (أنثوي نشط) - مناسب للمنتجات الشبابية
+- shimmer (أنثوي ناعم) - مناسب لمنتجات التجميل
 
 ## 🎮 مكتبات الألعاب:
 - Phaser 3, Three.js, Babylon.js, PixiJS, Matter.js, Howler.js, GSAP
@@ -298,13 +410,23 @@ SERVICE_COSTS = {
     "game_3d": 25,
     "image": 5,
     "image_logo": 10,
+    "image_preview": 5,         # صور تجريبية للمشاهد
     "image_multiple": 15,
-    "video_short": 30,          # 4 ثواني
-    "video_medium": 60,         # 8 ثواني
-    "video_long": 100,          # 12 ثانية
-    "video_cinematic": 150,     # فيديو سينمائي
-    "video_ad_basic": 200,      # إعلان بسيط
-    "video_ad_premium": 500,    # إعلان متكامل مع لوغو وسيناريو
+    # فيديوهات سينمائية
+    "video_cinematic_4": 50,
+    "video_cinematic_8": 80,
+    "video_cinematic_12": 120,
+    # فيديوهات مضحكة
+    "video_funny_4": 30,
+    "video_funny_8": 50,
+    "video_funny_12": 70,
+    # فيديوهات إعلانية
+    "video_advertising_4": 60,
+    "video_advertising_8": 100,
+    "video_advertising_12": 150,
+    # إضافات
+    "voice_over": 10,           # تعليق صوتي
+    "voice_preview": 5,         # معاينة صوتية
     "modification": 5,
     "export": 50,
     "deploy": 100,
@@ -655,17 +777,15 @@ class AIAssistant:
                 has_buttons = True
             else:
                 try:
-                    if request_type == "image":
-                        ai_response, attachments, credits_used = await self._generate_image(user_id, session_id, message, credits)
-                    elif request_type == "video":
-                        ai_response = """## 🎬 جاري إنشاء الفيديو...
-
-⏳ سيتم إشعارك عند الاكتمال
-
-> التكلفة: 20 نقطة"""
-                        credits_used = 20
-                    else:
-                        ai_response, credits_used, has_buttons = await self._generate_with_gpt(session, message, request_type, credits, settings)
+                    # Generate GPT response first
+                    ai_response, credits_used, has_buttons = await self._generate_with_gpt(session, message, request_type, credits, settings)
+                    
+                    # Process special commands in AI response
+                    ai_response, extra_attachments, extra_credits = await self._process_ai_commands(
+                        ai_response, user_id, session_id, credits - credits_used
+                    )
+                    attachments.extend(extra_attachments)
+                    credits_used += extra_credits
                     
                     if credits_used > 0:
                         await self.deduct_credits(user_id, credits_used, f"{request_type}")
@@ -772,6 +892,308 @@ class AIAssistant:
         except Exception as e:
             logger.error(f"Image error: {e}")
             return "❌ خطأ في توليد الصورة", [], 0
+    
+    async def _process_ai_commands(self, ai_response: str, user_id: str, session_id: str, available_credits: int) -> Tuple[str, List[Dict], int]:
+        """معالجة الأوامر الخاصة في رد الذكاء الاصطناعي"""
+        attachments = []
+        total_credits = 0
+        processed_response = ai_response
+        
+        # معالجة أمر توليد الفيديو [VIDEO_GENERATE]
+        video_match = re.search(
+            r'\[VIDEO_GENERATE\]\s*'
+            r'type:\s*(\w+)\s*'
+            r'duration:\s*(\d+)\s*'
+            r'prompt:\s*([^\[]+?)\s*'
+            r'(?:voice_text:\s*([^\[]+?)\s*)?'
+            r'(?:voice:\s*(\w+)\s*)?'
+            r'(?:size:\s*([^\[]+?)\s*)?'
+            r'\[/VIDEO_GENERATE\]',
+            ai_response, re.IGNORECASE | re.DOTALL
+        )
+        
+        if video_match:
+            video_type = video_match.group(1).strip()
+            duration = int(video_match.group(2))
+            prompt = video_match.group(3).strip()
+            voice_text = video_match.group(4).strip() if video_match.group(4) else None
+            voice = video_match.group(5).strip() if video_match.group(5) else "onyx"
+            size = video_match.group(6).strip() if video_match.group(6) else "1280x720"
+            
+            # حساب التكلفة
+            cost_key = f"video_{video_type}_{duration}"
+            video_cost = SERVICE_COSTS.get(cost_key, 60)
+            voice_cost = SERVICE_COSTS.get("voice_over", 10) if voice_text else 0
+            total_video_cost = video_cost + voice_cost
+            
+            if available_credits >= total_video_cost:
+                # توليد الفيديو
+                video_result = await self._generate_video(
+                    user_id, session_id, prompt, duration, size, video_type
+                )
+                
+                if video_result:
+                    attachments.append({
+                        "type": "video",
+                        "url": video_result["url"],
+                        "prompt": prompt,
+                        "duration": duration,
+                        "video_type": video_type
+                    })
+                    total_credits += video_cost
+                    
+                    # توليد التعليق الصوتي إذا مطلوب
+                    if voice_text:
+                        audio_url = await self.generate_tts(voice_text, "openai", voice)
+                        if audio_url:
+                            attachments.append({
+                                "type": "audio",
+                                "url": audio_url,
+                                "text": voice_text,
+                                "voice": voice
+                            })
+                            total_credits += voice_cost
+                    
+                    # تحديث الرد
+                    success_msg = f"""
+## ✅ تم إنشاء الفيديو بنجاح!
+
+🎬 النوع: {video_type}
+⏱️ المدة: {duration} ثواني
+💰 التكلفة: {total_video_cost} نقطة
+
+[BUTTONS]
+📥 تحميل الفيديو|🎬 فيديو جديد|✏️ تعديل
+[/BUTTONS]"""
+                    processed_response = re.sub(
+                        r'\[VIDEO_GENERATE\][\s\S]*?\[/VIDEO_GENERATE\]',
+                        success_msg,
+                        processed_response
+                    )
+                else:
+                    processed_response = re.sub(
+                        r'\[VIDEO_GENERATE\][\s\S]*?\[/VIDEO_GENERATE\]',
+                        "❌ فشل إنشاء الفيديو. حاول مرة أخرى.",
+                        processed_response
+                    )
+            else:
+                processed_response = re.sub(
+                    r'\[VIDEO_GENERATE\][\s\S]*?\[/VIDEO_GENERATE\]',
+                    f"⚠️ رصيد غير كافٍ! المطلوب: {total_video_cost} نقطة، المتوفر: {available_credits} نقطة",
+                    processed_response
+                )
+        
+        # معالجة أمر معاينة الصوت [VOICE_PREVIEW]
+        voice_preview_match = re.search(
+            r'\[VOICE_PREVIEW\]\s*'
+            r'text:\s*([^\[]+?)\s*'
+            r'(?:voice:\s*(\w+)\s*)?'
+            r'\[/VOICE_PREVIEW\]',
+            ai_response, re.IGNORECASE | re.DOTALL
+        )
+        
+        if voice_preview_match:
+            text = voice_preview_match.group(1).strip()
+            voice = voice_preview_match.group(2).strip() if voice_preview_match.group(2) else "onyx"
+            
+            voice_cost = SERVICE_COSTS.get("voice_preview", 5)
+            if available_credits >= voice_cost:
+                audio_url = await self.generate_tts(text, "openai", voice)
+                if audio_url:
+                    attachments.append({
+                        "type": "audio_preview",
+                        "url": audio_url,
+                        "text": text,
+                        "voice": voice
+                    })
+                    total_credits += voice_cost
+                    
+                    processed_response = re.sub(
+                        r'\[VOICE_PREVIEW\][\s\S]*?\[/VOICE_PREVIEW\]',
+                        f"""
+🔊 **معاينة التعليق الصوتي**
+الصوت: {voice}
+
+[BUTTONS]
+✅ أعجبني الصوت|🔄 صوت آخر|✏️ تعديل النص
+[/BUTTONS]""",
+                        processed_response
+                    )
+        
+        # معالجة أمر معاينة الصور [IMAGE_PREVIEW]
+        image_preview_match = re.search(
+            r'\[IMAGE_PREVIEW\]\s*([\s\S]*?)\[/IMAGE_PREVIEW\]',
+            ai_response, re.IGNORECASE
+        )
+        
+        if image_preview_match:
+            scenes_text = image_preview_match.group(1).strip()
+            scenes = re.findall(r'scene_\d+:\s*(.+)', scenes_text)
+            
+            preview_cost = SERVICE_COSTS.get("image_preview", 5) * len(scenes)
+            if available_credits >= preview_cost and scenes:
+                preview_images = []
+                for i, scene_prompt in enumerate(scenes):
+                    image_url = await self._generate_single_image(scene_prompt.strip())
+                    if image_url:
+                        preview_images.append({
+                            "type": "image_preview",
+                            "url": image_url,
+                            "scene": i + 1,
+                            "prompt": scene_prompt.strip()
+                        })
+                
+                if preview_images:
+                    attachments.extend(preview_images)
+                    total_credits += SERVICE_COSTS.get("image_preview", 5) * len(preview_images)
+                    
+                    processed_response = re.sub(
+                        r'\[IMAGE_PREVIEW\][\s\S]*?\[/IMAGE_PREVIEW\]',
+                        f"""
+🖼️ **صور تجريبية للمشاهد** ({len(preview_images)} صور)
+
+[BUTTONS]
+✅ موافق على المشاهد|✏️ تعديل المشاهد|🔄 صور جديدة
+[/BUTTONS]""",
+                        processed_response
+                    )
+        
+        # معالجة أمر توليد صورة [IMAGE_GENERATE]
+        image_gen_match = re.search(
+            r'\[IMAGE_GENERATE\]\s*'
+            r'type:\s*(\w+)\s*'
+            r'prompt:\s*([^\[]+?)\s*'
+            r'\[/IMAGE_GENERATE\]',
+            ai_response, re.IGNORECASE | re.DOTALL
+        )
+        
+        if image_gen_match:
+            image_type = image_gen_match.group(1).strip()
+            prompt = image_gen_match.group(2).strip()
+            
+            cost_key = f"image_{image_type}" if image_type in ["logo", "product"] else "image"
+            image_cost = SERVICE_COSTS.get(cost_key, 5)
+            
+            if available_credits >= image_cost:
+                image_url = await self._generate_single_image(prompt)
+                if image_url:
+                    attachments.append({
+                        "type": "image",
+                        "url": image_url,
+                        "image_type": image_type,
+                        "prompt": prompt
+                    })
+                    total_credits += image_cost
+                    
+                    processed_response = re.sub(
+                        r'\[IMAGE_GENERATE\][\s\S]*?\[/IMAGE_GENERATE\]',
+                        f"""
+## ✅ تم إنشاء الصورة!
+
+💰 التكلفة: {image_cost} نقطة
+
+[BUTTONS]
+🎨 صورة جديدة|✏️ تعديل|💾 حفظ
+[/BUTTONS]""",
+                        processed_response
+                    )
+        
+        return processed_response, attachments, total_credits
+    
+    async def _generate_video(self, user_id: str, session_id: str, prompt: str, duration: int, size: str, video_type: str) -> Optional[Dict]:
+        """توليد فيديو باستخدام Sora 2"""
+        try:
+            from emergentintegrations.llm.openai.video_generation import OpenAIVideoGeneration
+            
+            video_gen = OpenAIVideoGeneration(api_key=self.emergent_key)
+            
+            # Ensure duration is valid (4, 8, or 12)
+            valid_durations = [4, 8, 12]
+            if duration not in valid_durations:
+                duration = min(valid_durations, key=lambda x: abs(x - duration))
+            
+            # Ensure size is valid
+            valid_sizes = ["1280x720", "1792x1024", "1024x1792", "1024x1024"]
+            if size not in valid_sizes:
+                size = "1280x720"
+            
+            logger.info(f"Generating video: type={video_type}, duration={duration}, size={size}")
+            
+            video_bytes = video_gen.text_to_video(
+                prompt=prompt,
+                model="sora-2",
+                size=size,
+                duration=duration,
+                max_wait_time=600
+            )
+            
+            if video_bytes:
+                # رفع الفيديو إلى Object Storage
+                video_id = str(uuid.uuid4())
+                video_path = f"{APP_NAME}/videos/{user_id}/{video_id}.mp4"
+                
+                upload_result = upload_to_storage(video_path, video_bytes, "video/mp4")
+                
+                if upload_result:
+                    video_url = f"{STORAGE_URL.replace('/api/v1/storage', '')}/videos/{user_id}/{video_id}.mp4"
+                    
+                    # حفظ في قاعدة البيانات
+                    asset = {
+                        "id": video_id,
+                        "user_id": user_id,
+                        "session_id": session_id,
+                        "asset_type": "video",
+                        "video_type": video_type,
+                        "url": video_url,
+                        "prompt": prompt,
+                        "duration": duration,
+                        "size": size,
+                        "created_at": datetime.now(timezone.utc).isoformat()
+                    }
+                    await self.db.generated_assets.insert_one(asset)
+                    
+                    return {"url": video_url, "id": video_id}
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Video generation error: {e}")
+            return None
+    
+    async def _generate_single_image(self, prompt: str) -> Optional[str]:
+        """توليد صورة واحدة باستخدام GPT Image"""
+        try:
+            from emergentintegrations.llm.openai.image_generation import OpenAIImageGeneration
+            import base64
+            
+            image_gen = OpenAIImageGeneration(api_key=self.emergent_key)
+            
+            images = await image_gen.generate_images(
+                prompt=prompt,
+                model="gpt-image-1",
+                number_of_images=1
+            )
+            
+            if images and len(images) > 0:
+                # رفع الصورة إلى Object Storage
+                image_id = str(uuid.uuid4())
+                image_path = f"{APP_NAME}/images/{image_id}.png"
+                
+                upload_result = upload_to_storage(image_path, images[0], "image/png")
+                
+                if upload_result:
+                    image_url = f"{STORAGE_URL.replace('/api/v1/storage', '')}/images/{image_id}.png"
+                    return image_url
+                else:
+                    # إذا فشل الرفع، إرجاع base64
+                    image_base64 = base64.b64encode(images[0]).decode('utf-8')
+                    return f"data:image/png;base64,{image_base64}"
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Image generation error: {e}")
+            return None
     
     async def _generate_with_gpt(self, session: Dict, message: str, request_type: str, credits: int, settings: Dict) -> Tuple[str, int, bool]:
         # Build context about the project
