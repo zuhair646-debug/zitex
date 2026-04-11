@@ -1547,12 +1547,12 @@ const AIChat = ({ user }) => {
             </div>
             
             <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-              {['الكل', 'landing', 'ecommerce', 'portfolio', 'dashboard', 'custom'].map(cat => (
+              {['الكل', 'landing', 'ecommerce', 'portfolio', 'dashboard', 'game', 'custom'].map(cat => (
                 <button 
                   key={cat} 
                   className="px-4 py-2 rounded-full text-sm whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-gray-300 border border-slate-700"
                 >
-                  {cat === 'الكل' ? cat : cat === 'landing' ? 'صفحات هبوط' : cat === 'ecommerce' ? 'متاجر' : cat === 'portfolio' ? 'معارض' : cat === 'dashboard' ? 'لوحات تحكم' : 'مخصص'}
+                  {cat === 'الكل' ? cat : cat === 'landing' ? 'صفحات هبوط' : cat === 'ecommerce' ? 'متاجر' : cat === 'portfolio' ? 'معارض' : cat === 'dashboard' ? 'لوحات تحكم' : cat === 'game' ? '🎮 ألعاب' : 'مخصص'}
                 </button>
               ))}
             </div>
@@ -1564,14 +1564,15 @@ const AIChat = ({ user }) => {
                     key={template.id} 
                     className="bg-slate-800/50 border border-slate-700 rounded-xl overflow-hidden hover:border-purple-500/50 transition-all group"
                   >
-                    <div className="h-40 bg-gradient-to-br from-purple-500/20 to-pink-500/20 relative overflow-hidden">
-                      {template.preview_image ? (
-                        <img src={template.preview_image} alt={template.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-4xl">
-                          {template.category === 'ecommerce' ? '🛒' : template.category === 'dashboard' ? '📊' : template.category === 'portfolio' ? '👤' : '🌐'}
+                    <div className="h-40 bg-gradient-to-br from-purple-500/20 to-pink-500/20 relative overflow-hidden flex items-center justify-center">
+                      <div className="text-center">
+                        <div className="text-5xl mb-2">
+                          {template.category === 'ecommerce' ? '🛒' : template.category === 'dashboard' ? '📊' : template.category === 'portfolio' ? '👤' : template.category === 'game' ? '🎮' : template.category === 'landing' ? '🌐' : '✨'}
                         </div>
-                      )}
+                        <div className="text-xs text-gray-400 bg-black/30 px-2 py-1 rounded">
+                          {template.category === 'game' ? (template.id.includes('3d') ? 'Three.js' : 'Phaser.js') : 'Tailwind CSS'}
+                        </div>
+                      </div>
                       <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                         <button
                           onClick={() => handleUseTemplate(template.id)}

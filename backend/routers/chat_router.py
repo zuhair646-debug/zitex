@@ -394,3 +394,74 @@ async def delete_deployment(
         raise HTTPException(status_code=404, detail="Deployment not found")
     
     return {"message": "تم حذف المشروع"}
+
+
+# ============== Serve Deployed Sites ==============
+from fastapi.responses import HTMLResponse, Response
+from services.ai_chat_service import get_from_storage, GAME_LIBRARIES
+
+@router.get("/sites/{subdomain}")
+async def serve_deployed_site(subdomain: str):
+    """خدمة المواقع المنشورة"""
+    if not ai_assistant:
+        raise HTTPException(status_code=503, detail="Service not available")
+    
+    deployment = await ai_assistant.get_deployment_by_subdomain(subdomain)
+    if not deployment:
+        raise HTTPException(status_code=404, detail="الموقع غير موجود")
+    
+    # Increment visit count
+    await ai_assistant.db.deployments.update_one(
+        {"subdomain": subdomain},
+        {"$inc": {"visits": 1}}
+    )
+    
+    # Get code from storage
+    result = get_from_storage(deployment.get("storage_path", ""))
+    if result:
+        content, content_type = result
+        return Response(content=content, media_type="text/html")
+    
+    # Fallback to DB stored code
+    if deployment.get("code"):
+        return HTMLResponse(content=deployment["code"])
+    
+    raise HTTPException(status_code=404, detail="محتوى الموقع غير موجود")
+
+
+@router.get("/templates/preview/{template_id}")
+async def get_template_preview(template_id: str):
+    """صور مصغرة للقوالب"""
+    # Preview colors based on template type
+    colors = {
+        "landing-dark": ("#1a1a2e", "#ffd700", "صفحة هبوط"),
+        "ecommerce-gold": ("#0a0a12", "#ffd700", "متجر ذهبي"),
+        "portfolio-minimal": ("#16213e", "#00d4ff", "معرض أعمال"),
+        "dashboard-pro": ("#1a1a2e", "#00ff88", "لوحة تحكم"),
+        "game-2d-platformer": ("#0a0a12", "#ff6b6b", "🎮 لعبة 2D"),
+        "game-3d-racing": ("#1a1a2e", "#ffd700", "🏎️ سباق 3D")
+    }
+    
+    bg, accent, title = colors.get(template_id, ("#1a1a2e", "#ffd700", template_id))
+    
+    preview_html = f'''<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><style>
+* {{ margin:0; padding:0; box-sizing:border-box; }}
+body {{ display:flex; align-items:center; justify-content:center; min-height:100vh; background:{bg}; }}
+.card {{ width:100%; height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; }}
+.icon {{ font-size:60px; margin-bottom:20px; }}
+.title {{ color:{accent}; font-size:24px; font-family:Arial,sans-serif; font-weight:bold; text-align:center; }}
+.badge {{ background:{accent}20; border:2px solid {accent}; padding:8px 16px; border-radius:20px; margin-top:15px; color:{accent}; font-size:14px; }}
+</style></head>
+<body><div class="card">
+<div class="icon">{"🎮" if "game" in template_id else "🌐" if "landing" in template_id else "🛒" if "ecommerce" in template_id else "👤" if "portfolio" in template_id else "📊"}</div>
+<div class="title">{title}</div>
+<div class="badge">Zitex Template</div>
+</div></body></html>'''
+    return HTMLResponse(content=preview_html)
+
+
+@router.get("/game-libraries")
+async def get_game_libraries():
+    """قائمة مكتبات الألعاب المتاحة"""
+    return {"libraries": GAME_LIBRARIES}

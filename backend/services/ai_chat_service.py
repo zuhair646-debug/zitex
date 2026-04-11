@@ -1,7 +1,7 @@
 """
 Zitex AI Chat Service - Progressive Builder Edition
 خدمة الشات الذكي - النسخة التدريجية
-Version 6.0 - Progressive Live Builder with Hidden Code
+Version 7.0 - Real Hosting + Full Game Support
 """
 import os
 import uuid
@@ -9,6 +9,7 @@ import base64
 import logging
 import re
 import asyncio
+import requests
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, Tuple, List
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -20,6 +21,60 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 AI_FEATURES_ENABLED = True
+
+# ============== Object Storage for Real Hosting ==============
+STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
+EMERGENT_KEY = os.environ.get('EMERGENT_LLM_KEY')
+APP_NAME = "zitex-hosting"
+storage_key = None
+
+def init_storage():
+    """Initialize storage connection - call once at startup"""
+    global storage_key
+    if storage_key:
+        return storage_key
+    try:
+        resp = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_KEY}, timeout=30)
+        resp.raise_for_status()
+        storage_key = resp.json()["storage_key"]
+        logger.info("Object Storage initialized successfully")
+        return storage_key
+    except Exception as e:
+        logger.error(f"Storage init failed: {e}")
+        return None
+
+def upload_to_storage(path: str, data: bytes, content_type: str) -> Optional[dict]:
+    """Upload file to object storage"""
+    key = init_storage()
+    if not key:
+        return None
+    try:
+        resp = requests.put(
+            f"{STORAGE_URL}/objects/{path}",
+            headers={"X-Storage-Key": key, "Content-Type": content_type},
+            data=data, timeout=120
+        )
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        logger.error(f"Upload failed: {e}")
+        return None
+
+def get_from_storage(path: str) -> Optional[Tuple[bytes, str]]:
+    """Download file from storage"""
+    key = init_storage()
+    if not key:
+        return None
+    try:
+        resp = requests.get(
+            f"{STORAGE_URL}/objects/{path}",
+            headers={"X-Storage-Key": key}, timeout=60
+        )
+        resp.raise_for_status()
+        return resp.content, resp.headers.get("Content-Type", "text/html")
+    except Exception as e:
+        logger.error(f"Download failed: {e}")
+        return None
 
 # Try to import emergentintegrations for LLM chat
 try:
@@ -74,8 +129,6 @@ MASTER_SYSTEM_PROMPT = """أنت "زيتكس" (Zitex) - مهندس ذكاء اص
 **الخطوة 2:** بعد رد العميل: "✨ ممتاز! الآن سأضيف لوحة التحكم..."
 ثم ضع الكود المحدث في [CODE_BLOCK]
 
-**الخطوة 3:** "🎨 سأضيف الآن التصميم النهائي والتفاصيل..."
-
 ### 4. تنسيق الكود (مهم جداً):
 ضع الكود دائماً في نهاية الرد بهذا الشكل:
 [CODE_BLOCK]
@@ -88,15 +141,51 @@ MASTER_SYSTEM_PROMPT = """أنت "زيتكس" (Zitex) - مهندس ذكاء اص
 - كل كود يجب أن يكون كامل 100% (لا تكتب ... أبداً)
 - أضف شارة Zitex تلقائياً
 - الكود يجب أن يعمل مباشرة في المتصفح
-- استخدم CDN للمكتبات (Tailwind, Alpine.js, etc.)
+- استخدم CDN للمكتبات
 
-### 6. تنسيق الردود:
+### 6. مكتبات الألعاب المتاحة (مهم جداً للألعاب):
+عند بناء ألعاب، استخدم هذه المكتبات:
+
+**للألعاب 2D:**
+- Phaser 3: `<script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>`
+- PixiJS: `<script src="https://cdn.jsdelivr.net/npm/pixi.js@7.3.2/dist/pixi.min.js"></script>`
+
+**للألعاب 3D:**
+- Three.js: `<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>`
+- Babylon.js: `<script src="https://cdn.babylonjs.com/babylon.js"></script>`
+
+**للفيزياء:**
+- Matter.js: `<script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>`
+
+**للصوتيات:**
+- Howler.js: `<script src="https://cdn.jsdelivr.net/npm/howler@2.2.4/dist/howler.min.js"></script>`
+
+**للتحريك:**
+- GSAP: `<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.4/dist/gsap.min.js"></script>`
+
+### 7. أنواع الألعاب التي يمكنك بناؤها:
+- ألعاب منصات (Platformer) - استخدم Phaser
+- ألعاب ألغاز (Puzzle) - استخدم Matter.js
+- ألعاب سباق (Racing) - استخدم Three.js
+- ألعاب إطلاق نار (Shooter) - استخدم Phaser أو Three.js
+- ألعاب كروت (Cards) - استخدم PixiJS
+- ألعاب RPG - استخدم Phaser أو Babylon.js
+- ألعاب محاكاة (Simulation) - استخدم Babylon.js
+
+### 8. قواعد بناء الألعاب:
+- أضف شريط تحميل للعبة
+- أضف أزرار التحكم (لوحة المفاتيح + الموبايل)
+- أضف نظام نقاط/مستويات
+- أضف صوتيات (باستخدام Web Audio API أو Howler)
+- اجعل اللعبة متجاوبة مع الشاشات
+
+### 9. تنسيق الردود:
 - استخدم إيموجي
 - نص قصير ومباشر
 - لا تشرح الكود - العميل يراه في Live Preview
 - أخبر العميل بما سيُضاف في كل خطوة
 
-### 7. أمثلة للردود:
+### 10. أمثلة للردود:
 
 **بداية مشروع:**
 ```
@@ -108,33 +197,34 @@ MASTER_SYSTEM_PROMPT = """أنت "زيتكس" (Zitex) - مهندس ذكاء اص
 [/BUTTONS]
 ```
 
-**بدء البناء:**
+**بدء بناء لعبة:**
 ```
-🚀 رائع! سأبدأ الآن ببناء الصفحة الرئيسية...
+🎮 رائع! سأبني لعبة [نوع اللعبة]...
 
 شاهد النتيجة في المعاينة المباشرة ←
 
 > 💰 التكلفة: 15 نقطة
 
-ما رأيك؟ هل تريد تعديل شيء؟
+ما رأيك؟
 [BUTTONS]
-✅ ممتاز، أكمل|🎨 غيّر الألوان|📝 عدّل النص|➕ أضف قسم
+✅ ممتاز، أكمل|🎨 غيّر الألوان|🎯 أضف مستوى|🔊 أضف صوت
 [/BUTTONS]
 
 [CODE_BLOCK]
 ```html
 <!DOCTYPE html>
-...الكود الكامل...
+...كود اللعبة الكامل...
 ```
 [/CODE_BLOCK]
 ```
 
-### 8. الميزات التي يمكنك بناؤها:
+### 11. الميزات التي يمكنك بناؤها:
 - مواقع ويب كاملة (صفحات متعددة)
 - لوحات تحكم Dashboard
 - متاجر إلكترونية
 - صفحات هبوط Landing Pages
-- ألعاب 2D/3D
+- ألعاب 2D (Phaser, PixiJS)
+- ألعاب 3D (Three.js, Babylon.js)
 - تطبيقات ويب PWA
 """
 
@@ -181,39 +271,109 @@ DEFAULT_TEMPLATES = [
         "id": "landing-dark",
         "name": "صفحة هبوط داكنة",
         "category": "landing",
-        "preview_image": "https://via.placeholder.com/400x300/1a1a2e/ffd700?text=Landing+Dark",
+        "preview_image": "/api/templates/preview/landing-dark",
         "description": "صفحة هبوط احترافية بتصميم داكن وأنيق",
         "is_premium": False,
-        "cost": 0
+        "cost": 0,
+        "tags": ["landing", "dark", "professional"]
     },
     {
         "id": "ecommerce-gold",
         "name": "متجر ذهبي",
         "category": "ecommerce",
-        "preview_image": "https://via.placeholder.com/400x300/0a0a12/ffd700?text=E-Commerce",
+        "preview_image": "/api/templates/preview/ecommerce-gold",
         "description": "متجر إلكتروني بتصميم ذهبي فاخر",
         "is_premium": True,
-        "cost": 20
+        "cost": 20,
+        "tags": ["shop", "gold", "luxury"]
     },
     {
         "id": "portfolio-minimal",
         "name": "معرض أعمال بسيط",
         "category": "portfolio",
-        "preview_image": "https://via.placeholder.com/400x300/16213e/ffd700?text=Portfolio",
+        "preview_image": "/api/templates/preview/portfolio-minimal",
         "description": "معرض أعمال بتصميم بسيط وأنيق",
         "is_premium": False,
-        "cost": 0
+        "cost": 0,
+        "tags": ["portfolio", "minimal", "clean"]
     },
     {
         "id": "dashboard-pro",
         "name": "لوحة تحكم احترافية",
         "category": "dashboard",
-        "preview_image": "https://via.placeholder.com/400x300/1a1a2e/00d4ff?text=Dashboard",
+        "preview_image": "/api/templates/preview/dashboard-pro",
         "description": "لوحة تحكم متكاملة مع رسوم بيانية",
         "is_premium": True,
-        "cost": 25
+        "cost": 25,
+        "tags": ["dashboard", "admin", "charts"]
+    },
+    {
+        "id": "game-2d-platformer",
+        "name": "لعبة منصات 2D",
+        "category": "game",
+        "preview_image": "/api/templates/preview/game-2d-platformer",
+        "description": "لعبة منصات بتقنية Phaser.js",
+        "is_premium": True,
+        "cost": 30,
+        "tags": ["game", "2d", "platformer", "phaser"]
+    },
+    {
+        "id": "game-3d-racing",
+        "name": "لعبة سباق 3D",
+        "category": "game",
+        "preview_image": "/api/templates/preview/game-3d-racing",
+        "description": "لعبة سباق سيارات بتقنية Three.js",
+        "is_premium": True,
+        "cost": 35,
+        "tags": ["game", "3d", "racing", "threejs"]
     }
 ]
+
+# ============== Game Libraries & CDN Links ==============
+GAME_LIBRARIES = {
+    "phaser": {
+        "name": "Phaser 3",
+        "cdn": "https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js",
+        "description": "محرك ألعاب 2D قوي وسهل الاستخدام",
+        "use_cases": ["platformer", "puzzle", "arcade", "rpg_2d"]
+    },
+    "threejs": {
+        "name": "Three.js",
+        "cdn": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js",
+        "description": "مكتبة 3D متكاملة للويب",
+        "use_cases": ["3d_games", "racing", "simulation", "fps"]
+    },
+    "babylonjs": {
+        "name": "Babylon.js",
+        "cdn": "https://cdn.babylonjs.com/babylon.js",
+        "description": "محرك ألعاب 3D احترافي",
+        "use_cases": ["3d_games", "rpg", "mmorpg", "simulation"]
+    },
+    "pixijs": {
+        "name": "PixiJS",
+        "cdn": "https://cdn.jsdelivr.net/npm/pixi.js@7.3.2/dist/pixi.min.js",
+        "description": "مكتبة 2D سريعة للرسوميات",
+        "use_cases": ["2d_games", "cards", "slot", "arcade"]
+    },
+    "matter": {
+        "name": "Matter.js",
+        "cdn": "https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js",
+        "description": "محرك فيزياء 2D",
+        "use_cases": ["physics", "puzzle", "simulation"]
+    },
+    "howler": {
+        "name": "Howler.js",
+        "cdn": "https://cdn.jsdelivr.net/npm/howler@2.2.4/dist/howler.min.js",
+        "description": "مكتبة صوتيات للألعاب",
+        "use_cases": ["audio", "sound_effects", "music"]
+    },
+    "gsap": {
+        "name": "GSAP",
+        "cdn": "https://cdn.jsdelivr.net/npm/gsap@3.12.4/dist/gsap.min.js",
+        "description": "مكتبة تحريك احترافية",
+        "use_cases": ["animation", "ui", "transitions"]
+    }
+}
 
 
 def detect_request_type(message: str, session_type: str = "general") -> str:
@@ -855,13 +1015,186 @@ class AIAssistant:
         </div>
     </main>
 </body>
+</html>''',
+            "game-2d-platformer": '''<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لعبة منصات 2D</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #0a0a12; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        #game-container { border: 3px solid #ffd700; border-radius: 10px; overflow: hidden; }
+        .score { position: absolute; top: 20px; right: 20px; color: #ffd700; font-size: 24px; font-family: Arial; }
+    </style>
+</head>
+<body>
+    <div class="score">النقاط: <span id="score">0</span></div>
+    <div id="game-container"></div>
+    <script>
+        let score = 0;
+        const config = {
+            type: Phaser.AUTO,
+            width: 800,
+            height: 600,
+            parent: 'game-container',
+            physics: { default: 'arcade', arcade: { gravity: { y: 500 }, debug: false } },
+            scene: { preload, create, update }
+        };
+        
+        let player, platforms, cursors, stars;
+        
+        function preload() {
+            this.load.setBaseURL('https://labs.phaser.io');
+            this.load.image('sky', 'assets/skies/space3.png');
+            this.load.image('ground', 'assets/sprites/platform.png');
+            this.load.image('star', 'assets/demoscene/star.png');
+            this.load.spritesheet('dude', 'assets/sprites/dude.png', { frameWidth: 32, frameHeight: 48 });
+        }
+        
+        function create() {
+            this.add.image(400, 300, 'sky');
+            platforms = this.physics.add.staticGroup();
+            platforms.create(400, 568, 'ground').setScale(2).refreshBody();
+            platforms.create(600, 400, 'ground');
+            platforms.create(50, 250, 'ground');
+            platforms.create(750, 220, 'ground');
+            
+            player = this.physics.add.sprite(100, 450, 'dude');
+            player.setBounce(0.2);
+            player.setCollideWorldBounds(true);
+            
+            this.anims.create({ key: 'left', frames: this.anims.generateFrameNumbers('dude', { start: 0, end: 3 }), frameRate: 10, repeat: -1 });
+            this.anims.create({ key: 'turn', frames: [{ key: 'dude', frame: 4 }], frameRate: 20 });
+            this.anims.create({ key: 'right', frames: this.anims.generateFrameNumbers('dude', { start: 5, end: 8 }), frameRate: 10, repeat: -1 });
+            
+            stars = this.physics.add.group({ key: 'star', repeat: 11, setXY: { x: 12, y: 0, stepX: 70 } });
+            stars.children.iterate(child => child.setBounceY(Phaser.Math.FloatBetween(0.4, 0.8)));
+            
+            this.physics.add.collider(player, platforms);
+            this.physics.add.collider(stars, platforms);
+            this.physics.add.overlap(player, stars, collectStar, null, this);
+            
+            cursors = this.input.keyboard.createCursorKeys();
+        }
+        
+        function update() {
+            if (cursors.left.isDown) { player.setVelocityX(-160); player.anims.play('left', true); }
+            else if (cursors.right.isDown) { player.setVelocityX(160); player.anims.play('right', true); }
+            else { player.setVelocityX(0); player.anims.play('turn'); }
+            if (cursors.up.isDown && player.body.touching.down) player.setVelocityY(-330);
+        }
+        
+        function collectStar(player, star) {
+            star.disableBody(true, true);
+            score += 10;
+            document.getElementById('score').textContent = score;
+        }
+        
+        new Phaser.Game(config);
+    </script>
+</body>
+</html>''',
+            "game-3d-racing": '''<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لعبة سباق 3D</title>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; background: #000; }
+        #info { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); color: #ffd700; font-size: 24px; font-family: Arial; z-index: 10; }
+        #controls { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); color: #fff; font-size: 14px; font-family: Arial; z-index: 10; }
+    </style>
+</head>
+<body>
+    <div id="info">السرعة: <span id="speed">0</span> كم/س</div>
+    <div id="controls">استخدم الأسهم للتحكم | ↑ تسريع | ↓ فرامل | → ← التوجيه</div>
+    <script>
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a2e);
+        scene.fog = new THREE.Fog(0x1a1a2e, 50, 200);
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+        
+        // Lights
+        const ambient = new THREE.AmbientLight(0x404040, 2);
+        scene.add(ambient);
+        const directional = new THREE.DirectionalLight(0xffffff, 1);
+        directional.position.set(50, 50, 50);
+        scene.add(directional);
+        
+        // Road
+        const roadGeo = new THREE.PlaneGeometry(20, 1000);
+        const roadMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+        const road = new THREE.Mesh(roadGeo, roadMat);
+        road.rotation.x = -Math.PI / 2;
+        road.position.z = -450;
+        scene.add(road);
+        
+        // Car (simple box for now)
+        const carGeo = new THREE.BoxGeometry(2, 1, 4);
+        const carMat = new THREE.MeshStandardMaterial({ color: 0xffd700 });
+        const car = new THREE.Mesh(carGeo, carMat);
+        car.position.y = 0.5;
+        scene.add(car);
+        
+        // Trees
+        for (let i = 0; i < 50; i++) {
+            const treeGeo = new THREE.ConeGeometry(2, 8, 8);
+            const treeMat = new THREE.MeshStandardMaterial({ color: 0x228b22 });
+            const tree = new THREE.Mesh(treeGeo, treeMat);
+            tree.position.set((Math.random() > 0.5 ? 15 : -15), 4, -i * 20);
+            scene.add(tree);
+        }
+        
+        camera.position.set(0, 5, 10);
+        camera.lookAt(car.position);
+        
+        let speed = 0;
+        const keys = {};
+        document.addEventListener('keydown', e => keys[e.code] = true);
+        document.addEventListener('keyup', e => keys[e.code] = false);
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            if (keys['ArrowUp']) speed = Math.min(speed + 0.5, 100);
+            if (keys['ArrowDown']) speed = Math.max(speed - 1, 0);
+            if (keys['ArrowLeft']) car.position.x = Math.max(car.position.x - 0.2, -8);
+            if (keys['ArrowRight']) car.position.x = Math.min(car.position.x + 0.2, 8);
+            
+            speed *= 0.99;
+            car.position.z -= speed * 0.1;
+            camera.position.z = car.position.z + 10;
+            camera.lookAt(car.position);
+            
+            document.getElementById('speed').textContent = Math.round(speed);
+            renderer.render(scene, camera);
+        }
+        animate();
+        
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
 </html>'''
         }
         return templates_code.get(template_id, templates_code["landing-dark"])
     
-    # ============== Deployment System ==============
+    # ============== Deployment System with Real Hosting ==============
     async def deploy_project(self, user_id: str, session_id: str, subdomain: str) -> Dict:
-        """نشر المشروع على نطاق فرعي"""
+        """نشر المشروع على نطاق فرعي مع استضافة حقيقية"""
         import re
         
         # Validate subdomain
@@ -885,18 +1218,37 @@ class AIAssistant:
         if credits < cost:
             raise ValueError(f"رصيد غير كافٍ. المطلوب: {cost} نقطة")
         
+        # Upload to Object Storage for real hosting
+        storage_path = f"{APP_NAME}/sites/{subdomain}/index.html"
+        html_code = session["generated_code"]
+        
+        # Ensure code is bytes
+        if isinstance(html_code, str):
+            html_code = html_code.encode('utf-8')
+        
+        upload_result = upload_to_storage(storage_path, html_code, "text/html")
+        
+        if not upload_result:
+            raise ValueError("فشل رفع الملف. حاول مرة أخرى")
+        
+        # Generate public URL
+        public_url = f"https://{subdomain}.zitex.app"
+        storage_url = f"{STORAGE_URL.replace('/api/v1/storage', '')}/sites/{subdomain}/index.html"
+        
         # Create deployment record
         deployment = {
             "id": str(uuid.uuid4()),
             "user_id": user_id,
             "session_id": session_id,
             "subdomain": subdomain,
-            "url": f"https://{subdomain}.zitex.app",
-            "code": session["generated_code"],
+            "url": public_url,
+            "storage_path": storage_path,
+            "storage_url": storage_url,
             "status": "active",
             "visits": 0,
             "created_at": datetime.now(timezone.utc).isoformat(),
-            "expires_at": None  # No expiry for now
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "expires_at": None
         }
         
         await self.db.deployments.insert_one(deployment)
@@ -909,7 +1261,8 @@ class AIAssistant:
                 "deployment": {
                     "id": deployment["id"],
                     "subdomain": subdomain,
-                    "url": deployment["url"],
+                    "url": public_url,
+                    "storage_path": storage_path,
                     "status": "active"
                 }
             }}
@@ -917,10 +1270,39 @@ class AIAssistant:
         
         return {
             "id": deployment["id"],
-            "url": deployment["url"],
+            "url": public_url,
+            "storage_url": storage_url,
             "subdomain": subdomain,
-            "message": f"🚀 تم نشر المشروع بنجاح!\n\n🔗 الرابط: {deployment['url']}\n\n💰 التكلفة: {cost} نقطة"
+            "message": f"🚀 تم نشر المشروع بنجاح!\n\n🔗 الرابط: {public_url}\n\n💰 التكلفة: {cost} نقطة"
         }
+    
+    async def update_deployment(self, user_id: str, deployment_id: str, new_code: str) -> Dict:
+        """تحديث مشروع منشور"""
+        deployment = await self.db.deployments.find_one(
+            {"id": deployment_id, "user_id": user_id, "status": "active"},
+            {"_id": 0}
+        )
+        
+        if not deployment:
+            raise ValueError("المشروع غير موجود")
+        
+        # Upload updated code
+        storage_path = deployment["storage_path"]
+        if isinstance(new_code, str):
+            new_code = new_code.encode('utf-8')
+        
+        upload_result = upload_to_storage(storage_path, new_code, "text/html")
+        
+        if not upload_result:
+            raise ValueError("فشل تحديث الملف")
+        
+        # Update record
+        await self.db.deployments.update_one(
+            {"id": deployment_id},
+            {"$set": {"updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        
+        return {"message": "تم تحديث المشروع بنجاح", "url": deployment["url"]}
     
     async def get_user_deployments(self, user_id: str) -> List[Dict]:
         """استرجاع مشاريع المستخدم المنشورة"""
