@@ -75,24 +75,76 @@ const CodeBlock = memo(({ code, language = 'html', filename }) => {
 const parseMessageContent = (content) => {
   if (!content) return [];
   const parts = [];
+  
+  // First extract buttons
+  const buttonRegex = /\[BUTTONS\]\n?([\s\S]*?)\[\/BUTTONS\]/g;
   const codeBlockRegex = /```(\w+)?\n?([\s\S]*?)```/g;
+  
+  let processedContent = content;
+  
+  // Extract buttons
+  let buttonMatch;
+  while ((buttonMatch = buttonRegex.exec(content)) !== null) {
+    const buttonText = buttonMatch[1].trim();
+    const buttons = buttonText.split('|').map(b => b.trim()).filter(b => b);
+    processedContent = processedContent.replace(buttonMatch[0], `__BUTTONS__${JSON.stringify(buttons)}__ENDBUTTONS__`);
+  }
+  
+  // Now parse the rest
   let lastIndex = 0;
   let match;
   
-  while ((match = codeBlockRegex.exec(content)) !== null) {
+  // Handle buttons and code blocks
+  const combinedRegex = /__BUTTONS__([\s\S]*?)__ENDBUTTONS__|```(\w+)?\n?([\s\S]*?)```/g;
+  
+  while ((match = combinedRegex.exec(processedContent)) !== null) {
     if (match.index > lastIndex) {
-      parts.push({ type: 'text', content: content.slice(lastIndex, match.index) });
+      const textBefore = processedContent.slice(lastIndex, match.index).trim();
+      if (textBefore) {
+        parts.push({ type: 'text', content: textBefore });
+      }
     }
-    parts.push({ type: 'code', language: match[1] || 'code', content: match[2].trim() });
+    
+    if (match[1]) {
+      // Buttons
+      try {
+        const buttons = JSON.parse(match[1]);
+        parts.push({ type: 'buttons', buttons });
+      } catch (e) {
+        parts.push({ type: 'text', content: match[0] });
+      }
+    } else if (match[3]) {
+      // Code block
+      parts.push({ type: 'code', language: match[2] || 'html', content: match[3].trim() });
+    }
+    
     lastIndex = match.index + match[0].length;
   }
   
-  if (lastIndex < content.length) {
-    parts.push({ type: 'text', content: content.slice(lastIndex) });
+  if (lastIndex < processedContent.length) {
+    const remaining = processedContent.slice(lastIndex).trim();
+    if (remaining) {
+      parts.push({ type: 'text', content: remaining });
+    }
   }
   
   return parts.length > 0 ? parts : [{ type: 'text', content }];
 };
+
+// ============== Choice Buttons Component ==============
+const ChoiceButtons = memo(({ buttons, onSelect }) => (
+  <div className="flex flex-wrap gap-2 mt-3">
+    {buttons.map((btn, idx) => (
+      <button
+        key={idx}
+        onClick={() => onSelect(btn)}
+        className="px-4 py-2 bg-gradient-to-r from-amber-500/20 to-yellow-500/20 hover:from-amber-500/30 hover:to-yellow-500/30 border border-amber-500/40 hover:border-amber-400 text-amber-200 rounded-xl text-sm font-medium transition-all duration-200 hover:scale-105 hover:shadow-lg hover:shadow-amber-500/20"
+      >
+        {btn}
+      </button>
+    ))}
+  </div>
+));
 
 // ============== Session Skeleton ==============
 const SessionSkeleton = () => (
@@ -145,9 +197,10 @@ const SessionItem = memo(({ session, isActive, onSelect, onDelete, getIcon }) =>
 ));
 
 // ============== Chat Message ==============
-const ChatMessage = memo(({ msg, idx, renderAttachment, onPlayAudio, onGenerateTTS, playingAudio, onPreview, isTyping }) => {
+const ChatMessage = memo(({ msg, idx, renderAttachment, onPlayAudio, onGenerateTTS, playingAudio, onPreview, isTyping, onButtonClick }) => {
   const parsedContent = parseMessageContent(msg.content);
   const hasCode = parsedContent.some(p => p.type === 'code');
+  const hasButtons = parsedContent.some(p => p.type === 'buttons');
   const isUser = msg.role === 'user';
   
   return (
@@ -162,7 +215,7 @@ const ChatMessage = memo(({ msg, idx, renderAttachment, onPlayAudio, onGenerateT
             {parsedContent.map((part, i) => (
               part.type === 'code' ? (
                 <CodeBlock key={i} code={part.content} language={part.language} />
-              ) : (
+              ) : part.type === 'buttons' ? null : (
                 <p key={i} className="text-white whitespace-pre-wrap leading-relaxed text-sm">{part.content}</p>
               )
             ))}
@@ -179,6 +232,8 @@ const ChatMessage = memo(({ msg, idx, renderAttachment, onPlayAudio, onGenerateT
               {parsedContent.map((part, i) => (
                 part.type === 'code' ? (
                   <CodeBlock key={i} code={part.content} language={part.language} />
+                ) : part.type === 'buttons' ? (
+                  <ChoiceButtons key={i} buttons={part.buttons} onSelect={onButtonClick} />
                 ) : (
                   <p key={i} className="text-gray-200 whitespace-pre-wrap leading-relaxed text-sm">{part.content}</p>
                 )
@@ -189,13 +244,14 @@ const ChatMessage = memo(({ msg, idx, renderAttachment, onPlayAudio, onGenerateT
                 <div key={aIdx}>{renderAttachment(attachment, onPreview)}</div>
               ))}
               
-              {/* Footer */}
-              <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-700/30">
-                <p className="text-[10px] text-gray-500">
-                  {new Date(msg.created_at).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}
-                </p>
-                <div className="flex items-center gap-1">
-                  {hasCode && (
+              {/* Footer - hide if only buttons */}
+              {!hasButtons && (
+                <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-700/30">
+                  <p className="text-[10px] text-gray-500">
+                    {new Date(msg.created_at).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                  <div className="flex items-center gap-1">
+                    {hasCode && (
                     <button
                       onClick={() => {
                         const codeContent = parsedContent.find(p => p.type === 'code')?.content;

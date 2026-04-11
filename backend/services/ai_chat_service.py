@@ -1,22 +1,13 @@
 """
-Zitex AI Chat Service - Business Edition
-خدمة الشات الذكي - النسخة التجارية
-Version 4.0 - Consultative AI Assistant
-
-نموذج العمل:
-- محادثة استشارية مع أسئلة واضحة
-- جمع المتطلبات قبل البناء
-- نظام نقاط شفاف
-- شارة Zitex على كل مشروع
-- ردود منسقة باحترافية
+Zitex AI Chat Service - Interactive Edition
+خدمة الشات الذكي - النسخة التفاعلية
+Version 5.0 - Button-Based Consultative AI
 """
 import os
 import uuid
 import base64
 import logging
-import asyncio
 import re
-import json
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, Tuple, List
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -42,261 +33,87 @@ except ImportError:
     VoiceSettings = None
 
 
-# ============== CONSULTATIVE SYSTEM PROMPT ==============
+MASTER_SYSTEM_PROMPT = """أنت "زيتكس" (Zitex) - مستشار ذكاء اصطناعي لبناء المشاريع الرقمية.
 
-MASTER_SYSTEM_PROMPT = """أنت "زيتكس" (Zitex) - مستشار ذكاء اصطناعي محترف لبناء المشاريع الرقمية.
+## قواعد مهمة جداً:
 
-═══════════════════════════════════════════════════════════════
-                         🎯 هويتك ودورك
-═══════════════════════════════════════════════════════════════
+### 1. لا ترسل كود أبداً إلا بعد جمع كل المعلومات!
+- اسأل سؤال واحد فقط في كل مرة
+- انتظر إجابة العميل قبل السؤال التالي
+- بعد جمع 3-4 معلومات أساسية، ابدأ البناء
 
-أنت مستشار محترف تساعد العملاء في:
-• بناء مواقع ويب احترافية
-• تطوير تطبيقات جوال (Android/iOS)
-• إنشاء تطبيقات ويب متكاملة
-• تصميم ألعاب تفاعلية (2D و 3D)
+### 2. استخدم صيغة الأزرار للخيارات:
+عندما تريد إعطاء خيارات، استخدم هذا التنسيق بالضبط:
+[BUTTONS]
+خيار1|خيار2|خيار3|خيار4
+[/BUTTONS]
 
-═══════════════════════════════════════════════════════════════
-                    📋 آلية العمل (اتبعها بالترتيب)
-═══════════════════════════════════════════════════════════════
+مثال:
+ما نوع المشروع؟
+[BUTTONS]
+🌐 موقع ويب|📱 تطبيق جوال|💻 تطبيق ويب|🎮 لعبة
+[/BUTTONS]
 
-### المرحلة 1: فهم المشروع 🎯
-عندما يبدأ العميل محادثة جديدة، اسأله مباشرة:
+### 3. تسلسل الأسئلة:
 
----
-## 👋 مرحباً بك في زيتكس!
+**للمواقع:**
+1. ما مجال الموقع؟
+[BUTTONS]
+🍽️ مطعم|🏢 شركة|🛒 متجر|👤 شخصي|📝 مدونة
+[/BUTTONS]
 
-أنا مستشارك الذكي لبناء مشروعك الرقمي. دعني أفهم احتياجاتك:
+2. ما الألوان المفضلة؟
+[BUTTONS]
+🖤 أسود وذهبي|💙 أزرق|💚 أخضر|💜 بنفسجي|🎨 اختيار آخر
+[/BUTTONS]
 
-**ما نوع المشروع الذي تريد بناءه؟**
+3. ابدأ البناء مباشرة!
 
-| الخيار | النوع | الوصف |
-|--------|-------|-------|
-| **أ** | 🌐 موقع ويب | موقع كامل يعمل على المتصفح |
-| **ب** | 📱 تطبيق جوال | تطبيق للهواتف (Android/iOS) |
-| **ج** | 💻 تطبيق ويب | نظام أو لوحة تحكم |
-| **د** | 🎮 لعبة | لعبة تفاعلية 2D أو 3D |
+**للتطبيقات:**
+1. ما وظيفة التطبيق؟
+[BUTTONS]
+📋 إدارة مهام|💬 تواصل|🛒 تسوق|📊 تتبع|🎯 أخرى
+[/BUTTONS]
 
-> 💡 اختر حرفاً (أ، ب، ج، أو د)
----
+2. ابدأ البناء!
 
-### المرحلة 2: جمع التفاصيل 📝
-بعد معرفة النوع، اسأل أسئلة محددة:
+**للألعاب:**
+1. ما نوع اللعبة؟
+[BUTTONS]
+🏎️ سباق|🧩 ألغاز|👾 أركيد|⚽ رياضة|🎯 إطلاق
+[/BUTTONS]
 
-**لموقع ويب:**
-- ما مجال الموقع؟ (مطعم، شركة، متجر، شخصي...)
-- ما الأقسام المطلوبة؟
-- هل لديك ألوان أو تصميم معين في ذهنك؟
+2. ابدأ البناء!
 
-**لتطبيق جوال:**
-- ما وظيفة التطبيق الرئيسية؟
-- لأي نظام؟ (Android / iOS / كلاهما)
-- ما الميزات الأساسية؟
-
-**للعبة:**
-- ما نوع اللعبة؟ (أركيد، ألغاز، سباق، مغامرات...)
-- 2D أو 3D؟
-- ما فكرة اللعبة؟
-
-### المرحلة 3: تأكيد الفهم ✅
-قبل البدء، لخص ما فهمته:
-
----
-## 📋 ملخص مشروعك:
-
-| العنصر | التفاصيل |
-|--------|----------|
-| **النوع** | موقع ويب |
-| **المجال** | مطعم |
-| **الأقسام** | الرئيسية، القائمة، الحجز، تواصل |
-| **الألوان** | ذهبي وأسود |
-
-**هل هذا صحيح؟**
-- ✅ نعم، ابدأ البناء
-- ✏️ لا، أريد تعديل
-
-> 💰 **تكلفة البناء:** 15 نقطة
----
-
-### المرحلة 4: البناء والعرض 🔨
-بعد التأكيد، ابدأ البناء واعرض النتيجة:
-
----
-## ✅ تم إنشاء مشروعك!
-
-### 📊 تفاصيل المشروع:
-| العنصر | القيمة |
-|--------|--------|
-| **النوع** | موقع مطعم |
-| **الحالة** | جاهز للمعاينة |
-| **التكلفة** | 15 نقطة |
-
-### 🔗 رابط المعاينة:
-مشروعك متاح الآن في **المعاينة المباشرة** على اليسار.
-
-### ⚡ الخطوات التالية:
-- 🔄 طلب تعديلات (5 نقاط لكل تعديل)
-- 📤 نشر المشروع (رسوم إضافية)
-- 💾 تصدير الكود (رسوم إضافية)
-
-> 💡 **ملاحظة:** مشروعك يحمل شارة "Powered by Zitex"
-
----
-
-ثم أرفق الكود:
-
-```html
-<!-- كود المشروع الكامل هنا -->
-```
-
-═══════════════════════════════════════════════════════════════
-                    ✨ قواعد تنسيق الردود
-═══════════════════════════════════════════════════════════════
-
-### 1. استخدم التنسيق الغني دائماً:
-- **عناوين** باستخدام ## و ###
-- **جداول** لعرض المعلومات المنظمة
-- **قوائم** بالنقاط أو الأرقام
-- **إيموجي** للوضوح البصري 🎯✅📋
-- **اقتباسات** للملاحظات المهمة > 
-- **خطوط فاصلة** --- بين الأقسام
-
-### 2. هيكل الرد المثالي:
-```
-## 🎯 العنوان الرئيسي
-
-نص توضيحي قصير...
-
-### 📋 قسم فرعي:
-| عمود 1 | عمود 2 |
-|--------|--------|
-| قيمة | قيمة |
-
-> 💡 ملاحظة مهمة
-
----
-
-### ⚡ الخطوات التالية:
-- خطوة 1
-- خطوة 2
-```
-
-### 3. عند عرض الكود:
-- ضعه في نهاية الرد
-- استخدم ```html للتنسيق
-- الكود يجب أن يكون كاملاً 100%
-
-═══════════════════════════════════════════════════════════════
-                    💰 نظام النقاط
-═══════════════════════════════════════════════════════════════
-
-### تكلفة كل خدمة:
-| الخدمة | النقاط |
-|--------|--------|
-| رسالة استشارة | 1 |
-| بناء موقع | 15 |
-| بناء تطبيق | 20 |
-| بناء لعبة 2D | 15 |
-| بناء لعبة 3D | 25 |
-| توليد صورة | 5 |
-| توليد فيديو | 20 |
-| تعديل | 5 |
-| تصدير الكود | 50 |
-| نشر خارجي | 100 |
-
-### عند كل عملية، أخبر العميل:
-> 💰 **التكلفة:** X نقطة | **رصيدك:** Y نقطة
-
-═══════════════════════════════════════════════════════════════
-                    🏷️ شارة Zitex
-═══════════════════════════════════════════════════════════════
-
-كل مشروع يُنشأ يجب أن يحتوي على شارة Zitex:
-
-```html
-<!-- Zitex Badge - لا تحذف هذا -->
-<div id="zitex-badge" style="position:fixed;bottom:20px;right:20px;background:linear-gradient(135deg,#1a1a2e,#16213e);padding:10px 20px;border-radius:25px;box-shadow:0 4px 15px rgba(0,0,0,0.3);z-index:9999;display:flex;align-items:center;gap:10px;cursor:pointer;border:1px solid rgba(255,215,0,0.3);" onclick="window.open('https://zitex.vercel.app','_blank')">
-    <div style="width:30px;height:30px;background:linear-gradient(135deg,#ffd700,#ffaa00);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;color:#000;font-size:16px;">Z</div>
-    <span style="color:#ffd700;font-size:14px;font-weight:500;">Powered by Zitex</span>
-</div>
-```
-
-═══════════════════════════════════════════════════════════════
-                    🎨 معايير التصميم
-═══════════════════════════════════════════════════════════════
-
-### الألوان الافتراضية:
-- **الأساسي:** #1a1a2e (أسود مزرق)
-- **الثانوي:** #16213e (أزرق داكن)
-- **التمييز:** #ffd700 (ذهبي)
-- **النص:** #ffffff (أبيض)
-
-### الخطوط:
-```html
-<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet">
-```
-
-### المكتبات المتاحة:
-- Three.js للـ 3D
-- Chart.js للرسوم البيانية
-- Font Awesome للأيقونات
-- Animate.css للتأثيرات
-
-═══════════════════════════════════════════════════════════════
-                    ⚠️ قواعد مهمة
-═══════════════════════════════════════════════════════════════
-
-✅ **افعل:**
-- اسأل أسئلة واضحة قبل البناء
-- استخدم تنسيق غني في كل رد
-- أخبر العميل بالتكلفة مسبقاً
-- أضف شارة Zitex لكل مشروع
+### 4. عند البناء:
 - اكتب كود كامل 100%
+- أضف شارة Zitex
+- لا تكتب "..." أبداً
 
-❌ **لا تفعل:**
-- لا تبدأ البناء بدون فهم المتطلبات
-- لا تكتب ردود بدون تنسيق
-- لا تنسى إظهار التكلفة
-- لا تكتب "..." في الكود
-- لا تنسى شارة Zitex"""
+### 5. تنسيق الردود:
+- استخدم إيموجي
+- اجعل النص قصيراً ومباشراً
+- سطر أو سطرين فقط قبل الأزرار
 
+### 6. لا تسأل أكثر من سؤالين قبل البناء!
+"""
 
-# ============== WELCOME MESSAGE ==============
 
 WELCOME_MESSAGE = """## 👋 مرحباً بك في زيتكس!
 
-أنا مستشارك الذكي لبناء مشروعك الرقمي. سأساعدك في تحويل فكرتك إلى واقع!
+ماذا تريد أن تبني اليوم؟
 
----
-
-### 🎯 ما نوع المشروع الذي تريد بناءه؟
-
-| الخيار | النوع | الوصف |
-|--------|-------|-------|
-| **أ** | 🌐 موقع ويب | موقع كامل يعمل على المتصفح |
-| **ب** | 📱 تطبيق جوال | تطبيق للهواتف (Android/iOS) |
-| **ج** | 💻 تطبيق ويب | نظام إدارة أو لوحة تحكم |
-| **د** | 🎮 لعبة | لعبة تفاعلية 2D أو 3D |
-| **هـ** | 🎨 تصميم/صورة | شعار أو تصميم جرافيكي |
-| **و** | 🎬 فيديو | فيديو سينمائي بالذكاء الاصطناعي |
-
----
-
-> 💡 **اختر حرفاً** أو اكتب فكرتك مباشرة وسأساعدك!
-
-> 💰 **رصيدك الحالي:** {credits} نقطة"""
+[BUTTONS]
+🌐 موقع ويب|📱 تطبيق جوال|💻 تطبيق ويب|🎮 لعبة|🎨 صورة|🎬 فيديو
+[/BUTTONS]"""
 
 
-# ============== ZITEX BADGE ==============
-
-ZITEX_BADGE = '''<!-- Zitex Badge - Powered by Zitex -->
-<div id="zitex-badge" style="position:fixed;bottom:20px;right:20px;background:linear-gradient(135deg,#1a1a2e,#16213e);padding:10px 20px;border-radius:25px;box-shadow:0 4px 15px rgba(0,0,0,0.3);z-index:9999;display:flex;align-items:center;gap:10px;cursor:pointer;border:1px solid rgba(255,215,0,0.3);transition:all 0.3s ease;" onclick="window.open('https://zitex.vercel.app','_blank')" onmouseover="this.style.transform='scale(1.05)';this.style.boxShadow='0 6px 20px rgba(255,215,0,0.3)';" onmouseout="this.style.transform='scale(1)';this.style.boxShadow='0 4px 15px rgba(0,0,0,0.3)';">
+ZITEX_BADGE = '''<!-- Zitex Badge -->
+<div id="zitex-badge" style="position:fixed;bottom:20px;right:20px;background:linear-gradient(135deg,#1a1a2e,#16213e);padding:10px 20px;border-radius:25px;box-shadow:0 4px 15px rgba(0,0,0,0.3);z-index:9999;display:flex;align-items:center;gap:10px;cursor:pointer;border:1px solid rgba(255,215,0,0.3);" onclick="window.open('https://zitex.vercel.app','_blank')">
     <div style="width:30px;height:30px;background:linear-gradient(135deg,#ffd700,#ffaa00);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;color:#000;font-size:16px;">Z</div>
     <span style="color:#ffd700;font-size:14px;font-weight:500;">Powered by Zitex</span>
 </div>'''
 
-
-# ============== SERVICE COSTS ==============
 
 SERVICE_COSTS = {
     "message": 1,
@@ -313,111 +130,42 @@ SERVICE_COSTS = {
 }
 
 
-# ============== REQUEST TYPE DETECTION ==============
-
 def detect_request_type(message: str, session_type: str = "general") -> str:
-    """تحديد نوع الطلب بذكاء متقدم"""
     message_lower = message.lower()
     
-    # Check for option selection first
-    if message.strip() in ['أ', 'ا', 'a', 'A']:
+    # Direct button selections
+    if "موقع ويب" in message or "موقع" in message_lower:
         return "website"
-    elif message.strip() in ['ب', 'b', 'B']:
+    elif "تطبيق جوال" in message or "جوال" in message_lower or "موبايل" in message_lower:
         return "pwa"
-    elif message.strip() in ['ج', 'c', 'C']:
+    elif "تطبيق ويب" in message or "لوحة" in message_lower:
         return "webapp"
-    elif message.strip() in ['د', 'd', 'D']:
+    elif "لعبة" in message_lower or "game" in message_lower:
         return "game"
-    elif message.strip() in ['هـ', 'ه', 'e', 'E']:
+    elif "صورة" in message_lower or "شعار" in message_lower:
         return "image"
-    elif message.strip() in ['و', 'f', 'F']:
+    elif "فيديو" in message_lower:
         return "video"
     
-    # 3D Game keywords
-    game_3d_keywords = [
-        '3d', 'ثلاثي', 'ثلاثية', 'three.js', 'babylon',
-        'سباق', 'racing', 'سيارات', 'طيران', 'flight'
-    ]
+    # 3D detection
+    if "3d" in message_lower or "ثلاثي" in message_lower or "سباق" in message_lower:
+        return "game_3d"
     
-    # 2D Game keywords
-    game_2d_keywords = [
-        'لعبة', 'العاب', 'game', 'play', 'ألعاب',
-        'snake', 'سنيك', 'بونج', 'pong', 'اركيد'
-    ]
-    
-    # PWA / Mobile App keywords
-    pwa_keywords = [
-        'تطبيق جوال', 'تطبيق موبايل', 'mobile app', 'pwa',
-        'للجوال', 'للموبايل', 'هاتف', 'اندرويد', 'ايفون'
-    ]
-    
-    # Web App keywords
-    webapp_keywords = [
-        'تطبيق ويب', 'web app', 'webapp', 'dashboard',
-        'لوحة تحكم', 'نظام إدارة', 'admin', 'panel'
-    ]
-    
-    # Website keywords
-    website_keywords = [
-        'موقع', 'صفحة', 'ويب', 'website', 'page', 'site',
-        'متجر', 'مطعم', 'شركة', 'بورتفوليو', 'مدونة'
-    ]
-    
-    # Image keywords
-    image_keywords = [
-        'صورة', 'صور', 'شعار', 'لوجو', 'logo', 'تصميم',
-        'image', 'picture', 'draw', 'ارسم'
-    ]
-    
-    # Video keywords
-    video_keywords = [
-        'فيديو', 'فديو', 'مقطع', 'فلم', 'video', 'clip',
-        'سينمائي', 'cinematic'
-    ]
-    
-    # Check session type first
     if session_type and session_type != "general":
         return session_type
-    
-    # Check message content
-    if any(kw in message_lower for kw in game_3d_keywords):
-        return "game_3d"
-    elif any(kw in message_lower for kw in game_2d_keywords):
-        return "game"
-    elif any(kw in message_lower for kw in pwa_keywords):
-        return "pwa"
-    elif any(kw in message_lower for kw in webapp_keywords):
-        return "webapp"
-    elif any(kw in message_lower for kw in image_keywords):
-        return "image"
-    elif any(kw in message_lower for kw in video_keywords):
-        return "video"
-    elif any(kw in message_lower for kw in website_keywords):
-        return "website"
     
     return "general"
 
 
-def get_system_prompt(request_type: str) -> str:
-    """الحصول على System Prompt"""
-    return MASTER_SYSTEM_PROMPT
-
-
 def inject_zitex_badge(html_code: str) -> str:
-    """إضافة شارة Zitex للكود"""
     if '</body>' in html_code:
         return html_code.replace('</body>', f'{ZITEX_BADGE}\n</body>')
     elif '</html>' in html_code:
         return html_code.replace('</html>', f'{ZITEX_BADGE}\n</html>')
-    else:
-        return html_code + '\n' + ZITEX_BADGE
+    return html_code + '\n' + ZITEX_BADGE
 
-
-# ============== AI ASSISTANT CLASS ==============
 
 class AIAssistant:
-    """مساعد الذكاء الاصطناعي - النسخة التجارية"""
-    
     def __init__(self, db: AsyncIOMotorDatabase, api_key: str = None, elevenlabs_key: str = None, openai_key: str = None):
         self.db = db
         self.api_key = api_key or os.environ.get('OPENAI_API_KEY')
@@ -439,22 +187,16 @@ class AIAssistant:
                 pass
     
     async def create_session(self, user_id: str, session_type: str = "general", title: str = None) -> Dict:
-        """إنشاء جلسة جديدة مع رسالة ترحيب"""
-        
-        # Get user credits
         user = await self.db.users.find_one({"id": user_id}, {"_id": 0})
         credits = user.get("credits", 0) if user else 0
-        
-        # Create welcome message
-        welcome_content = WELCOME_MESSAGE.format(credits=credits)
         
         welcome_msg = {
             "id": str(uuid.uuid4()),
             "role": "assistant",
-            "content": welcome_content,
+            "content": WELCOME_MESSAGE,
             "message_type": "text",
             "attachments": [],
-            "metadata": {"is_welcome": True},
+            "metadata": {"is_welcome": True, "has_buttons": True},
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         
@@ -466,6 +208,7 @@ class AIAssistant:
             "messages": [welcome_msg],
             "project_data": {},
             "generated_code": None,
+            "conversation_stage": "type_selection",
             "status": "active",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat()
@@ -474,14 +217,12 @@ class AIAssistant:
         return session
     
     async def get_session(self, session_id: str, user_id: str) -> Optional[Dict]:
-        """استرجاع جلسة"""
         return await self.db.chat_sessions.find_one(
             {"id": session_id, "user_id": user_id},
             {"_id": 0}
         )
     
     async def get_user_sessions(self, user_id: str, limit: int = 50) -> List[Dict]:
-        """استرجاع جلسات المستخدم"""
         sessions = await self.db.chat_sessions.find(
             {"user_id": user_id, "status": "active"},
             {"_id": 0}
@@ -489,12 +230,10 @@ class AIAssistant:
         return sessions
     
     async def get_user_credits(self, user_id: str) -> int:
-        """الحصول على رصيد المستخدم"""
         user = await self.db.users.find_one({"id": user_id}, {"_id": 0, "credits": 1})
         return user.get("credits", 0) if user else 0
     
     async def deduct_credits(self, user_id: str, amount: int, reason: str) -> bool:
-        """خصم نقاط من رصيد المستخدم"""
         result = await self.db.users.update_one(
             {"id": user_id, "credits": {"$gte": amount}},
             {
@@ -510,21 +249,13 @@ class AIAssistant:
         )
         return result.modified_count > 0
     
-    async def process_message(
-        self, 
-        session_id: str, 
-        user_id: str, 
-        message: str,
-        settings: Dict[str, Any] = None
-    ) -> Dict:
-        """معالجة رسالة المستخدم"""
+    async def process_message(self, session_id: str, user_id: str, message: str, settings: Dict[str, Any] = None) -> Dict:
         settings = settings or {}
         
         session = await self.get_session(session_id, user_id)
         if not session:
             raise ValueError("Session not found")
         
-        # Get user credits
         credits = await self.get_user_credits(user_id)
         
         user_msg = {
@@ -542,29 +273,23 @@ class AIAssistant:
         ai_response = ""
         attachments = []
         credits_used = 0
+        has_buttons = False
         
         if not AI_FEATURES_ENABLED or not self.openai_client:
-            ai_response = """## ⚠️ خدمة غير متاحة
-
-عذراً، خدمات الذكاء الاصطناعي غير متاحة حالياً.
-
-> 💡 يرجى التأكد من إعداد مفتاح OpenAI API في إعدادات النظام."""
+            ai_response = "⚠️ خدمة غير متاحة حالياً"
         else:
-            # Check credits
             required_credits = SERVICE_COSTS.get(request_type, 1)
             
             if credits < required_credits:
                 ai_response = f"""## ⚠️ رصيد غير كافٍ
 
-عذراً، رصيدك الحالي ({credits} نقطة) غير كافٍ لهذه العملية.
+رصيدك: **{credits} نقطة**
+المطلوب: **{required_credits} نقطة**
 
-| العملية | التكلفة |
-|---------|---------|
-| {request_type} | {required_credits} نقطة |
-
----
-
-> 💡 **الحل:** قم بشحن رصيدك من صفحة [الأسعار](/pricing)"""
+[BUTTONS]
+💰 شحن الرصيد
+[/BUTTONS]"""
+                has_buttons = True
             else:
                 try:
                     if request_type == "image":
@@ -572,35 +297,23 @@ class AIAssistant:
                     elif request_type == "video":
                         ai_response = """## 🎬 جاري إنشاء الفيديو...
 
-طلبك قيد المعالجة الآن.
+⏳ سيتم إشعارك عند الاكتمال
 
-| التفاصيل | القيمة |
-|----------|--------|
-| **النوع** | فيديو سينمائي |
-| **المدة** | حتى 12 ثانية |
-| **الجودة** | 1080p |
-| **التكلفة** | 20 نقطة |
-
----
-
-> ⏳ سيتم إشعارك عند اكتمال الفيديو"""
+> التكلفة: 20 نقطة"""
                         credits_used = 20
                     else:
-                        ai_response, credits_used = await self._generate_with_gpt(
-                            session, message, request_type, credits, settings
-                        )
+                        ai_response, credits_used, has_buttons = await self._generate_with_gpt(session, message, request_type, credits, settings)
                     
-                    # Deduct credits
                     if credits_used > 0:
-                        await self.deduct_credits(user_id, credits_used, f"{request_type} generation")
+                        await self.deduct_credits(user_id, credits_used, f"{request_type}")
                         
                 except Exception as e:
-                    logger.error(f"Error processing message: {e}")
-                    ai_response = f"""## ❌ حدث خطأ
-
-عذراً، حدث خطأ أثناء المعالجة.
-
-> 🔄 يرجى المحاولة مرة أخرى"""
+                    logger.error(f"Error: {e}")
+                    ai_response = "❌ حدث خطأ، حاول مرة أخرى"
+        
+        # Check if response has buttons
+        if "[BUTTONS]" in ai_response:
+            has_buttons = True
         
         assistant_msg = {
             "id": str(uuid.uuid4()),
@@ -611,7 +324,8 @@ class AIAssistant:
             "metadata": {
                 "request_type": request_type,
                 "credits_used": credits_used,
-                "credits_remaining": credits - credits_used
+                "credits_remaining": credits - credits_used,
+                "has_buttons": has_buttons
             },
             "created_at": datetime.now(timezone.utc).isoformat()
         }
@@ -621,27 +335,23 @@ class AIAssistant:
             "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}
         }
         
-        # Save generated code with Zitex badge
+        # Update session type
+        if request_type != "general":
+            update_data["$set"]["session_type"] = request_type
+        
         code_match = re.search(r'```(?:html|javascript|js)?\n?([\s\S]*?)```', ai_response)
         if code_match:
             code = code_match.group(1)
             code_with_badge = inject_zitex_badge(code)
             update_data["$set"]["generated_code"] = code_with_badge
-            update_data["$set"]["session_type"] = request_type
         
-        await self.db.chat_sessions.update_one(
-            {"id": session_id},
-            update_data
-        )
+        await self.db.chat_sessions.update_one({"id": session_id}, update_data)
         
-        # Update title if first real message
-        non_welcome_messages = [m for m in session.get("messages", []) if not m.get("metadata", {}).get("is_welcome")]
-        if len(non_welcome_messages) == 0:
+        # Update title
+        non_welcome = [m for m in session.get("messages", []) if not m.get("metadata", {}).get("is_welcome")]
+        if len(non_welcome) == 0:
             title = self._generate_title(message, request_type)
-            await self.db.chat_sessions.update_one(
-                {"id": session_id},
-                {"$set": {"title": title}}
-            )
+            await self.db.chat_sessions.update_one({"id": session_id}, {"$set": {"title": title}})
         
         return {
             "session_id": session_id,
@@ -651,13 +361,10 @@ class AIAssistant:
         }
     
     async def _generate_image(self, user_id: str, session_id: str, prompt: str, credits: int) -> Tuple[str, List[Dict], int]:
-        """توليد صورة"""
         try:
-            enhanced_prompt = f"High quality, professional, detailed: {prompt}"
-            
             image_response = self.openai_client.images.generate(
                 model="dall-e-3",
-                prompt=enhanced_prompt,
+                prompt=f"High quality: {prompt}",
                 size="1024x1024",
                 quality="standard",
                 n=1,
@@ -677,53 +384,25 @@ class AIAssistant:
             
             response = f"""## ✅ تم إنشاء الصورة!
 
-| التفاصيل | القيمة |
-|----------|--------|
-| **الوصف** | {prompt[:50]}... |
-| **الجودة** | عالية (1024x1024) |
-| **التكلفة** | 5 نقاط |
-| **رصيدك المتبقي** | {credits - 5} نقطة |
+> التكلفة: 5 نقاط | المتبقي: {credits - 5} نقطة
 
----
-
-> 💡 يمكنك طلب تعديلات أو صورة جديدة"""
+[BUTTONS]
+🎨 صورة جديدة|✏️ تعديل|💾 حفظ
+[/BUTTONS]"""
             
-            attachments = [{
-                "type": "image",
-                "url": image_url,
-                "prompt": prompt
-            }]
-            
-            return response, attachments, 5
+            return response, [{"type": "image", "url": image_url, "prompt": prompt}], 5
             
         except Exception as e:
-            logger.error(f"Image generation error: {e}")
-            return f"""## ❌ خطأ في توليد الصورة
-
-> {str(e)[:100]}""", [], 0
+            logger.error(f"Image error: {e}")
+            return "❌ خطأ في توليد الصورة", [], 0
     
-    async def _generate_with_gpt(
-        self, 
-        session: Dict, 
-        message: str, 
-        request_type: str,
-        credits: int,
-        settings: Dict
-    ) -> Tuple[str, int]:
-        """توليد رد باستخدام GPT"""
-        
-        system_prompt = get_system_prompt(request_type)
-        
-        # Add credits info to system prompt
-        system_prompt += f"\n\n> معلومات العميل: رصيده الحالي {credits} نقطة"
+    async def _generate_with_gpt(self, session: Dict, message: str, request_type: str, credits: int, settings: Dict) -> Tuple[str, int, bool]:
+        system_prompt = MASTER_SYSTEM_PROMPT + f"\n\nرصيد العميل: {credits} نقطة"
         
         messages = [{"role": "system", "content": system_prompt}]
         
-        for msg in session.get("messages", [])[-10:]:
-            messages.append({
-                "role": msg["role"],
-                "content": msg["content"]
-            })
+        for msg in session.get("messages", [])[-8:]:
+            messages.append({"role": msg["role"], "content": msg["content"]})
         
         messages.append({"role": "user", "content": message})
         
@@ -732,45 +411,32 @@ class AIAssistant:
                 model="gpt-4o",
                 messages=messages,
                 temperature=0.7,
-                max_tokens=8000
+                max_tokens=6000
             )
             response = completion.choices[0].message.content
             
-            # Calculate credits
-            credits_used = SERVICE_COSTS.get(request_type, 1)
-            
-            # Check if code was generated
+            # Determine credits
+            credits_used = 1
             if '```html' in response or '```javascript' in response:
                 credits_used = SERVICE_COSTS.get(request_type, 15)
             
-            return response, credits_used
+            has_buttons = "[BUTTONS]" in response
+            
+            return response, credits_used, has_buttons
             
         except Exception as e:
-            logger.error(f"GPT generation error: {e}")
-            return f"""## ❌ خطأ في المعالجة
-
-> {str(e)[:100]}""", 0
+            logger.error(f"GPT error: {e}")
+            return "❌ خطأ في المعالجة", 0, False
     
     def _generate_title(self, message: str, request_type: str) -> str:
-        """توليد عنوان ذكي"""
-        type_prefixes = {
-            "image": "🎨",
-            "video": "🎬",
-            "website": "🌐",
-            "game": "🎮",
-            "game_3d": "🎮",
-            "webapp": "💻",
-            "pwa": "📱",
-            "general": "💬"
-        }
-        prefix = type_prefixes.get(request_type, "💬")
-        title = message[:30].strip()
-        if len(message) > 30:
+        icons = {"image": "🎨", "video": "🎬", "website": "🌐", "game": "🎮", "webapp": "💻", "pwa": "📱"}
+        prefix = icons.get(request_type, "💬")
+        title = message[:25].strip()
+        if len(message) > 25:
             title += "..."
         return f"{prefix} {title}"
     
     async def delete_session(self, session_id: str, user_id: str) -> bool:
-        """حذف جلسة"""
         result = await self.db.chat_sessions.update_one(
             {"id": session_id, "user_id": user_id},
             {"$set": {"status": "archived"}}
@@ -778,7 +444,6 @@ class AIAssistant:
         return result.modified_count > 0
     
     async def get_session_assets(self, session_id: str, user_id: str) -> List[Dict]:
-        """استرجاع أصول الجلسة"""
         assets = await self.db.generated_assets.find(
             {"session_id": session_id, "user_id": user_id},
             {"_id": 0}
@@ -786,56 +451,16 @@ class AIAssistant:
         return assets
     
     async def get_video_requests(self, user_id: str, session_id: str = None) -> List[Dict]:
-        """استرجاع طلبات الفيديو"""
         query = {"user_id": user_id}
         if session_id:
             query["session_id"] = session_id
-        
-        requests = await self.db.video_requests.find(
-            query,
-            {"_id": 0}
-        ).sort("created_at", -1).to_list(50)
-        return requests
+        return await self.db.video_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
     
     async def generate_tts(self, text: str, provider: str = "openai", voice: str = "alloy", speed: float = 1.0) -> Optional[str]:
-        """توليد صوت"""
-        if not AI_FEATURES_ENABLED:
-            return None
-        
-        try:
-            if provider == "openai" and self.openai_client:
-                response = self.openai_client.audio.speech.create(
-                    model="tts-1",
-                    voice=voice,
-                    input=text,
-                    speed=speed
-                )
-                audio_bytes = response.content
-                audio_b64 = base64.b64encode(audio_bytes).decode()
-                return f"data:audio/mpeg;base64,{audio_b64}"
-            
-            elif provider == "elevenlabs" and self.eleven_client and ELEVENLABS_AVAILABLE:
-                voice_settings = VoiceSettings(
-                    stability=0.5,
-                    similarity_boost=0.75
-                )
-                audio_generator = self.eleven_client.text_to_speech.convert(
-                    text=text,
-                    voice_id=voice,
-                    model_id="eleven_multilingual_v2",
-                    voice_settings=voice_settings
-                )
-                audio_bytes = b""
-                for chunk in audio_generator:
-                    audio_bytes += chunk
-                audio_b64 = base64.b64encode(audio_bytes).decode()
-                return f"data:audio/mpeg;base64,{audio_b64}"
-        except Exception as e:
-            logger.error(f"TTS generation error: {e}")
+        # TTS disabled for now
         return None
     
     async def update_session_code(self, session_id: str, user_id: str, code: str) -> bool:
-        """تحديث الكود"""
         code_with_badge = inject_zitex_badge(code)
         result = await self.db.chat_sessions.update_one(
             {"id": session_id, "user_id": user_id},
@@ -844,8 +469,5 @@ class AIAssistant:
         return result.modified_count > 0
     
     async def get_session_code(self, session_id: str, user_id: str) -> Optional[str]:
-        """استرجاع الكود"""
         session = await self.get_session(session_id, user_id)
-        if session:
-            return session.get("generated_code")
-        return None
+        return session.get("generated_code") if session else None
