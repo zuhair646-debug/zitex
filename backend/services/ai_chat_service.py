@@ -378,6 +378,225 @@ prompts:
 ## 🎮 مكتبات الألعاب:
 - Phaser 3, Three.js, Babylon.js, PixiJS, Matter.js, Howler.js, GSAP
 
+---
+
+## 📱 قسم تطبيقات الموبايل (جديد!):
+
+### عند طلب تطبيق موبايل، اسأل أولاً:
+
+[BUTTONS]
+📱 iOS (iPhone/iPad)|🤖 Android|📲 كلاهما (iOS + Android)
+[/BUTTONS]
+
+---
+
+### 🔧 أنواع البرمجة المتاحة:
+
+**1. Flutter (موصى به للمنصتين):**
+- كود واحد يعمل على iOS و Android
+- أداء ممتاز وواجهة جميلة
+- اللغة: Dart
+- التكلفة: 30 نقطة
+
+**2. React Native:**
+- JavaScript/TypeScript
+- مناسب لمطوري الويب
+- مجتمع كبير ومكتبات متنوعة
+- التكلفة: 30 نقطة
+
+**3. Swift (Native iOS فقط):**
+- أفضل أداء لـ iPhone/iPad
+- تصميم Apple الأصلي
+- التكلفة: 35 نقطة
+
+**4. Kotlin (Native Android فقط):**
+- أفضل أداء لأجهزة Android
+- تصميم Material Design
+- التكلفة: 35 نقطة
+
+---
+
+### 📋 خطوات إنشاء التطبيق:
+
+**الخطوة 1 - اختيار المنصة:**
+```
+ما المنصة المستهدفة لتطبيقك؟
+
+[BUTTONS]
+📱 iOS فقط|🤖 Android فقط|📲 كلاهما
+[/BUTTONS]
+```
+
+**الخطوة 2 - اختيار نوع البرمجة:**
+إذا اختار كلاهما أو iOS:
+```
+ما نوع البرمجة المفضل؟
+
+[BUTTONS]
+🎯 Flutter (موصى به)|⚛️ React Native|🍎 Swift (iOS فقط)|📝 Kotlin (Android فقط)
+[/BUTTONS]
+```
+
+**الخطوة 3 - نوع التطبيق:**
+```
+ما نوع التطبيق الذي تريده؟
+
+[BUTTONS]
+🛒 تطبيق تجارة|📋 تطبيق خدمات|💬 تطبيق تواصل|📰 تطبيق أخبار/محتوى|🎮 لعبة موبايل|✏️ نوع آخر
+[/BUTTONS]
+```
+
+**الخطوة 4 - جمع المتطلبات:**
+```
+📋 أخبرني عن تطبيقك:
+1. ما اسم التطبيق؟
+2. ما وظيفته الرئيسية؟
+3. ما الشاشات/الصفحات المطلوبة؟
+4. هل يحتاج تسجيل دخول؟
+5. ما الألوان والهوية البصرية؟
+6. هل تحتاج قاعدة بيانات/Backend؟
+```
+
+**الخطوة 5 - عرض التكلفة والبدء:**
+```
+💰 ملخص المشروع:
+━━━━━━━━━━━━━━━━━━━━━━
+📱 التطبيق: [اسم التطبيق]
+🔧 التقنية: [Flutter/React Native/Swift/Kotlin]
+📲 المنصة: [iOS/Android/كلاهما]
+━━━━━━━━━━━━━━━━━━━━━━
+التكلفة: [X] نقطة
+رصيدك: [X] نقطة
+
+[BUTTONS]
+✅ ابدأ البناء|📝 تعديل المتطلبات|❌ إلغاء
+[/BUTTONS]
+```
+
+**الخطوة 6 - البناء:**
+عند الموافقة، ابدأ بإنشاء الكود:
+
+للـ Flutter:
+[CODE_BLOCK]
+```dart
+// main.dart - Flutter App
+import 'package:flutter/material.dart';
+// ... الكود الكامل
+```
+[/CODE_BLOCK]
+
+للـ React Native:
+[CODE_BLOCK]
+```javascript
+// App.js - React Native App
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+// ... الكود الكامل
+```
+[/CODE_BLOCK]
+
+للـ Swift:
+[CODE_BLOCK]
+```swift
+// ContentView.swift - SwiftUI App
+import SwiftUI
+// ... الكود الكامل
+```
+[/CODE_BLOCK]
+
+للـ Kotlin:
+[CODE_BLOCK]
+```kotlin
+// MainActivity.kt - Android App
+package com.example.app
+import android.os.Bundle
+import androidx.appcompat.app.AppCompatActivity
+// ... الكود الكامل
+```
+[/CODE_BLOCK]
+
+---
+
+### 📁 هيكل ملفات التطبيق:
+
+**Flutter:**
+```
+lib/
+├── main.dart
+├── screens/
+│   ├── home_screen.dart
+│   ├── login_screen.dart
+│   └── profile_screen.dart
+├── widgets/
+├── models/
+└── services/
+pubspec.yaml
+```
+
+**React Native:**
+```
+src/
+├── App.js
+├── screens/
+│   ├── HomeScreen.js
+│   ├── LoginScreen.js
+│   └── ProfileScreen.js
+├── components/
+├── navigation/
+└── services/
+package.json
+```
+
+**Swift:**
+```
+App/
+├── AppName.swift (Entry)
+├── Views/
+│   ├── ContentView.swift
+│   ├── HomeView.swift
+│   └── LoginView.swift
+├── Models/
+└── Services/
+```
+
+**Kotlin:**
+```
+app/src/main/
+├── java/com/app/
+│   ├── MainActivity.kt
+│   ├── ui/
+│   │   ├── HomeFragment.kt
+│   │   └── LoginFragment.kt
+│   └── data/
+├── res/
+│   ├── layout/
+│   └── values/
+└── AndroidManifest.xml
+```
+
+---
+
+### ⚠️ قواعد تطبيقات الموبايل:
+
+1. **أنشئ الكود الكامل** - لا تترك TODO أو placeholders
+2. **أضف التعليقات** بالعربية والإنجليزية
+3. **صمم واجهة جميلة** مع Animations
+4. **استخدم أفضل الممارسات** لكل منصة
+5. **قدم تعليمات التشغيل** بالتفصيل
+
+---
+
+## 💰 جدول تكاليف تطبيقات الموبايل:
+
+| التقنية | المنصة | التكلفة |
+|---------|--------|---------|
+| Flutter | iOS + Android | 30 نقطة |
+| React Native | iOS + Android | 30 نقطة |
+| Swift | iOS فقط | 35 نقطة |
+| Kotlin | Android فقط | 35 نقطة |
+| + تصميم UI متقدم | - | +15 نقطة |
+| + Backend/API | - | +20 نقطة |
+
 اجعل كل تفاعل احترافياً ومنظماً!
 """
 
@@ -390,7 +609,7 @@ WELCOME_MESSAGE = """## 👋 مرحباً بك في زيتكس!
 ماذا تريد أن نبني اليوم؟
 
 [BUTTONS]
-🌐 موقع ويب|📱 تطبيق ويب|🎮 لعبة|🖼️ صفحة هبوط|✏️ فكرة أخرى
+🌐 موقع ويب|📱 تطبيق موبايل|🎮 لعبة|🎬 فيديو|🖼️ صورة/لوغو|✏️ فكرة أخرى
 [/BUTTONS]"""
 
 
@@ -412,6 +631,13 @@ SERVICE_COSTS = {
     "image_logo": 10,
     "image_preview": 5,         # صور تجريبية للمشاهد
     "image_multiple": 15,
+    # تطبيقات الموبايل
+    "mobile_flutter": 30,
+    "mobile_react_native": 30,
+    "mobile_swift": 35,
+    "mobile_kotlin": 35,
+    "mobile_ui_advanced": 15,
+    "mobile_backend": 20,
     # فيديوهات سينمائية
     "video_cinematic_4": 50,
     "video_cinematic_8": 80,
@@ -564,8 +790,85 @@ DEFAULT_TEMPLATES = [
         "is_premium": True,
         "cost": 35,
         "tags": ["game", "3d", "racing", "threejs"]
+    },
+    # قوالب تطبيقات الموبايل
+    {
+        "id": "mobile-flutter-ecommerce",
+        "name": "تطبيق متجر Flutter",
+        "category": "mobile",
+        "preview_image": "/api/templates/preview/mobile-flutter-ecommerce",
+        "description": "تطبيق متجر إلكتروني بتقنية Flutter",
+        "is_premium": True,
+        "cost": 30,
+        "tags": ["mobile", "flutter", "ecommerce", "ios", "android"],
+        "tech": "flutter"
+    },
+    {
+        "id": "mobile-react-native-social",
+        "name": "تطبيق تواصل React Native",
+        "category": "mobile",
+        "preview_image": "/api/templates/preview/mobile-react-native-social",
+        "description": "تطبيق تواصل اجتماعي بتقنية React Native",
+        "is_premium": True,
+        "cost": 30,
+        "tags": ["mobile", "react-native", "social", "ios", "android"],
+        "tech": "react_native"
+    },
+    {
+        "id": "mobile-swift-fitness",
+        "name": "تطبيق لياقة Swift",
+        "category": "mobile",
+        "preview_image": "/api/templates/preview/mobile-swift-fitness",
+        "description": "تطبيق لياقة وصحة لـ iOS بتقنية Swift",
+        "is_premium": True,
+        "cost": 35,
+        "tags": ["mobile", "swift", "fitness", "ios"],
+        "tech": "swift"
+    },
+    {
+        "id": "mobile-kotlin-news",
+        "name": "تطبيق أخبار Kotlin",
+        "category": "mobile",
+        "preview_image": "/api/templates/preview/mobile-kotlin-news",
+        "description": "تطبيق أخبار لـ Android بتقنية Kotlin",
+        "is_premium": True,
+        "cost": 35,
+        "tags": ["mobile", "kotlin", "news", "android"],
+        "tech": "kotlin"
     }
 ]
+
+# ============== Mobile App Frameworks ==============
+MOBILE_FRAMEWORKS = {
+    "flutter": {
+        "name": "Flutter",
+        "language": "Dart",
+        "platforms": ["ios", "android"],
+        "description": "كود واحد للمنصتين - أداء ممتاز",
+        "cost": 30
+    },
+    "react_native": {
+        "name": "React Native",
+        "language": "JavaScript/TypeScript",
+        "platforms": ["ios", "android"],
+        "description": "مناسب لمطوري الويب - مجتمع كبير",
+        "cost": 30
+    },
+    "swift": {
+        "name": "Swift (SwiftUI)",
+        "language": "Swift",
+        "platforms": ["ios"],
+        "description": "أفضل أداء لـ iOS - تصميم Apple الأصلي",
+        "cost": 35
+    },
+    "kotlin": {
+        "name": "Kotlin",
+        "language": "Kotlin",
+        "platforms": ["android"],
+        "description": "أفضل أداء لـ Android - Material Design",
+        "cost": 35
+    }
+}
 
 # ============== Game Libraries & CDN Links ==============
 GAME_LIBRARIES = {
@@ -617,18 +920,26 @@ GAME_LIBRARIES = {
 def detect_request_type(message: str, session_type: str = "general") -> str:
     message_lower = message.lower()
     
+    # Mobile app detection (priority)
+    if any(word in message for word in ["تطبيق موبايل", "تطبيق جوال", "تطبيق هاتف", "📱 تطبيق"]):
+        return "mobile"
+    if any(word in message_lower for word in ["flutter", "react native", "swift", "kotlin"]):
+        return "mobile"
+    if any(word in message for word in ["ios", "iphone", "ipad", "أيفون", "آيفون"]):
+        return "mobile"
+    if any(word in message for word in ["android", "أندرويد", "اندرويد"]):
+        return "mobile"
+    
     # Direct button selections
-    if "موقع ويب" in message or "موقع" in message_lower:
+    if "موقع ويب" in message or "🌐 موقع" in message:
         return "website"
-    elif "تطبيق جوال" in message or "جوال" in message_lower or "موبايل" in message_lower:
-        return "pwa"
     elif "تطبيق ويب" in message or "لوحة" in message_lower:
         return "webapp"
-    elif "لعبة" in message_lower or "game" in message_lower:
+    elif "لعبة" in message_lower or "game" in message_lower or "🎮" in message:
         return "game"
-    elif "صورة" in message_lower or "شعار" in message_lower:
+    elif "صورة" in message_lower or "شعار" in message_lower or "لوغو" in message_lower or "🖼️" in message:
         return "image"
-    elif "فيديو" in message_lower:
+    elif "فيديو" in message_lower or "🎬" in message:
         return "video"
     
     # 3D detection

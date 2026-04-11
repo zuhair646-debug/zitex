@@ -10,7 +10,8 @@ import {
   Volume2, VolumeX, Copy, Check, Play, X, ArrowUp,
   Code, Eye, EyeOff, Gamepad2, RefreshCw, Maximize2, Minimize2,
   Coins, Gift, Paperclip, Zap, Save, GitFork, Settings2, Bot,
-  Layout, Rocket, Link, ExternalLink, BookMarked, Upload, Share2, FileText
+  Layout, Rocket, Link, ExternalLink, BookMarked, Upload, Share2, FileText,
+  Smartphone
 } from 'lucide-react';
 
 // ============== Zitex Logo Animation ==============
@@ -1318,6 +1319,7 @@ const AIChat = ({ user }) => {
       case 'video': return <Video className="w-4 h-4" />;
       case 'website': return <Globe className="w-4 h-4" />;
       case 'game': return <Gamepad2 className="w-4 h-4" />;
+      case 'mobile': return <Smartphone className="w-4 h-4" />;
       default: return <MessageSquare className="w-4 h-4" />;
     }
   }, []);
@@ -1652,10 +1654,11 @@ const AIChat = ({ user }) => {
                 <Button onClick={() => { createSession('general'); setSidebarOpen(false); }} className="w-full bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 shadow-lg shadow-amber-500/20" data-testid="new-chat-btn">
                   <Plus className="w-4 h-4 me-2" /> محادثة جديدة
                 </Button>
-                <div className="grid grid-cols-4 gap-1.5 mt-2">
+                <div className="grid grid-cols-5 gap-1.5 mt-2">
                   {[
                     { type: 'image', icon: Image, color: 'purple', label: 'صورة' },
                     { type: 'video', icon: Video, color: 'orange', label: 'فيديو' },
+                    { type: 'mobile', icon: Smartphone, color: 'pink', label: 'تطبيق' },
                     { type: 'website', icon: Globe, color: 'green', label: 'موقع' },
                     { type: 'game', icon: Gamepad2, color: 'cyan', label: 'لعبة' }
                   ].map(({ type, icon: Icon, color, label }) => (
@@ -1711,12 +1714,13 @@ const AIChat = ({ user }) => {
                     مرحباً في <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-500">Zitex</span>
                   </h1>
                   <p className="text-amber-200/80 mb-8">منصة الإبداع بالذكاء الاصطناعي</p>
-                  <div className="grid grid-cols-2 gap-3 mb-6">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
                     {[
-                      { type: 'image', icon: Image, color: 'purple', title: 'صور', desc: 'GPT Image 1' },
                       { type: 'video', icon: Video, color: 'orange', title: 'فيديو', desc: 'Sora 2' },
-                      { type: 'website', icon: Globe, color: 'green', title: 'مواقع', desc: 'GPT-5.2' },
-                      { type: 'game', icon: Gamepad2, color: 'cyan', title: 'ألعاب', desc: 'Babylon.js' }
+                      { type: 'image', icon: Image, color: 'purple', title: 'صور', desc: 'GPT Image 1' },
+                      { type: 'mobile', icon: Smartphone, color: 'pink', title: 'تطبيق موبايل', desc: 'Flutter/Swift/Kotlin' },
+                      { type: 'game', icon: Gamepad2, color: 'cyan', title: 'ألعاب', desc: 'Phaser/Three.js' },
+                      { type: 'website', icon: Globe, color: 'green', title: 'مواقع', desc: 'React/HTML' }
                     ].map(({ type, icon: Icon, color, title, desc }) => (
                       <Card key={type} className={`bg-slate-800/30 border-slate-700/50 cursor-pointer hover:bg-slate-800/50 hover:border-${color}-500/30 transition-all`} onClick={() => createSession(type)}>
                         <CardContent className="p-4 text-center">
