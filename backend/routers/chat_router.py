@@ -60,7 +60,7 @@ def set_ai_assistant(assistant):
     ai_assistant = assistant
 
 
-@router.post("/sessions", response_model=SessionResponse)
+@router.post("/sessions")
 async def create_session(
     request: CreateSessionRequest,
     current_user: dict = Depends(get_current_user)
@@ -75,15 +75,17 @@ async def create_session(
         title=request.title
     )
     
-    return SessionResponse(
-        id=session['id'],
-        title=session['title'],
-        session_type=session['session_type'],
-        status=session['status'],
-        created_at=session['created_at'],
-        updated_at=session['updated_at'],
-        message_count=len(session.get('messages', []))
-    )
+    # Return full session with messages (including welcome message)
+    return {
+        "id": session['id'],
+        "title": session['title'],
+        "session_type": session['session_type'],
+        "status": session['status'],
+        "created_at": session['created_at'],
+        "updated_at": session['updated_at'],
+        "message_count": len(session.get('messages', [])),
+        "messages": session.get('messages', [])
+    }
 
 
 @router.get("/sessions")

@@ -72,19 +72,24 @@ const CodeBlock = memo(({ code, language = 'html', filename }) => {
 });
 
 // ============== Message Content Parser ==============
-const parseMessageContent = (content) => {
+const parseMessageContent = (content, metadata = {}) => {
   if (!content) return [];
   const parts = [];
   
-  // First extract buttons
-  const buttonRegex = /\[BUTTONS\]\n?([\s\S]*?)\[\/BUTTONS\]/g;
-  const codeBlockRegex = /```(\w+)?\n?([\s\S]*?)```/g;
+  // First, remove CODE_BLOCK from display (code goes to Live Preview only)
+  let displayContent = content.replace(/\[CODE_BLOCK\]\s*```[\s\S]*?```\s*\[\/CODE_BLOCK\]/g, '');
   
-  let processedContent = content;
+  // Also remove any regular code blocks from display (they go to preview)
+  displayContent = displayContent.replace(/```(?:html|javascript|js)?\n?[\s\S]*?```/g, '');
+  
+  // Extract buttons
+  const buttonRegex = /\[BUTTONS\]\n?([\s\S]*?)\[\/BUTTONS\]/g;
+  
+  let processedContent = displayContent;
   
   // Extract buttons
   let buttonMatch;
-  while ((buttonMatch = buttonRegex.exec(content)) !== null) {
+  while ((buttonMatch = buttonRegex.exec(displayContent)) !== null) {
     const buttonText = buttonMatch[1].trim();
     const buttons = buttonText.split('|').map(b => b.trim()).filter(b => b);
     processedContent = processedContent.replace(buttonMatch[0], `__BUTTONS__${JSON.stringify(buttons)}__ENDBUTTONS__`);
@@ -94,8 +99,8 @@ const parseMessageContent = (content) => {
   let lastIndex = 0;
   let match;
   
-  // Handle buttons and code blocks
-  const combinedRegex = /__BUTTONS__([\s\S]*?)__ENDBUTTONS__|```(\w+)?\n?([\s\S]*?)```/g;
+  // Handle buttons
+  const combinedRegex = /__BUTTONS__([\s\S]*?)__ENDBUTTONS__/g;
   
   while ((match = combinedRegex.exec(processedContent)) !== null) {
     if (match.index > lastIndex) {
@@ -113,9 +118,6 @@ const parseMessageContent = (content) => {
       } catch (e) {
         parts.push({ type: 'text', content: match[0] });
       }
-    } else if (match[3]) {
-      // Code block
-      parts.push({ type: 'code', language: match[2] || 'html', content: match[3].trim() });
     }
     
     lastIndex = match.index + match[0].length;
@@ -128,8 +130,26 @@ const parseMessageContent = (content) => {
     }
   }
   
-  return parts.length > 0 ? parts : [{ type: 'text', content }];
+  // If we have preview, add indicator
+  if (metadata?.has_preview) {
+    parts.push({ type: 'preview_indicator' });
+  }
+  
+  return parts.length > 0 ? parts : [{ type: 'text', content: displayContent.trim() || content }];
 };
+
+// ============== Preview Indicator Component ==============
+const PreviewIndicator = memo(() => (
+  <div className="mt-3 p-3 bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/30 rounded-xl flex items-center gap-3">
+    <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+      <Eye className="w-5 h-5 text-green-400" />
+    </div>
+    <div>
+      <p className="text-green-300 text-sm font-medium">شاهد النتيجة في المعاينة المباشرة ←</p>
+      <p className="text-green-400/60 text-xs">يمكنك التفاعل مع الموقع مباشرة</p>
+    </div>
+  </div>
+));
 
 // ============== Choice Buttons Component ==============
 const ChoiceButtons = memo(({ buttons, onSelect }) => (
@@ -198,9 +218,9 @@ const SessionItem = memo(({ session, isActive, onSelect, onDelete, getIcon }) =>
 
 // ============== Chat Message ==============
 const ChatMessage = memo(({ msg, idx, renderAttachment, onPlayAudio, onGenerateTTS, playingAudio, onPreview, isTyping, onButtonClick }) => {
-  const parsedContent = parseMessageContent(msg.content);
-  const hasCode = parsedContent.some(p => p.type === 'code');
+  const parsedContent = parseMessageContent(msg.content, msg.metadata);
   const hasButtons = parsedContent.some(p => p.type === 'buttons');
+  const hasPreviewIndicator = parsedContent.some(p => p.type === 'preview_indicator');
   const isUser = msg.role === 'user';
   
   return (
@@ -213,11 +233,9 @@ const ChatMessage = memo(({ msg, idx, renderAttachment, onPlayAudio, onGenerateT
           </div>
           <div className="bg-slate-800/80 backdrop-blur border border-slate-700/50 rounded-2xl rounded-tl-md p-4 shadow-lg">
             {parsedContent.map((part, i) => (
-              part.type === 'code' ? (
-                <CodeBlock key={i} code={part.content} language={part.language} />
-              ) : part.type === 'buttons' ? null : (
-                <p key={i} className="text-white whitespace-pre-wrap leading-relaxed text-sm">{part.content}</p>
-              )
+              part.type === 'buttons' ? null : 
+              part.type === 'preview_indicator' ? null :
+              <p key={i} className="text-white whitespace-pre-wrap leading-relaxed text-sm">{part.content}</p>
             ))}
             <p className="text-[10px] text-gray-500 mt-2">
               {new Date(msg.created_at).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}
@@ -230,10 +248,10 @@ const ChatMessage = memo(({ msg, idx, renderAttachment, onPlayAudio, onGenerateT
           <div className="order-2">
             <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700/50 rounded-2xl rounded-tr-md p-4 shadow-xl">
               {parsedContent.map((part, i) => (
-                part.type === 'code' ? (
-                  <CodeBlock key={i} code={part.content} language={part.language} />
-                ) : part.type === 'buttons' ? (
+                part.type === 'buttons' ? (
                   <ChoiceButtons key={i} buttons={part.buttons} onSelect={onButtonClick} />
+                ) : part.type === 'preview_indicator' ? (
+                  <PreviewIndicator key={i} />
                 ) : (
                   <p key={i} className="text-gray-200 whitespace-pre-wrap leading-relaxed text-sm">{part.content}</p>
                 )
@@ -251,28 +269,22 @@ const ChatMessage = memo(({ msg, idx, renderAttachment, onPlayAudio, onGenerateT
                     {new Date(msg.created_at).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}
                   </p>
                   <div className="flex items-center gap-1">
-                    {hasCode && (
+                    {msg.metadata?.credits_used > 0 && (
+                      <span className="text-[10px] text-amber-400/60 mr-2">
+                        -{msg.metadata.credits_used} نقطة
+                      </span>
+                    )}
                     <button
-                      onClick={() => {
-                        const codeContent = parsedContent.find(p => p.type === 'code')?.content;
-                        if (codeContent) onPreview(codeContent);
-                      }}
-                      className="p-1.5 rounded-lg text-green-400 hover:bg-green-500/20 transition-all"
-                      title="معاينة"
+                      onClick={() => msg.audio_url ? onPlayAudio(msg.audio_url, msg.id) : onGenerateTTS(msg.content, msg.id)}
+                      className={`p-1.5 rounded-lg transition-all ${
+                        playingAudio === msg.id ? 'bg-purple-500 text-white' : 'text-gray-400 hover:bg-slate-700'
+                      }`}
                     >
-                      <Eye className="w-3.5 h-3.5" />
+                      {playingAudio === msg.id ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
                     </button>
-                  )}
-                  <button
-                    onClick={() => msg.audio_url ? onPlayAudio(msg.audio_url, msg.id) : onGenerateTTS(msg.content, msg.id)}
-                    className={`p-1.5 rounded-lg transition-all ${
-                      playingAudio === msg.id ? 'bg-purple-500 text-white' : 'text-gray-400 hover:bg-slate-700'
-                    }`}
-                  >
-                    {playingAudio === msg.id ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
-                  </button>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
           <ZitexLogo size="sm" isAnimating={isTyping} />
@@ -283,8 +295,9 @@ const ChatMessage = memo(({ msg, idx, renderAttachment, onPlayAudio, onGenerateT
 });
 
 // ============== Live Preview Panel ==============
-const LivePreviewPanel = memo(({ code, isOpen, onClose, onRefresh, isFullscreen, onToggleFullscreen }) => {
+const LivePreviewPanel = memo(({ code, isOpen, onClose, onRefresh, isFullscreen, onToggleFullscreen, onExportCode, userCredits }) => {
   const iframeRef = useRef(null);
+  const [copied, setCopied] = useState(false);
   
   useEffect(() => {
     if (code && iframeRef.current) {
@@ -295,6 +308,13 @@ const LivePreviewPanel = memo(({ code, isOpen, onClose, onRefresh, isFullscreen,
       doc.close();
     }
   }, [code]);
+  
+  const handleCopyCode = async () => {
+    await navigator.clipboard.writeText(code);
+    setCopied(true);
+    toast.success('تم نسخ الكود!');
+    setTimeout(() => setCopied(false), 2000);
+  };
   
   if (!isOpen) return null;
   
@@ -308,9 +328,32 @@ const LivePreviewPanel = memo(({ code, isOpen, onClose, onRefresh, isFullscreen,
             <span className="w-3 h-3 rounded-full bg-yellow-500"></span>
             <span className="w-3 h-3 rounded-full bg-green-500"></span>
           </div>
-          <span className="text-sm text-gray-400 font-medium">App Preview</span>
+          <span className="text-sm text-gray-400 font-medium">Live Preview</span>
+          {code && (
+            <span className="text-xs text-green-400 bg-green-500/20 px-2 py-0.5 rounded-full">متصل</span>
+          )}
         </div>
         <div className="flex items-center gap-1">
+          {code && (
+            <>
+              <button 
+                onClick={handleCopyCode} 
+                className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium hover:bg-slate-700 text-gray-400 hover:text-white transition-all"
+                title="نسخ الكود"
+              >
+                {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                <span className="hidden sm:inline">{copied ? 'تم!' : 'نسخ'}</span>
+              </button>
+              <button 
+                onClick={onExportCode} 
+                className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 transition-all"
+                title="تصدير الكود (50 نقطة)"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">تصدير</span>
+              </button>
+            </>
+          )}
           <button onClick={onRefresh} className="p-1.5 rounded-lg hover:bg-slate-700 text-gray-400 hover:text-white transition-all">
             <RefreshCw className="w-4 h-4" />
           </button>
@@ -326,12 +369,13 @@ const LivePreviewPanel = memo(({ code, isOpen, onClose, onRefresh, isFullscreen,
       {/* Preview */}
       <div className="flex-1 bg-white overflow-hidden">
         {code ? (
-          <iframe ref={iframeRef} className="w-full h-full border-0" title="Live Preview" sandbox="allow-scripts allow-same-origin" />
+          <iframe ref={iframeRef} className="w-full h-full border-0" title="Live Preview" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" />
         ) : (
           <div className="h-full flex items-center justify-center bg-slate-900 text-gray-500">
             <div className="text-center">
               <Eye className="w-16 h-16 mx-auto mb-4 opacity-20" />
-              <p>لا يوجد محتوى للمعاينة</p>
+              <p className="text-lg mb-2">المعاينة المباشرة</p>
+              <p className="text-sm text-gray-600">سيظهر المشروع هنا أثناء البناء</p>
             </div>
           </div>
         )}
@@ -478,7 +522,8 @@ const AIChat = ({ user }) => {
       const session = await res.json();
       setSessions(prev => [session, ...prev]);
       setCurrentSession(session);
-      setMessages([]);
+      // Set messages from session (includes welcome message with buttons)
+      setMessages(session.messages || []);
       setPreviewCode('');
       toast.success('تم إنشاء محادثة جديدة');
       if (window.innerWidth < 768) setSidebarOpen(false);
@@ -544,10 +589,10 @@ const AIChat = ({ user }) => {
           playAudio(data.assistant_message.audio_url, data.assistant_message.id);
         }
 
-        const assistantContent = data.assistant_message?.content || '';
-        const codeMatch = assistantContent.match(/```(?:html|javascript|js)?\n?([\s\S]*?)```/);
-        if (codeMatch) {
-          setPreviewCode(codeMatch[1]);
+        // Auto-open Live Preview when code is generated
+        const metadata = data.assistant_message?.metadata || {};
+        if (metadata.generated_code) {
+          setPreviewCode(metadata.generated_code);
           setPreviewOpen(true);
         }
 
@@ -720,6 +765,112 @@ const AIChat = ({ user }) => {
     setPreviewCode(code);
     setPreviewOpen(true);
   }, []);
+
+  // Handle button click from chat - send as message
+  const handleButtonClick = useCallback((buttonText) => {
+    if (loading || !currentSession) return;
+    setInputMessage(buttonText);
+    // Auto-send after a short delay
+    setTimeout(() => {
+      const input = document.querySelector('[data-testid="chat-input"]');
+      if (input) {
+        const event = new KeyboardEvent('keypress', { key: 'Enter', bubbles: true });
+        // Directly call sendMessage with the button text
+      }
+    }, 100);
+  }, [loading, currentSession]);
+  
+  // Effect to auto-send when inputMessage changes from button click
+  const buttonClickRef = useRef(false);
+  
+  const handleButtonClickDirect = useCallback(async (buttonText) => {
+    if (loading || !currentSession) return;
+    
+    setLoading(true);
+    setIsTyping(true);
+
+    const tempUserMsg = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: buttonText,
+      attachments: [],
+      created_at: new Date().toISOString()
+    };
+    setMessages(prev => [...prev, tempUserMsg]);
+
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(
+        `${process.env.REACT_APP_BACKEND_URL}/api/chat/sessions/${currentSession.id}/messages`,
+        {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: buttonText, settings: { tts: ttsSettings, ultra: ultraMode } })
+        }
+      );
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setMessages(prev => {
+          const filtered = prev.filter(m => m.id !== tempUserMsg.id);
+          return [...filtered, data.user_message, data.assistant_message];
+        });
+        
+        if (data.credits_used) setUserCredits(prev => Math.max(0, prev - data.credits_used));
+
+        // Auto-open Live Preview when code is generated
+        const metadata = data.assistant_message?.metadata || {};
+        if (metadata.generated_code) {
+          setPreviewCode(metadata.generated_code);
+          setPreviewOpen(true);
+        }
+      } else {
+        toast.error(data.detail || 'فشل إرسال الرسالة');
+        setMessages(prev => prev.filter(m => m.id !== tempUserMsg.id));
+      }
+    } catch (error) {
+      toast.error('حدث خطأ في الاتصال');
+      setMessages(prev => prev.filter(m => m.id !== tempUserMsg.id));
+    } finally {
+      setLoading(false);
+      setIsTyping(false);
+    }
+  }, [currentSession, loading, ttsSettings, ultraMode]);
+
+  // Handle export code with credits deduction
+  const handleExportCode = useCallback(async () => {
+    if (!previewCode) {
+      toast.error('لا يوجد كود للتصدير');
+      return;
+    }
+    
+    if (userCredits < 50 && user?.role !== 'owner') {
+      toast.error('رصيد غير كافٍ! التصدير يكلف 50 نقطة');
+      return;
+    }
+    
+    // Remove Zitex badge for export
+    let cleanCode = previewCode.replace(/<!-- Zitex Badge -->[\s\S]*?<\/div>/g, '');
+    
+    // Download as HTML file
+    const blob = new Blob([cleanCode], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'zitex-project.html';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    // Deduct credits (TODO: call backend)
+    if (user?.role !== 'owner') {
+      setUserCredits(prev => Math.max(0, prev - 50));
+    }
+    
+    toast.success('تم تصدير الكود بنجاح! (-50 نقطة)');
+  }, [previewCode, userCredits, user]);
 
   const renderAttachment = useCallback((attachment, onPreview) => {
     switch (attachment.type) {
@@ -911,7 +1062,7 @@ const AIChat = ({ user }) => {
                       </div>
                     )}
                     {messages.map((msg, idx) => (
-                      <ChatMessage key={msg.id || idx} msg={msg} idx={idx} renderAttachment={renderAttachment} onPlayAudio={playAudio} onGenerateTTS={generateTTS} playingAudio={playingAudio} onPreview={handlePreview} isTyping={isTyping && idx === messages.length - 1 && msg.role === 'assistant'} />
+                      <ChatMessage key={msg.id || idx} msg={msg} idx={idx} renderAttachment={renderAttachment} onPlayAudio={playAudio} onGenerateTTS={generateTTS} playingAudio={playingAudio} onPreview={handlePreview} isTyping={isTyping && idx === messages.length - 1 && msg.role === 'assistant'} onButtonClick={handleButtonClickDirect} />
                     ))}
                     {isTyping && (
                       <div className="flex justify-end">
@@ -1027,7 +1178,22 @@ const AIChat = ({ user }) => {
           {/* Preview Panel */}
           {previewOpen && (
             <div className={`${previewFullscreen ? 'fixed inset-0 z-50' : 'w-1/2'}`}>
-              <LivePreviewPanel code={previewCode} isOpen={previewOpen} onClose={() => setPreviewOpen(false)} onRefresh={() => {}} isFullscreen={previewFullscreen} onToggleFullscreen={() => setPreviewFullscreen(!previewFullscreen)} />
+              <LivePreviewPanel 
+                code={previewCode} 
+                isOpen={previewOpen} 
+                onClose={() => setPreviewOpen(false)} 
+                onRefresh={() => {
+                  if (previewCode) {
+                    const temp = previewCode;
+                    setPreviewCode('');
+                    setTimeout(() => setPreviewCode(temp), 100);
+                  }
+                }} 
+                isFullscreen={previewFullscreen} 
+                onToggleFullscreen={() => setPreviewFullscreen(!previewFullscreen)}
+                onExportCode={handleExportCode}
+                userCredits={userCredits}
+              />
             </div>
           )}
         </div>

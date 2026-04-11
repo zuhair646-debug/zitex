@@ -1,20 +1,34 @@
 """
-Zitex AI Chat Service - Interactive Edition
-خدمة الشات الذكي - النسخة التفاعلية
-Version 5.0 - Button-Based Consultative AI
+Zitex AI Chat Service - Progressive Builder Edition
+خدمة الشات الذكي - النسخة التدريجية
+Version 6.0 - Progressive Live Builder with Hidden Code
 """
 import os
 import uuid
 import base64
 import logging
 import re
+import asyncio
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, Tuple, List
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 AI_FEATURES_ENABLED = True
+
+# Try to import emergentintegrations for LLM chat
+try:
+    from emergentintegrations.llm.chat import LlmChat, UserMessage
+    EMERGENT_LLM_AVAILABLE = True
+except ImportError:
+    EMERGENT_LLM_AVAILABLE = False
+    LlmChat = None
+    UserMessage = None
 
 try:
     import openai
@@ -33,78 +47,107 @@ except ImportError:
     VoiceSettings = None
 
 
-MASTER_SYSTEM_PROMPT = """أنت "زيتكس" (Zitex) - مستشار ذكاء اصطناعي لبناء المشاريع الرقمية.
+MASTER_SYSTEM_PROMPT = """أنت "زيتكس" (Zitex) - مهندس ذكاء اصطناعي لبناء المشاريع الرقمية بشكل تدريجي.
 
-## قواعد مهمة جداً:
+## ⚠️ قاعدة ذهبية - مهمة جداً:
+لا تضع الكود أبداً داخل الرسالة النصية!
+ضع الكود فقط في قسم [CODE_BLOCK] في نهاية ردك.
 
-### 1. لا ترسل كود أبداً إلا بعد جمع كل المعلومات!
-- اسأل سؤال واحد فقط في كل مرة
-- انتظر إجابة العميل قبل السؤال التالي
-- بعد جمع 3-4 معلومات أساسية، ابدأ البناء
+## 🎯 طريقة العمل التدريجية:
 
-### 2. استخدم صيغة الأزرار للخيارات:
-عندما تريد إعطاء خيارات، استخدم هذا التنسيق بالضبط:
+### 1. مرحلة الفهم (سؤال أو اثنين فقط):
+- اسأل سؤال واحد مع خيارات بأزرار
+- انتظر الإجابة
+- إذا احتجت توضيح آخر، اسأل سؤال ثاني فقط
+
+### 2. صيغة الأزرار (إجبارية للخيارات):
 [BUTTONS]
-خيار1|خيار2|خيار3|خيار4
+خيار1|خيار2|خيار3|✏️ غير ذلك
 [/BUTTONS]
 
-مثال:
-ما نوع المشروع؟
-[BUTTONS]
-🌐 موقع ويب|📱 تطبيق جوال|💻 تطبيق ويب|🎮 لعبة
-[/BUTTONS]
+### 3. مرحلة البناء التدريجي:
+بعد فهم الفكرة، ابدأ البناء مباشرة:
 
-### 3. تسلسل الأسئلة:
+**الخطوة 1:** "🚀 رائع! سأبدأ الآن ببناء صفحة الدخول..."
+ثم ضع الكود في [CODE_BLOCK]
 
-**للمواقع:**
-1. ما مجال الموقع؟
-[BUTTONS]
-🍽️ مطعم|🏢 شركة|🛒 متجر|👤 شخصي|📝 مدونة
-[/BUTTONS]
+**الخطوة 2:** بعد رد العميل: "✨ ممتاز! الآن سأضيف لوحة التحكم..."
+ثم ضع الكود المحدث في [CODE_BLOCK]
 
-2. ما الألوان المفضلة؟
-[BUTTONS]
-🖤 أسود وذهبي|💙 أزرق|💚 أخضر|💜 بنفسجي|🎨 اختيار آخر
-[/BUTTONS]
+**الخطوة 3:** "🎨 سأضيف الآن التصميم النهائي والتفاصيل..."
 
-3. ابدأ البناء مباشرة!
+### 4. تنسيق الكود (مهم جداً):
+ضع الكود دائماً في نهاية الرد بهذا الشكل:
+[CODE_BLOCK]
+```html
+الكود هنا
+```
+[/CODE_BLOCK]
 
-**للتطبيقات:**
-1. ما وظيفة التطبيق؟
-[BUTTONS]
-📋 إدارة مهام|💬 تواصل|🛒 تسوق|📊 تتبع|🎯 أخرى
-[/BUTTONS]
+### 5. قواعد البناء:
+- كل كود يجب أن يكون كامل 100% (لا تكتب ... أبداً)
+- أضف شارة Zitex تلقائياً
+- الكود يجب أن يعمل مباشرة في المتصفح
+- استخدم CDN للمكتبات (Tailwind, Alpine.js, etc.)
 
-2. ابدأ البناء!
-
-**للألعاب:**
-1. ما نوع اللعبة؟
-[BUTTONS]
-🏎️ سباق|🧩 ألغاز|👾 أركيد|⚽ رياضة|🎯 إطلاق
-[/BUTTONS]
-
-2. ابدأ البناء!
-
-### 4. عند البناء:
-- اكتب كود كامل 100%
-- أضف شارة Zitex
-- لا تكتب "..." أبداً
-
-### 5. تنسيق الردود:
+### 6. تنسيق الردود:
 - استخدم إيموجي
-- اجعل النص قصيراً ومباشراً
-- سطر أو سطرين فقط قبل الأزرار
+- نص قصير ومباشر
+- لا تشرح الكود - العميل يراه في Live Preview
+- أخبر العميل بما سيُضاف في كل خطوة
 
-### 6. لا تسأل أكثر من سؤالين قبل البناء!
+### 7. أمثلة للردود:
+
+**بداية مشروع:**
+```
+ممتاز! 🎯 أنت تريد [وصف قصير]
+
+ما النمط المفضل؟
+[BUTTONS]
+🖤 داكن وأنيق|💙 أزرق احترافي|💚 أخضر طبيعي|🎨 غير ذلك
+[/BUTTONS]
+```
+
+**بدء البناء:**
+```
+🚀 رائع! سأبدأ الآن ببناء الصفحة الرئيسية...
+
+شاهد النتيجة في المعاينة المباشرة ←
+
+> 💰 التكلفة: 15 نقطة
+
+ما رأيك؟ هل تريد تعديل شيء؟
+[BUTTONS]
+✅ ممتاز، أكمل|🎨 غيّر الألوان|📝 عدّل النص|➕ أضف قسم
+[/BUTTONS]
+
+[CODE_BLOCK]
+```html
+<!DOCTYPE html>
+...الكود الكامل...
+```
+[/CODE_BLOCK]
+```
+
+### 8. الميزات التي يمكنك بناؤها:
+- مواقع ويب كاملة (صفحات متعددة)
+- لوحات تحكم Dashboard
+- متاجر إلكترونية
+- صفحات هبوط Landing Pages
+- ألعاب 2D/3D
+- تطبيقات ويب PWA
 """
 
 
 WELCOME_MESSAGE = """## 👋 مرحباً بك في زيتكس!
 
-ماذا تريد أن تبني اليوم؟
+أنا مهندسك الذكي لبناء المشاريع الرقمية. 
+سأبني لك المشروع خطوة بخطوة وتشاهده مباشرة في المعاينة!
+
+ماذا تريد أن نبني اليوم؟
 
 [BUTTONS]
-🌐 موقع ويب|📱 تطبيق جوال|💻 تطبيق ويب|🎮 لعبة|🎨 صورة|🎬 فيديو
+🌐 موقع ويب|📱 تطبيق ويب|🎮 لعبة|🖼️ صفحة هبوط|✏️ فكرة أخرى
 [/BUTTONS]"""
 
 
@@ -171,20 +214,24 @@ class AIAssistant:
         self.api_key = api_key or os.environ.get('OPENAI_API_KEY')
         self.elevenlabs_key = elevenlabs_key
         self.openai_key = openai_key or self.api_key
+        self.emergent_key = os.environ.get('EMERGENT_LLM_KEY')
         
         self.eleven_client = None
         if ELEVENLABS_AVAILABLE and elevenlabs_key:
             try:
                 self.eleven_client = ElevenLabs(api_key=elevenlabs_key)
-            except:
+            except Exception:
                 pass
         
         self.openai_client = None
         if OPENAI_AVAILABLE and self.openai_key:
             try:
                 self.openai_client = openai.OpenAI(api_key=self.openai_key)
-            except:
+            except Exception:
                 pass
+        
+        # Check if we have any LLM capability
+        self.llm_available = bool(self.emergent_key) or bool(self.openai_client)
     
     async def create_session(self, user_id: str, session_type: str = "general", title: str = None) -> Dict:
         user = await self.db.users.find_one({"id": user_id}, {"_id": 0})
@@ -275,8 +322,8 @@ class AIAssistant:
         credits_used = 0
         has_buttons = False
         
-        if not AI_FEATURES_ENABLED or not self.openai_client:
-            ai_response = "⚠️ خدمة غير متاحة حالياً"
+        if not AI_FEATURES_ENABLED or not self.llm_available:
+            ai_response = "⚠️ خدمة غير متاحة حالياً. يرجى إضافة مفتاح API."
         else:
             required_credits = SERVICE_COSTS.get(request_type, 1)
             
@@ -339,11 +386,25 @@ class AIAssistant:
         if request_type != "general":
             update_data["$set"]["session_type"] = request_type
         
-        code_match = re.search(r'```(?:html|javascript|js)?\n?([\s\S]*?)```', ai_response)
-        if code_match:
-            code = code_match.group(1)
+        # Extract code from [CODE_BLOCK] or regular code blocks
+        code = None
+        
+        # First try CODE_BLOCK format
+        code_block_match = re.search(r'\[CODE_BLOCK\]\s*```(?:html|javascript|js)?\n?([\s\S]*?)```\s*\[/CODE_BLOCK\]', ai_response)
+        if code_block_match:
+            code = code_block_match.group(1).strip()
+        else:
+            # Fall back to regular code block
+            code_match = re.search(r'```(?:html|javascript|js)?\n?([\s\S]*?)```', ai_response)
+            if code_match:
+                code = code_match.group(1).strip()
+        
+        if code:
             code_with_badge = inject_zitex_badge(code)
             update_data["$set"]["generated_code"] = code_with_badge
+            # Store code in metadata for frontend to use
+            assistant_msg["metadata"]["generated_code"] = code_with_badge
+            assistant_msg["metadata"]["has_preview"] = True
         
         await self.db.chat_sessions.update_one({"id": session_id}, update_data)
         
@@ -397,27 +458,63 @@ class AIAssistant:
             return "❌ خطأ في توليد الصورة", [], 0
     
     async def _generate_with_gpt(self, session: Dict, message: str, request_type: str, credits: int, settings: Dict) -> Tuple[str, int, bool]:
-        system_prompt = MASTER_SYSTEM_PROMPT + f"\n\nرصيد العميل: {credits} نقطة"
+        # Build context about the project
+        project_data = session.get("project_data", {})
+        stage = session.get("conversation_stage", "initial")
         
-        messages = [{"role": "system", "content": system_prompt}]
+        context = f"""
+رصيد العميل: {credits} نقطة
+مرحلة المحادثة: {stage}
+بيانات المشروع حتى الآن: {project_data}
+"""
         
-        for msg in session.get("messages", [])[-8:]:
-            messages.append({"role": msg["role"], "content": msg["content"]})
+        system_prompt = MASTER_SYSTEM_PROMPT + context
         
-        messages.append({"role": "user", "content": message})
+        # Build conversation history
+        conversation_history = ""
+        for msg in session.get("messages", [])[-12:]:
+            role_label = "المستخدم" if msg["role"] == "user" else "زيتكس"
+            conversation_history += f"\n{role_label}: {msg['content']}\n"
+        
+        full_prompt = f"{conversation_history}\nالمستخدم: {message}"
         
         try:
-            completion = self.openai_client.chat.completions.create(
-                model="gpt-4o",
-                messages=messages,
-                temperature=0.7,
-                max_tokens=6000
-            )
-            response = completion.choices[0].message.content
+            # Try Emergent LLM first (preferred)
+            if EMERGENT_LLM_AVAILABLE and self.emergent_key:
+                chat = LlmChat(
+                    api_key=self.emergent_key,
+                    session_id=session.get("id", "default"),
+                    system_message=system_prompt
+                )
+                chat.with_model("openai", "gpt-4o")
+                
+                user_message = UserMessage(text=full_prompt)
+                response = await chat.send_message(user_message)
             
-            # Determine credits
-            credits_used = 1
-            if '```html' in response or '```javascript' in response:
+            # Fall back to direct OpenAI client
+            elif self.openai_client:
+                messages = [{"role": "system", "content": system_prompt}]
+                for msg in session.get("messages", [])[-12:]:
+                    messages.append({"role": msg["role"], "content": msg["content"]})
+                messages.append({"role": "user", "content": message})
+                
+                completion = self.openai_client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=messages,
+                    temperature=0.7,
+                    max_tokens=8000
+                )
+                response = completion.choices[0].message.content
+            else:
+                return "⚠️ خدمة الذكاء الاصطناعي غير متاحة. يرجى إضافة مفتاح API.", 0, False
+            
+            # Determine credits based on content
+            credits_used = 1  # Base cost for conversation
+            
+            # Check if response contains code (in CODE_BLOCK or regular code block)
+            has_code = '[CODE_BLOCK]' in response or ('```html' in response and '[CODE_BLOCK]' not in response) or '```javascript' in response
+            
+            if has_code:
                 credits_used = SERVICE_COSTS.get(request_type, 15)
             
             has_buttons = "[BUTTONS]" in response
@@ -426,7 +523,7 @@ class AIAssistant:
             
         except Exception as e:
             logger.error(f"GPT error: {e}")
-            return "❌ خطأ في المعالجة", 0, False
+            return f"❌ خطأ في المعالجة: {str(e)}", 0, False
     
     def _generate_title(self, message: str, request_type: str) -> str:
         icons = {"image": "🎨", "video": "🎬", "website": "🌐", "game": "🎮", "webapp": "💻", "pwa": "📱"}

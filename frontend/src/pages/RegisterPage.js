@@ -90,14 +90,13 @@ const RegisterPage = ({ setUser }) => {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name" className="text-gray-300">الاسم الكامل</Label>
+              <Label htmlFor="name" className="text-gray-300">الاسم <span className="text-xs text-gray-500">(اختياري)</span></Label>
               <Input
                 id="name"
                 type="text"
                 placeholder="أحمد محمد"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                required
                 className="bg-slate-800/50 border-slate-700 text-white placeholder:text-gray-500 focus:border-amber-500/50"
                 data-testid="name-input"
               />
