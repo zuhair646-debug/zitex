@@ -5,43 +5,11 @@
 
 ## Session Update - April 11, 2026
 
-### ✅ جميع الميزات المكتملة:
+---
 
-#### 1. نظام البناء التدريجي Progressive Builder
-- الذكاء الاصطناعي يسأل أسئلة استشارية بأزرار قابلة للنقر
-- يبدأ البناء بعد سؤال أو اثنين فقط
-- الكود مخفي عن المستخدم
-- Live Preview يفتح تلقائياً
+## ✅ جميع الميزات المكتملة:
 
-#### 2. نظام القوالب الجاهزة (6 قوالب)
-| القالب | التصنيف | التكلفة | التقنية |
-|--------|---------|---------|---------|
-| صفحة هبوط داكنة | landing | مجاني | Tailwind |
-| متجر ذهبي | ecommerce | 20 نقطة | Tailwind |
-| معرض أعمال بسيط | portfolio | مجاني | Tailwind |
-| لوحة تحكم احترافية | dashboard | 25 نقطة | Tailwind |
-| لعبة منصات 2D | game | 30 نقطة | Phaser.js |
-| لعبة سباق 3D | game | 35 نقطة | Three.js |
-
-#### 3. نظام النشر مع استضافة حقيقية
-- نشر على `subdomain.zitex.app`
-- استخدام Object Storage
-- تكلفة: 100 نقطة
-
-#### 4. دعم كامل للألعاب (7 مكتبات)
-- Phaser 3, Three.js, Babylon.js, PixiJS, Matter.js, Howler.js, GSAP
-
-#### 5. الصوت (TTS) - يعمل! ✅
-- توليد صوت من النص باستخدام OpenAI TTS
-- أصوات متعددة (alloy, echo, fable, onyx, nova, shimmer)
-- سرعة قابلة للتعديل
-
-#### 6. لوحة تحكم إدارة النقاط والعروض ✅
-**المسار:** `/admin/credits`
-
-#### 7. نظام الفيديوهات الاستشاري المتقدم (جديد!) ✅
-**تم إنجازه في هذه الجلسة**
-
+### 1. نظام الفيديوهات الاستشاري المتقدم
 **أنواع الفيديوهات الثلاثة:**
 | النوع | الوصف | التكاليف |
 |-------|-------|----------|
@@ -58,26 +26,103 @@
 6. عرض التكلفة النهائية
 7. التأكيد والتوليد
 
-**الإضافات:**
-- معاينة صوتية: 5 نقاط
-- تعليق صوتي: 10 نقاط
-- صور تجريبية: 5 نقاط × عدد الصور
+---
 
-**الأوامر المدعومة:**
-- `[VIDEO_GENERATE]` - توليد فيديو
-- `[VOICE_PREVIEW]` - معاينة صوتية
-- `[IMAGE_PREVIEW]` - صور تجريبية للمشاهد
-- `[IMAGE_GENERATE]` - توليد صورة
+### 2. نظام رفع الملفات (جديد!) ✅ مجاني
+**أنواع الملفات المدعومة:**
+| النوع | الامتدادات | الاستخدام |
+|-------|-----------|----------|
+| 🖼️ صور | jpg, png, gif, webp | لوجو، منتجات، مرجعية |
+| 🎬 فيديوهات | mp4, webm, mov, avi | فيديو مرجعي |
+| 📄 مستندات | pdf, doc, docx, txt | معلومات إضافية |
+| 🎵 صوتيات | mp3, wav, ogg, m4a | تعليق صوتي جاهز |
+
+**الحد الأقصى:** 50 MB لكل ملف
+
+**APIs:**
+- `POST /api/files/upload` - رفع ملف
+- `GET /api/files/my-files` - ملفاتي
+- `DELETE /api/files/{file_id}` - حذف ملف
+
+---
+
+### 3. نظام النشر للمنصات الاجتماعية (جديد!) ✅ مجاني
+
+**المنصات المدعومة:**
+| المنصة | الأيقونة | حجم الفيديو | حجم الصورة |
+|--------|---------|------------|------------|
+| TikTok | 🎵 | 1080x1920 (9:16) | 1080x1920 |
+| Snapchat | 👻 | 1080x1920 (9:16) | 1080x1920 |
+| Instagram Reels | 📸 | 1080x1920 (9:16) | 1080x1920 |
+| Instagram Story | 📱 | 1080x1920 (9:16) | 1080x1920 |
+| Instagram Post | 🖼️ | 1080x1080 (1:1) | 1080x1080 |
+| YouTube Shorts | ▶️ | 1080x1920 (9:16) | 1280x720 |
+| Facebook | 📘 | 1280x720 (16:9) | 1200x630 |
+| Twitter/X | 🐦 | 1280x720 (16:9) | 1200x675 |
+
+**الميزات:**
+- تصدير محسّن لكل منصة
+- نصائح للنشر لكل منصة
+- تحميل مباشر
+
+**APIs:**
+- `GET /api/social/platforms` - قائمة المنصات
+- `POST /api/social/export` - تصدير للمنصات
+
+---
+
+### 4. الميزات السابقة المكتملة
+
+#### نظام البناء التدريجي Progressive Builder
+- الذكاء الاصطناعي يسأل أسئلة استشارية بأزرار قابلة للنقر
+- يبدأ البناء بعد سؤال أو اثنين فقط
+- الكود مخفي عن المستخدم
+- Live Preview يفتح تلقائياً
+
+#### نظام القوالب الجاهزة (6 قوالب)
+| القالب | التصنيف | التكلفة |
+|--------|---------|---------|
+| صفحة هبوط داكنة | landing | مجاني |
+| متجر ذهبي | ecommerce | 20 نقطة |
+| معرض أعمال بسيط | portfolio | مجاني |
+| لوحة تحكم احترافية | dashboard | 25 نقطة |
+| لعبة منصات 2D | game | 30 نقطة |
+| لعبة سباق 3D | game | 35 نقطة |
+
+#### نظام النشر مع استضافة حقيقية
+- نشر على `subdomain.zitex.app`
+- استخدام Object Storage
+- تكلفة: 100 نقطة
+
+#### دعم كامل للألعاب (7 مكتبات)
+- Phaser 3, Three.js, Babylon.js, PixiJS, Matter.js, Howler.js, GSAP
+
+#### الصوت (TTS) ✅
+- توليد صوت من النص باستخدام OpenAI TTS
+- أصوات: alloy, echo, fable, onyx, nova, shimmer
+
+#### لوحة تحكم إدارة النقاط والعروض ✅
+**المسار:** `/admin/credits`
 
 ---
 
 ## Service Costs (Points) - محدّث
+
+### المجاني:
+| الخدمة | التكلفة |
+|--------|---------|
+| رفع الملفات | مجاني |
+| تصدير للمنصات | مجاني |
+
+### المدفوع:
 | الخدمة | التكلفة |
 |--------|---------|
 | محادثة عادية | 1 |
 | توليد صورة | 5 |
 | صورة شعار (لوغو) | 10 |
 | صور تجريبية | 5 |
+| معاينة صوتية | 5 |
+| تعليق صوتي | 10 |
 | إنشاء موقع | 15 |
 | إنشاء لعبة | 15 |
 | فيديو سينمائي (4ث) | 50 |
@@ -89,8 +134,6 @@
 | فيديو إعلاني (4ث) | 60 |
 | فيديو إعلاني (8ث) | 100 |
 | فيديو إعلاني (12ث) | 150 |
-| معاينة صوتية | 5 |
-| تعليق صوتي | 10 |
 | تعديل | 5 |
 | حفظ كقالب | 10 |
 | تصدير الكود | 50 |
@@ -103,7 +146,7 @@
 - Backend: FastAPI + Motor
 - Database: MongoDB
 - AI: GPT-4o (Chat) + Sora 2 (Video) + GPT Image 1 (Images) + OpenAI TTS (Voice)
-- Hosting: Object Storage via emergentintegrations
+- Storage: Object Storage via emergentintegrations
 - Deployment: Vercel (Frontend) + Railway (Backend)
 
 ## Credentials
@@ -115,16 +158,33 @@
 - Backend: https://zitex-production.up.railway.app
 - GitHub: https://github.com/zuhair646-debug/zitex
 
+---
+
 ## Key Files Changed (This Session)
-1. `/backend/services/ai_chat_service.py`:
+
+### Backend:
+1. `/backend/server.py`:
+   - إضافة نظام رفع الملفات (`/api/files/upload`, `/api/files/my-files`)
+   - إضافة نظام النشر للمنصات (`/api/social/platforms`, `/api/social/export`)
+   - إضافة SOCIAL_PLATFORMS مع مواصفات كل منصة
+   - إضافة نصائح النشر لكل منصة
+
+2. `/backend/services/ai_chat_service.py`:
    - تحديث `MASTER_SYSTEM_PROMPT` لدعم 3 أنواع فيديوهات
    - إضافة `SERVICE_COSTS` للفيديوهات الجديدة
    - إضافة `_process_ai_commands()` لمعالجة أوامر AI
    - إضافة `_generate_video()` لتوليد فيديو باستخدام Sora 2
    - إضافة `_generate_single_image()` لتوليد صور
-   
-2. `/frontend/src/pages/AIChat.js`:
-   - تحديث `renderAttachment()` لدعم أنواع جديدة (audio, audio_preview, image_preview)
+
+### Frontend:
+1. `/frontend/src/pages/AIChat.js`:
+   - إضافة `FileUploadButton` component
+   - إضافة `SocialExportModal` component
+   - إضافة `UploadedFilePreview` component
+   - تحديث `renderAttachment()` لدعم زر النشر
+   - تحديث شريط الأدوات مع الأزرار الجديدة
+
+---
 
 ## What's Working ✅
 - 🔘 أزرار الاختيار التفاعلية
@@ -134,20 +194,18 @@
 - 🚀 نظام النشر الحقيقي
 - 🎮 دعم كامل للألعاب 2D/3D
 - 💰 إدارة النقاط والعروض
-- 🔊 الصوت TTS - يعمل!
+- 🔊 الصوت TTS
 - 🌐 إنشاء المواقع
 - 🖼️ توليد الصور
-- 🎬 **نظام الفيديوهات الاستشاري الجديد - يعمل!**
-
-## Test Results (iteration_7)
-- Backend: 100% (14/14 tests passed)
-- Frontend: 100% (all video chat flow features working)
+- 🎬 نظام الفيديوهات الاستشاري
+- 📤 **رفع الملفات (جديد!)**
+- 📱 **النشر للمنصات الاجتماعية (جديد!)**
 
 ---
 
 ## Upcoming Tasks (P1)
-- تسليم الكود النهائي للنشر على GitHub/Vercel/Railway
-- اختبار توليد الفيديو الفعلي باستخدام Sora 2
+1. تسليم الكود النهائي للنشر على GitHub/Vercel/Railway
+2. اختبار توليد الفيديو الفعلي باستخدام Sora 2
 
 ## Future Tasks (P2-P3)
 - دعم اللغات المتعددة (i18n)

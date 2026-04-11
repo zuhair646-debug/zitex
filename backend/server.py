@@ -520,7 +520,7 @@ async def login(credentials: UserLogin):
             user_doc[field] = 0 if field != 'free_website_trial' else False
     
     user = User(**{k: v for k, v in user_doc.items() if k != 'password'})
-    await log_activity(user.id, "user_login", "create", f"User logged in")
+    await log_activity(user.id, "user_login", "create", "User logged in")
     
     token = create_token(user.id, user.role)
     return {"token": token, "user": user}
@@ -2070,6 +2070,395 @@ async def get_public_offers():
     """Get active credit offers for purchase"""
     offers = await db.offers.find({"is_active": True}, {"_id": 0}).to_list(100)
     return {"offers": offers}
+
+# ============== FILE UPLOAD SYSTEM (مجاني) ==============
+
+# Object Storage Configuration
+STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
+EMERGENT_KEY = os.environ.get('EMERGENT_LLM_KEY')
+APP_NAME = "zitex-files"
+
+import requests as http_requests
+import tempfile
+
+_storage_key = None
+
+def _init_storage():
+    """Initialize storage connection"""
+    global _storage_key
+    if _storage_key:
+        return _storage_key
+    try:
+        resp = http_requests.post(f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_KEY}, timeout=30)
+        resp.raise_for_status()
+        _storage_key = resp.json()["storage_key"]
+        return _storage_key
+    except Exception as e:
+        logger.error(f"Storage init failed: {e}")
+        return None
+
+def _upload_file_to_storage(path: str, data: bytes, content_type: str):
+    """Upload file to object storage"""
+    key = _init_storage()
+    if not key:
+        return None
+    try:
+        resp = http_requests.put(
+            f"{STORAGE_URL}/objects/{path}",
+            headers={"X-Storage-Key": key, "Content-Type": content_type},
+            data=data, timeout=120
+        )
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        logger.error(f"Upload failed: {e}")
+        return None
+
+# Allowed file types
+ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+ALLOWED_VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime", "video/x-msvideo"]
+ALLOWED_DOC_TYPES = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"]
+ALLOWED_AUDIO_TYPES = ["audio/mpeg", "audio/wav", "audio/ogg", "audio/mp4"]
+
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
+
+class FileUploadResponse(BaseModel):
+    id: str
+    filename: str
+    file_type: str
+    file_url: str
+    size: int
+    created_at: str
+
+@api_router.post("/files/upload", response_model=FileUploadResponse)
+async def upload_file(
+    file: UploadFile = File(...),
+    file_category: str = Form("general"),  # general, logo, product, reference, document
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    رفع ملف (مجاني)
+    - صور: jpg, png, gif, webp
+    - فيديوهات: mp4, webm, mov, avi
+    - مستندات: pdf, doc, docx, txt
+    - صوتيات: mp3, wav, ogg, m4a
+    """
+    # Check file size
+    contents = await file.read()
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail=f"حجم الملف أكبر من الحد المسموح ({MAX_FILE_SIZE // (1024*1024)} MB)")
+    
+    # Determine file type
+    content_type = file.content_type or "application/octet-stream"
+    
+    if content_type in ALLOWED_IMAGE_TYPES:
+        file_type = "image"
+    elif content_type in ALLOWED_VIDEO_TYPES:
+        file_type = "video"
+    elif content_type in ALLOWED_DOC_TYPES:
+        file_type = "document"
+    elif content_type in ALLOWED_AUDIO_TYPES:
+        file_type = "audio"
+    else:
+        raise HTTPException(status_code=400, detail=f"نوع الملف غير مدعوم: {content_type}")
+    
+    # Generate unique filename
+    file_id = str(uuid.uuid4())
+    ext = file.filename.split('.')[-1] if '.' in file.filename else 'bin'
+    storage_path = f"{APP_NAME}/{current_user['user_id']}/{file_category}/{file_id}.{ext}"
+    
+    # Upload to storage
+    upload_result = _upload_file_to_storage(storage_path, contents, content_type)
+    
+    if not upload_result:
+        raise HTTPException(status_code=500, detail="فشل رفع الملف. حاول مرة أخرى")
+    
+    # Generate public URL
+    file_url = f"https://integrations.emergentagent.com/objstore/{APP_NAME}/{current_user['user_id']}/{file_category}/{file_id}.{ext}"
+    
+    # Save to database
+    file_doc = {
+        "id": file_id,
+        "user_id": current_user['user_id'],
+        "filename": file.filename,
+        "file_type": file_type,
+        "file_category": file_category,
+        "content_type": content_type,
+        "storage_path": storage_path,
+        "file_url": file_url,
+        "size": len(contents),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.uploaded_files.insert_one(file_doc)
+    
+    await log_activity(
+        current_user['user_id'],
+        "file_uploaded",
+        "create",
+        f"Uploaded {file_type}: {file.filename}",
+        {"file_category": file_category, "size": len(contents)}
+    )
+    
+    return FileUploadResponse(
+        id=file_id,
+        filename=file.filename,
+        file_type=file_type,
+        file_url=file_url,
+        size=len(contents),
+        created_at=file_doc["created_at"]
+    )
+
+@api_router.get("/files/my-files")
+async def get_my_files(
+    file_type: Optional[str] = None,
+    file_category: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """استرجاع ملفات المستخدم"""
+    query = {"user_id": current_user['user_id']}
+    if file_type:
+        query["file_type"] = file_type
+    if file_category:
+        query["file_category"] = file_category
+    
+    files = await db.uploaded_files.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return {"files": files}
+
+@api_router.delete("/files/{file_id}")
+async def delete_file(file_id: str, current_user: dict = Depends(get_current_user)):
+    """حذف ملف"""
+    result = await db.uploaded_files.delete_one({
+        "id": file_id,
+        "user_id": current_user['user_id']
+    })
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="الملف غير موجود")
+    return {"message": "تم حذف الملف بنجاح"}
+
+# ============== SOCIAL MEDIA EXPORT (مجاني) ==============
+
+# Social media platform specifications
+SOCIAL_PLATFORMS = {
+    "tiktok": {
+        "name": "TikTok",
+        "icon": "🎵",
+        "video_specs": {"width": 1080, "height": 1920, "aspect": "9:16", "max_duration": 180},
+        "image_specs": {"width": 1080, "height": 1920}
+    },
+    "snapchat": {
+        "name": "Snapchat",
+        "icon": "👻",
+        "video_specs": {"width": 1080, "height": 1920, "aspect": "9:16", "max_duration": 60},
+        "image_specs": {"width": 1080, "height": 1920}
+    },
+    "instagram_reels": {
+        "name": "Instagram Reels",
+        "icon": "📸",
+        "video_specs": {"width": 1080, "height": 1920, "aspect": "9:16", "max_duration": 90},
+        "image_specs": {"width": 1080, "height": 1920}
+    },
+    "instagram_story": {
+        "name": "Instagram Story",
+        "icon": "📱",
+        "video_specs": {"width": 1080, "height": 1920, "aspect": "9:16", "max_duration": 15},
+        "image_specs": {"width": 1080, "height": 1920}
+    },
+    "instagram_post": {
+        "name": "Instagram Post",
+        "icon": "🖼️",
+        "video_specs": {"width": 1080, "height": 1080, "aspect": "1:1", "max_duration": 60},
+        "image_specs": {"width": 1080, "height": 1080}
+    },
+    "youtube_shorts": {
+        "name": "YouTube Shorts",
+        "icon": "▶️",
+        "video_specs": {"width": 1080, "height": 1920, "aspect": "9:16", "max_duration": 60},
+        "image_specs": {"width": 1280, "height": 720}
+    },
+    "facebook": {
+        "name": "Facebook",
+        "icon": "📘",
+        "video_specs": {"width": 1280, "height": 720, "aspect": "16:9", "max_duration": 240},
+        "image_specs": {"width": 1200, "height": 630}
+    },
+    "twitter": {
+        "name": "Twitter/X",
+        "icon": "🐦",
+        "video_specs": {"width": 1280, "height": 720, "aspect": "16:9", "max_duration": 140},
+        "image_specs": {"width": 1200, "height": 675}
+    }
+}
+
+class SocialExportRequest(BaseModel):
+    asset_id: str  # ID of the video or image to export
+    platforms: List[str]  # List of platform keys
+
+class SocialExportResult(BaseModel):
+    platform: str
+    platform_name: str
+    icon: str
+    status: str  # ready, processing, error
+    download_url: Optional[str] = None
+    specs: dict
+    tips: List[str]
+
+@api_router.get("/social/platforms")
+async def get_social_platforms():
+    """استرجاع قائمة المنصات الاجتماعية المدعومة"""
+    platforms = []
+    for key, specs in SOCIAL_PLATFORMS.items():
+        platforms.append({
+            "id": key,
+            "name": specs["name"],
+            "icon": specs["icon"],
+            "video_specs": specs["video_specs"],
+            "image_specs": specs["image_specs"]
+        })
+    return {"platforms": platforms}
+
+@api_router.post("/social/export")
+async def export_to_social(
+    request: SocialExportRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    تصدير فيديو/صورة لمنصات التواصل الاجتماعي (مجاني)
+    يقوم بإعداد الملف بالمواصفات المناسبة لكل منصة
+    """
+    # Get the asset
+    asset = await db.generated_assets.find_one(
+        {"id": request.asset_id, "user_id": current_user['user_id']},
+        {"_id": 0}
+    )
+    
+    if not asset:
+        # Try uploaded files
+        asset = await db.uploaded_files.find_one(
+            {"id": request.asset_id, "user_id": current_user['user_id']},
+            {"_id": 0}
+        )
+    
+    if not asset:
+        raise HTTPException(status_code=404, detail="الملف غير موجود")
+    
+    asset_type = asset.get("asset_type") or asset.get("file_type")
+    asset_url = asset.get("url") or asset.get("file_url")
+    
+    results = []
+    
+    for platform_key in request.platforms:
+        if platform_key not in SOCIAL_PLATFORMS:
+            results.append(SocialExportResult(
+                platform=platform_key,
+                platform_name="غير معروف",
+                icon="❓",
+                status="error",
+                specs={},
+                tips=["المنصة غير مدعومة"]
+            ))
+            continue
+        
+        platform = SOCIAL_PLATFORMS[platform_key]
+        specs = platform["video_specs"] if asset_type == "video" else platform["image_specs"]
+        
+        # Generate tips for the platform
+        tips = _get_platform_tips(platform_key, asset_type)
+        
+        results.append(SocialExportResult(
+            platform=platform_key,
+            platform_name=platform["name"],
+            icon=platform["icon"],
+            status="ready",
+            download_url=asset_url,  # Original URL - frontend can handle resize
+            specs=specs,
+            tips=tips
+        ))
+    
+    # Log activity
+    await log_activity(
+        current_user['user_id'],
+        "social_export",
+        "create",
+        f"Exported to: {', '.join(request.platforms)}",
+        {"asset_id": request.asset_id, "platforms": request.platforms}
+    )
+    
+    return {"exports": [r.model_dump() for r in results]}
+
+def _get_platform_tips(platform: str, asset_type: str) -> List[str]:
+    """نصائح لكل منصة"""
+    tips_db = {
+        "tiktok": {
+            "video": [
+                "استخدم موسيقى ترند لزيادة الانتشار",
+                "أضف نص على الفيديو في أول 3 ثواني",
+                "استخدم هاشتاقات شائعة (3-5 هاشتاقات)"
+            ],
+            "image": ["حوّل الصورة إلى فيديو قصير للأفضل"]
+        },
+        "snapchat": {
+            "video": [
+                "اجعل الرسالة واضحة في أول ثانيتين",
+                "استخدم فلاتر Snapchat لزيادة التفاعل"
+            ],
+            "image": ["أضف ملصقات تفاعلية من Snapchat"]
+        },
+        "instagram_reels": {
+            "video": [
+                "استخدم موسيقى من مكتبة Instagram",
+                "أضف نص وملصقات تفاعلية",
+                "انشر في أوقات الذروة (12-3 م، 7-9 م)"
+            ],
+            "image": ["حوّلها إلى Reel للوصول أكبر"]
+        },
+        "instagram_story": {
+            "video": [
+                "أضف استطلاع أو سؤال لزيادة التفاعل",
+                "استخدم موسيقى ترند"
+            ],
+            "image": ["أضف رابط أو CTA واضح"]
+        },
+        "instagram_post": {
+            "video": [
+                "اكتب كابشن جذاب (أول سطرين مهمين)",
+                "استخدم 20-30 هاشتاق"
+            ],
+            "image": ["استخدم ألوان متناسقة مع هوية حسابك"]
+        },
+        "youtube_shorts": {
+            "video": [
+                "ابدأ بـ hook قوي في أول ثانية",
+                "أضف عنوان جذاب ووصف SEO",
+                "استخدم #Shorts في الوصف"
+            ],
+            "image": ["يفضل الفيديو على YouTube"]
+        },
+        "facebook": {
+            "video": [
+                "أضف ترجمة للفيديو (85% يشاهدون بدون صوت)",
+                "الطول المثالي 1-2 دقيقة"
+            ],
+            "image": ["اكتب نص مصاحب مفصل"]
+        },
+        "twitter": {
+            "video": [
+                "اجعله قصيراً ومباشراً",
+                "أضف نص في التغريدة يشرح المحتوى"
+            ],
+            "image": ["اكتب تغريدة جذابة مع الصورة"]
+        }
+    }
+    
+    return tips_db.get(platform, {}).get(asset_type, ["تأكد من جودة المحتوى"])
+
+@api_router.get("/social/export-history")
+async def get_export_history(current_user: dict = Depends(get_current_user)):
+    """سجل التصديرات للمنصات الاجتماعية"""
+    history = await db.activity_logs.find(
+        {"user_id": current_user['user_id'], "action": "social_export"},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    return {"history": history}
 
 # ============== APP SETUP ==============
 

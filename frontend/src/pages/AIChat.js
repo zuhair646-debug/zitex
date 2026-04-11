@@ -10,7 +10,7 @@ import {
   Volume2, VolumeX, Copy, Check, Play, X, ArrowUp,
   Code, Eye, EyeOff, Gamepad2, RefreshCw, Maximize2, Minimize2,
   Coins, Gift, Paperclip, Zap, Save, GitFork, Settings2, Bot,
-  Layout, Rocket, Link, ExternalLink, BookMarked
+  Layout, Rocket, Link, ExternalLink, BookMarked, Upload, Share2, FileText
 } from 'lucide-react';
 
 // ============== Zitex Logo Animation ==============
@@ -164,6 +164,250 @@ const ChoiceButtons = memo(({ buttons, onSelect }) => (
         {btn}
       </button>
     ))}
+  </div>
+));
+
+// ============== File Upload Component ==============
+const FileUploadButton = memo(({ onFileSelect }) => {
+  const fileInputRef = useRef(null);
+  
+  const handleClick = () => fileInputRef.current?.click();
+  
+  const handleChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    // Check file size (50MB limit)
+    if (file.size > 50 * 1024 * 1024) {
+      toast.error('حجم الملف أكبر من 50 MB');
+      return;
+    }
+    
+    onFileSelect(file);
+    e.target.value = ''; // Reset input
+  };
+  
+  return (
+    <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        accept="image/*,video/*,.pdf,.doc,.docx,.txt,audio/*"
+        onChange={handleChange}
+      />
+      <Button
+        size="icon"
+        variant="ghost"
+        onClick={handleClick}
+        className="h-9 w-9 text-gray-400 hover:text-amber-400 hover:bg-amber-500/10"
+        title="رفع ملف"
+      >
+        <Upload className="w-4 h-4" />
+      </Button>
+    </>
+  );
+});
+
+// ============== Social Media Export Modal ==============
+const SOCIAL_PLATFORMS = [
+  { id: 'tiktok', name: 'TikTok', icon: '🎵', color: 'from-pink-500 to-purple-500' },
+  { id: 'snapchat', name: 'Snapchat', icon: '👻', color: 'from-yellow-400 to-yellow-500' },
+  { id: 'instagram_reels', name: 'Instagram Reels', icon: '📸', color: 'from-purple-500 to-pink-500' },
+  { id: 'instagram_story', name: 'Instagram Story', icon: '📱', color: 'from-orange-500 to-pink-500' },
+  { id: 'instagram_post', name: 'Instagram Post', icon: '🖼️', color: 'from-pink-500 to-orange-500' },
+  { id: 'youtube_shorts', name: 'YouTube Shorts', icon: '▶️', color: 'from-red-500 to-red-600' },
+  { id: 'facebook', name: 'Facebook', icon: '📘', color: 'from-blue-600 to-blue-700' },
+  { id: 'twitter', name: 'Twitter/X', icon: '🐦', color: 'from-blue-400 to-blue-500' }
+];
+
+const SocialExportModal = memo(({ isOpen, onClose, assetId, assetUrl, assetType }) => {
+  const [selectedPlatforms, setSelectedPlatforms] = useState([]);
+  const [exportResults, setExportResults] = useState(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const API_URL = process.env.REACT_APP_BACKEND_URL;
+  
+  const togglePlatform = (platformId) => {
+    setSelectedPlatforms(prev => 
+      prev.includes(platformId) 
+        ? prev.filter(p => p !== platformId)
+        : [...prev, platformId]
+    );
+  };
+  
+  const handleExport = async () => {
+    if (selectedPlatforms.length === 0) {
+      toast.error('اختر منصة واحدة على الأقل');
+      return;
+    }
+    
+    setIsExporting(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/api/social/export`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          asset_id: assetId,
+          platforms: selectedPlatforms
+        })
+      });
+      
+      const data = await response.json();
+      if (response.ok) {
+        setExportResults(data.exports);
+        toast.success('تم تجهيز الملفات للتصدير!');
+      } else {
+        toast.error(data.detail || 'فشل التصدير');
+      }
+    } catch (error) {
+      toast.error('خطأ في الاتصال');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+  
+  if (!isOpen) return null;
+  
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
+      <div 
+        className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="p-4 border-b border-slate-700 flex items-center justify-between bg-gradient-to-r from-purple-500/10 to-pink-500/10">
+          <div className="flex items-center gap-3">
+            <Share2 className="w-6 h-6 text-purple-400" />
+            <div>
+              <h2 className="text-lg font-bold text-white">تصدير للمنصات الاجتماعية</h2>
+              <p className="text-xs text-gray-400">مجاني - اختر المنصات المطلوبة</p>
+            </div>
+          </div>
+          <Button size="icon" variant="ghost" onClick={onClose}>
+            <X className="w-5 h-5" />
+          </Button>
+        </div>
+        
+        {/* Content */}
+        <div className="p-4 overflow-y-auto max-h-[60vh]">
+          {!exportResults ? (
+            <>
+              {/* Platform Selection */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {SOCIAL_PLATFORMS.map(platform => (
+                  <button
+                    key={platform.id}
+                    onClick={() => togglePlatform(platform.id)}
+                    className={`p-3 rounded-xl border-2 transition-all ${
+                      selectedPlatforms.includes(platform.id)
+                        ? `bg-gradient-to-br ${platform.color} border-transparent text-white shadow-lg`
+                        : 'bg-slate-800/50 border-slate-700 hover:border-slate-600 text-gray-300'
+                    }`}
+                  >
+                    <span className="text-2xl block mb-1">{platform.icon}</span>
+                    <span className="text-xs font-medium">{platform.name}</span>
+                  </button>
+                ))}
+              </div>
+              
+              {/* Export Button */}
+              <div className="mt-6">
+                <Button
+                  onClick={handleExport}
+                  disabled={isExporting || selectedPlatforms.length === 0}
+                  className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 h-12 text-lg"
+                >
+                  {isExporting ? (
+                    <><Loader2 className="w-5 h-5 animate-spin me-2" /> جاري التجهيز...</>
+                  ) : (
+                    <><Share2 className="w-5 h-5 me-2" /> تصدير ({selectedPlatforms.length})</>
+                  )}
+                </Button>
+              </div>
+            </>
+          ) : (
+            /* Export Results */
+            <div className="space-y-3">
+              {exportResults.map(result => (
+                <div key={result.platform} className="p-4 bg-slate-800/50 rounded-xl border border-slate-700">
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className="text-2xl">{result.icon}</span>
+                    <div className="flex-1">
+                      <h4 className="font-medium text-white">{result.platform_name}</h4>
+                      <p className="text-xs text-gray-400">
+                        {result.specs.width}x{result.specs.height} • {result.specs.aspect}
+                      </p>
+                    </div>
+                    {result.download_url && (
+                      <a
+                        href={result.download_url}
+                        download
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1.5 bg-green-500/20 text-green-400 rounded-lg text-sm font-medium hover:bg-green-500/30 flex items-center gap-1"
+                      >
+                        <Download className="w-4 h-4" /> تحميل
+                      </a>
+                    )}
+                  </div>
+                  {/* Tips */}
+                  <div className="space-y-1">
+                    {result.tips?.map((tip, i) => (
+                      <p key={i} className="text-xs text-amber-300/80 flex items-start gap-2">
+                        <span className="text-amber-400">💡</span> {tip}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              
+              <Button
+                onClick={() => { setExportResults(null); setSelectedPlatforms([]); }}
+                variant="outline"
+                className="w-full mt-4"
+              >
+                تصدير لمنصات أخرى
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+// ============== Uploaded File Preview ==============
+const UploadedFilePreview = memo(({ file, onRemove, onSend }) => (
+  <div className="mx-4 mb-2 p-3 bg-slate-800/70 border border-slate-700 rounded-xl flex items-center gap-3">
+    {file.type.startsWith('image/') ? (
+      <img src={URL.createObjectURL(file)} alt="Preview" className="w-14 h-14 object-cover rounded-lg" />
+    ) : file.type.startsWith('video/') ? (
+      <div className="w-14 h-14 bg-orange-500/20 rounded-lg flex items-center justify-center">
+        <Video className="w-6 h-6 text-orange-400" />
+      </div>
+    ) : file.type.startsWith('audio/') ? (
+      <div className="w-14 h-14 bg-purple-500/20 rounded-lg flex items-center justify-center">
+        <Volume2 className="w-6 h-6 text-purple-400" />
+      </div>
+    ) : (
+      <div className="w-14 h-14 bg-blue-500/20 rounded-lg flex items-center justify-center">
+        <FileText className="w-6 h-6 text-blue-400" />
+      </div>
+    )}
+    <div className="flex-1 min-w-0">
+      <p className="text-white text-sm truncate">{file.name}</p>
+      <p className="text-xs text-gray-400">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+    </div>
+    <Button size="icon" variant="ghost" onClick={onRemove} className="text-red-400 hover:bg-red-500/20">
+      <X className="w-4 h-4" />
+    </Button>
+    <Button onClick={onSend} className="bg-amber-500 hover:bg-amber-600 text-black">
+      <Send className="w-4 h-4 me-1" /> أرسل
+    </Button>
   </div>
 ));
 
@@ -624,6 +868,14 @@ const AIChat = ({ user }) => {
     speed: 1.0
   });
   
+  // File Upload State
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  
+  // Social Export State
+  const [showSocialExport, setShowSocialExport] = useState(false);
+  const [exportAsset, setExportAsset] = useState(null);
+  
   // Refs
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -729,6 +981,78 @@ const AIChat = ({ user }) => {
       console.error('Error fetching credits:', error);
     }
   };
+
+  // Upload file to backend
+  const handleFileUpload = useCallback(async (file, category = 'general') => {
+    setIsUploading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('file_category', category);
+      
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/files/upload`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok) {
+        toast.success('تم رفع الملف بنجاح!');
+        return data;
+      } else {
+        toast.error(data.detail || 'فشل رفع الملف');
+        return null;
+      }
+    } catch (error) {
+      toast.error('خطأ في رفع الملف');
+      return null;
+    } finally {
+      setIsUploading(false);
+    }
+  }, []);
+  
+  // Handle file selection for chat
+  const handleFileSelect = useCallback((file) => {
+    setUploadedFile(file);
+  }, []);
+  
+  // Send uploaded file as message
+  const handleSendFile = useCallback(async () => {
+    if (!uploadedFile || !currentSession) return;
+    
+    // Upload file first
+    const uploadResult = await handleFileUpload(uploadedFile, 
+      uploadedFile.type.startsWith('image/') ? 'reference' : 
+      uploadedFile.type.startsWith('video/') ? 'reference' : 'document'
+    );
+    
+    if (uploadResult) {
+      // Send message with file reference
+      const fileMessage = uploadedFile.type.startsWith('image/') 
+        ? `[رفعت صورة: ${uploadedFile.name}]\nرابط الصورة: ${uploadResult.file_url}`
+        : uploadedFile.type.startsWith('video/')
+        ? `[رفعت فيديو مرجعي: ${uploadedFile.name}]\nرابط الفيديو: ${uploadResult.file_url}`
+        : `[رفعت مستند: ${uploadedFile.name}]\nرابط الملف: ${uploadResult.file_url}`;
+      
+      setInputMessage(fileMessage);
+      setUploadedFile(null);
+      
+      // Auto send
+      setTimeout(() => {
+        const sendBtn = document.querySelector('[data-testid="send-btn"]');
+        if (sendBtn) sendBtn.click();
+      }, 100);
+    }
+  }, [uploadedFile, currentSession, handleFileUpload]);
+  
+  // Open social export modal
+  const openSocialExport = useCallback((asset) => {
+    setExportAsset(asset);
+    setShowSocialExport(true);
+  }, []);
 
   const fetchSessions = useCallback(async () => {
     setSessionsLoading(true);
@@ -1198,9 +1522,12 @@ const AIChat = ({ user }) => {
                 مشهد {attachment.scene}
               </div>
             )}
-            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
               <Button size="sm" onClick={() => downloadAsset(attachment.url, 'zitex-image.png')} className="bg-white/20 backdrop-blur">
                 <Download className="w-4 h-4 me-1" /> تحميل
+              </Button>
+              <Button size="sm" onClick={() => openSocialExport({ id: attachment.id || 'temp', url: attachment.url, type: 'image' })} className="bg-purple-500/80 backdrop-blur hover:bg-purple-500">
+                <Share2 className="w-4 h-4 me-1" /> نشر
               </Button>
             </div>
           </div>
@@ -1223,6 +1550,9 @@ const AIChat = ({ user }) => {
             <div className="flex gap-2 mt-2">
               <Button size="sm" onClick={() => downloadAsset(attachment.url, 'zitex-video.mp4')} className="bg-orange-500 hover:bg-orange-600">
                 <Download className="w-4 h-4 me-1" /> تحميل
+              </Button>
+              <Button size="sm" onClick={() => openSocialExport({ id: attachment.id || 'temp', url: attachment.url, type: 'video' })} className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
+                <Share2 className="w-4 h-4 me-1" /> نشر للمنصات
               </Button>
             </div>
           </div>
@@ -1473,21 +1803,27 @@ const AIChat = ({ user }) => {
                       {/* Bottom Tools */}
                       <div className="flex items-center justify-between px-3 py-2 border-t border-slate-700/30">
                         <div className="flex items-center gap-1">
-                          {/* Attach File (Disabled) */}
-                          <button className="p-2 rounded-lg text-gray-500 hover:text-gray-400 hover:bg-slate-700/50 transition-all opacity-50 cursor-not-allowed" title="رفع ملفات (قريباً)" disabled>
-                            <Paperclip className="w-4 h-4" />
-                          </button>
+                          {/* Attach File - NOW ACTIVE! */}
+                          <FileUploadButton onFileSelect={handleFileSelect} />
                           
-                          {/* Save (Disabled) */}
-                          <button className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-gray-500 hover:text-gray-400 hover:bg-slate-700/50 transition-all text-xs opacity-50 cursor-not-allowed" title="حفظ (قريباً)" disabled>
+                          {/* Save Template */}
+                          <button 
+                            onClick={() => setShowTemplatesPanel(true)}
+                            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-gray-400 hover:text-amber-400 hover:bg-amber-500/10 transition-all text-xs" 
+                            title="القوالب"
+                          >
                             <Save className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline">Save</span>
+                            <span className="hidden sm:inline">قوالب</span>
                           </button>
                           
-                          {/* Fork (Disabled) */}
-                          <button className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-gray-500 hover:text-gray-400 hover:bg-slate-700/50 transition-all text-xs opacity-50 cursor-not-allowed" title="نسخ (قريباً)" disabled>
-                            <GitFork className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline">Fork</span>
+                          {/* Social Export */}
+                          <button 
+                            onClick={() => setShowSocialExport(true)}
+                            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-gray-400 hover:text-purple-400 hover:bg-purple-500/10 transition-all text-xs" 
+                            title="نشر للمنصات"
+                          >
+                            <Share2 className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">نشر</span>
                           </button>
                           
                           {/* Ultra Mode */}
@@ -1649,6 +1985,26 @@ const AIChat = ({ user }) => {
           </div>
         </div>
       )}
+      
+      {/* Uploaded File Preview */}
+      {uploadedFile && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 w-full max-w-lg">
+          <UploadedFilePreview 
+            file={uploadedFile} 
+            onRemove={() => setUploadedFile(null)} 
+            onSend={handleSendFile}
+          />
+        </div>
+      )}
+      
+      {/* Social Export Modal */}
+      <SocialExportModal
+        isOpen={showSocialExport}
+        onClose={() => { setShowSocialExport(false); setExportAsset(null); }}
+        assetId={exportAsset?.id}
+        assetUrl={exportAsset?.url}
+        assetType={exportAsset?.type}
+      />
     </div>
   );
 };
