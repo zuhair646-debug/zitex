@@ -20,6 +20,7 @@ import AdminClients from '@/pages/AdminClients';
 import AdminWebsites from '@/pages/AdminWebsites';
 import AdminSettings from '@/pages/AdminSettings';
 import AdminActivity from '@/pages/AdminActivity';
+import AdminCredits from '@/pages/AdminCredits';
 import AIChat from '@/pages/AIChat';
 import ProjectsPage from '@/pages/ProjectsPage';
 import '@/App.css';
@@ -85,6 +86,7 @@ function App() {
           <Route path="/admin/websites" element={<ProtectedRoute adminOnly><AdminWebsites user={user} /></ProtectedRoute>} />
           <Route path="/admin/settings" element={<ProtectedRoute adminOnly><AdminSettings user={user} /></ProtectedRoute>} />
           <Route path="/admin/activity" element={<ProtectedRoute adminOnly><AdminActivity user={user} /></ProtectedRoute>} />
+          <Route path="/admin/credits" element={<ProtectedRoute adminOnly><AdminCredits user={user} /></ProtectedRoute>} />
           <Route path="/chat" element={<ProtectedRoute><AIChat user={user} /></ProtectedRoute>} />
           <Route path="/projects" element={<ProtectedRoute><ProjectsPage user={user} /></ProtectedRoute>} />
         </Routes>

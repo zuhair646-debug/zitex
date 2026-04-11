@@ -754,8 +754,42 @@ class AIAssistant:
         return await self.db.video_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
     
     async def generate_tts(self, text: str, provider: str = "openai", voice: str = "alloy", speed: float = 1.0) -> Optional[str]:
-        # TTS disabled for now
-        return None
+        """توليد صوت من النص باستخدام OpenAI TTS"""
+        if not text or len(text.strip()) == 0:
+            return None
+        
+        # Limit text length
+        text = text[:4000]
+        
+        # Remove buttons and code blocks from text
+        import re
+        text = re.sub(r'\[BUTTONS\][\s\S]*?\[/BUTTONS\]', '', text)
+        text = re.sub(r'\[CODE_BLOCK\][\s\S]*?\[/CODE_BLOCK\]', '', text)
+        text = re.sub(r'```[\s\S]*?```', '', text)
+        text = text.strip()
+        
+        if not text:
+            return None
+        
+        try:
+            from emergentintegrations.llm.openai import OpenAITextToSpeech
+            
+            tts = OpenAITextToSpeech(api_key=self.emergent_key)
+            
+            # Generate audio as base64
+            audio_base64 = await tts.generate_speech_base64(
+                text=text,
+                model="tts-1",
+                voice=voice,
+                speed=speed
+            )
+            
+            # Return as data URL
+            return f"data:audio/mp3;base64,{audio_base64}"
+            
+        except Exception as e:
+            logger.error(f"TTS error: {e}")
+            return None
     
     async def update_session_code(self, session_id: str, user_id: str, code: str) -> bool:
         code_with_badge = inject_zitex_badge(code)

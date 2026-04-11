@@ -5,20 +5,15 @@
 
 ## Session Update - April 11, 2026
 
-### ✅ الميزات المكتملة:
+### ✅ جميع الميزات المكتملة:
 
 #### 1. نظام البناء التدريجي Progressive Builder
 - الذكاء الاصطناعي يسأل أسئلة استشارية بأزرار قابلة للنقر
 - يبدأ البناء بعد سؤال أو اثنين فقط
-- الكود يُرسل في `[CODE_BLOCK]` مخفي عن المستخدم
-- Live Preview يفتح تلقائياً ويعرض الموقع
+- الكود مخفي عن المستخدم
+- Live Preview يفتح تلقائياً
 
-#### 2. أزرار الاختيار التفاعلية
-- صيغة `[BUTTONS]...[/BUTTONS]` للأزرار
-- الضغط على الزر يُرسل الاختيار مباشرة
-- أزرار جميلة بتصميم ذهبي
-
-#### 3. نظام القوالب الجاهزة (6 قوالب)
+#### 2. نظام القوالب الجاهزة (6 قوالب)
 | القالب | التصنيف | التكلفة | التقنية |
 |--------|---------|---------|---------|
 | صفحة هبوط داكنة | landing | مجاني | Tailwind |
@@ -28,40 +23,40 @@
 | لعبة منصات 2D | game | 30 نقطة | Phaser.js |
 | لعبة سباق 3D | game | 35 نقطة | Three.js |
 
-#### 4. نظام النشر مع استضافة حقيقية
-- نشر المشروع على `subdomain.zitex.app`
-- استخدام Object Storage للاستضافة
-- التحقق من توفر النطاق
-- تكلفة النشر: 100 نقطة
+#### 3. نظام النشر مع استضافة حقيقية
+- نشر على `subdomain.zitex.app`
+- استخدام Object Storage
+- تكلفة: 100 نقطة
 
-#### 5. دعم كامل للألعاب
-**مكتبات الألعاب المتاحة:**
-| المكتبة | الاستخدام | CDN |
-|---------|-----------|-----|
-| Phaser 3 | ألعاب 2D | cdn.jsdelivr.net/npm/phaser@3.70.0 |
-| Three.js | ألعاب 3D | cdn.jsdelivr.net/npm/three@0.160.0 |
-| Babylon.js | ألعاب 3D احترافية | cdn.babylonjs.com |
-| PixiJS | رسوميات 2D سريعة | cdn.jsdelivr.net/npm/pixi.js@7.3.2 |
-| Matter.js | فيزياء 2D | cdn.jsdelivr.net/npm/matter-js@0.19.0 |
-| Howler.js | صوتيات | cdn.jsdelivr.net/npm/howler@2.2.4 |
-| GSAP | تحريك احترافي | cdn.jsdelivr.net/npm/gsap@3.12.4 |
+#### 4. دعم كامل للألعاب (7 مكتبات)
+- Phaser 3, Three.js, Babylon.js, PixiJS, Matter.js, Howler.js, GSAP
 
-**أنواع الألعاب المدعومة:**
-- ألعاب منصات (Platformer) - Phaser
-- ألعاب ألغاز (Puzzle) - Matter.js
-- ألعاب سباق (Racing) - Three.js
-- ألعاب إطلاق نار (Shooter) - Phaser/Three.js
-- ألعاب كروت (Cards) - PixiJS
-- ألعاب RPG - Phaser/Babylon.js
-- ألعاب محاكاة (Simulation) - Babylon.js
+#### 5. الصوت (TTS) - تم إصلاحه! ✅
+- توليد صوت من النص باستخدام OpenAI TTS
+- أصوات متعددة (alloy, echo, fable, onyx, nova, shimmer)
+- سرعة قابلة للتعديل
 
-#### 6. Live Preview محسّن
-- يفتح تلقائياً عند توليد الكود
-- زر نسخ الكود
-- زر تصدير الكود (50 نقطة)
-- زر حفظ كقالب (10 نقاط)
-- زر نشر على الإنترنت (100 نقطة)
-- زر تحديث وملء الشاشة
+#### 6. لوحة تحكم إدارة النقاط والعروض (جديد!) ✅
+**المسار:** `/admin/credits`
+
+**الميزات:**
+- عرض إحصائيات النقاط (إجمالي، متوسط، عدد المستخدمين)
+- تعديل نقاط المستخدمين مباشرة
+- إدارة أسعار الخدمات (موقع، لعبة، صورة، تصدير، نشر)
+- إنشاء عروض شراء نقاط (مع خصومات)
+- تفعيل/تعطيل العروض
+- حذف العروض
+
+**API Endpoints:**
+- `GET /api/admin/users` - قائمة المستخدمين
+- `PUT /api/admin/users/{id}/credits` - تعديل النقاط
+- `GET /api/admin/service-pricing` - أسعار الخدمات
+- `PUT /api/admin/service-pricing` - تحديث الأسعار
+- `GET /api/admin/offers` - قائمة العروض
+- `POST /api/admin/offers` - إضافة عرض
+- `PUT /api/admin/offers/{id}` - تعديل عرض
+- `DELETE /api/admin/offers/{id}` - حذف عرض
+- `GET /api/offers` - العروض النشطة (للعملاء)
 
 ---
 
@@ -74,18 +69,16 @@
 | إنشاء لعبة | 15 |
 | تعديل | 5 |
 | حفظ كقالب | 10 |
-| استخدام قالب مجاني | 0 |
-| استخدام قالب Premium | 5-35 |
 | تصدير الكود | 50 |
 | نشر على الإنترنت | 100 |
 
 ---
 
 ## Technical Stack
-- Frontend: React + Tailwind + Shadcn UI (Vercel)
-- Backend: FastAPI + Motor (Railway)
+- Frontend: React + Tailwind + Shadcn UI
+- Backend: FastAPI + Motor
 - Database: MongoDB
-- AI: GPT-4o via emergentintegrations
+- AI: GPT-4o + OpenAI TTS via emergentintegrations
 - Hosting: Object Storage via emergentintegrations
 - Deployment: Vercel (Frontend) + Railway (Backend)
 
@@ -99,27 +92,28 @@
 - GitHub: https://github.com/zuhair646-debug/zitex
 
 ## Key Files Changed
-1. `/backend/services/ai_chat_service.py` - نظام البناء + القوالب + النشر + الألعاب
-2. `/backend/routers/chat_router.py` - APIs للقوالب والنشر والألعاب
-3. `/frontend/src/pages/AIChat.js` - واجهة القوالب + أزرار النشر
-4. `/frontend/src/pages/RegisterPage.js` - حقل الاسم اختياري
+1. `/backend/services/ai_chat_service.py` - TTS, القوالب, النشر, الألعاب
+2. `/backend/routers/chat_router.py` - TTS endpoint
+3. `/backend/server.py` - Admin APIs للنقاط والعروض
+4. `/frontend/src/pages/AIChat.js` - واجهة القوالب + النشر
+5. `/frontend/src/pages/AdminCredits.js` - **جديد!** صفحة إدارة النقاط
+6. `/frontend/src/pages/AdminDashboard.js` - رابط النقاط والعروض
+7. `/frontend/src/App.js` - Route للصفحة الجديدة
 
 ## What's Working ✅
 - 🔘 أزرار الاختيار التفاعلية
 - 👁️ Live Preview التلقائي
-- 🏷️ شارة Zitex في الأكواد
+- 🏷️ شارة Zitex
 - 📦 نظام القوالب (6 قوالب)
 - 🚀 نظام النشر الحقيقي
 - 🎮 دعم كامل للألعاب 2D/3D
-- 💰 خصم النقاط
+- 💰 إدارة النقاط والعروض
+- 🔊 **الصوت TTS - يعمل!**
 - 🌐 إنشاء المواقع
 - 🖼️ توليد الصور
 
 ## Pending ❌
 - 🎬 الفيديوهات الطويلة (مؤجل)
-- 🔊 الصوت TTS (معطل مؤقتاً)
 
-## Next Tasks (Backlog)
-1. **P2** - تفعيل الفيديوهات الطويلة (Runway/Luma)
-2. **P2** - تفعيل الصوت TTS
-3. **P3** - إضافة قوالب جديدة
+## All Tasks Complete! ✅
+المنصة جاهزة للاستخدام.

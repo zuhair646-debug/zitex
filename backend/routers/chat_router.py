@@ -465,3 +465,30 @@ body {{ display:flex; align-items:center; justify-content:center; min-height:100
 async def get_game_libraries():
     """قائمة مكتبات الألعاب المتاحة"""
     return {"libraries": GAME_LIBRARIES}
+
+
+# ============== TTS API ==============
+class TTSRequest(BaseModel):
+    text: str
+    voice: str = "alloy"
+    speed: float = 1.0
+
+@router.post("/tts")
+async def generate_tts(
+    request: TTSRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """توليد صوت من نص"""
+    if not ai_assistant:
+        raise HTTPException(status_code=503, detail="AI service not available")
+    
+    audio_url = await ai_assistant.generate_tts(
+        text=request.text,
+        voice=request.voice,
+        speed=request.speed
+    )
+    
+    if not audio_url:
+        raise HTTPException(status_code=500, detail="فشل توليد الصوت")
+    
+    return {"audio_url": audio_url}

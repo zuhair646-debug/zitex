@@ -1911,6 +1911,166 @@ async def add_free_trials(user_id: str, images: int = 0, videos: int = 0, admin:
     
     return {"message": f"Added {images} free images, {videos} free videos"}
 
+
+# ============== CREDITS MANAGEMENT ==============
+
+class UpdateCreditsRequest(BaseModel):
+    credits: int
+
+@api_router.put("/admin/users/{user_id}/credits")
+async def set_user_credits(user_id: str, request: UpdateCreditsRequest, admin: dict = Depends(require_admin)):
+    """Set user credits to specific value"""
+    result = await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"credits": request.credits}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    await log_activity(
+        admin.get('id', 'admin'),
+        "credits_set",
+        "edit",
+        f"Set credits to {request.credits} for user {user_id}"
+    )
+    
+    return {"message": f"Credits set to {request.credits}"}
+
+
+# ============== PRICING MANAGEMENT (Admin) ==============
+
+class PricingRequest(BaseModel):
+    pricing: dict
+
+@api_router.get("/admin/service-pricing")
+async def get_service_pricing(admin: dict = Depends(require_admin)):
+    """Get service pricing for admin"""
+    pricing_doc = await db.settings.find_one({"type": "pricing"}, {"_id": 0})
+    if pricing_doc:
+        return {"pricing": pricing_doc.get("pricing", {})}
+    
+    # Default pricing
+    return {"pricing": {
+        "website": 15,
+        "game": 15,
+        "image": 5,
+        "video": 20,
+        "modification": 5,
+        "save_template": 10,
+        "export": 50,
+        "deploy": 100
+    }}
+
+@api_router.put("/admin/service-pricing")
+async def update_service_pricing(request: PricingRequest, admin: dict = Depends(require_admin)):
+    """Update service pricing"""
+    await db.settings.update_one(
+        {"type": "pricing"},
+        {"$set": {"type": "pricing", "pricing": request.pricing}},
+        upsert=True
+    )
+    
+    await log_activity(
+        admin.get('id', 'admin'),
+        "pricing_updated",
+        "edit",
+        "Updated service pricing"
+    )
+    
+    return {"message": "Pricing updated"}
+
+
+# ============== OFFERS MANAGEMENT ==============
+
+class OfferRequest(BaseModel):
+    name: str
+    credits: int
+    price: float
+    discount: int = 0
+    is_active: bool = True
+
+class OfferUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    credits: Optional[int] = None
+    price: Optional[float] = None
+    discount: Optional[int] = None
+    is_active: Optional[bool] = None
+
+@api_router.get("/admin/offers")
+async def get_offers(admin: dict = Depends(require_admin)):
+    """Get all credit offers"""
+    offers = await db.offers.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return {"offers": offers}
+
+@api_router.post("/admin/offers")
+async def create_offer(request: OfferRequest, admin: dict = Depends(require_admin)):
+    """Create new credit offer"""
+    offer = {
+        "id": str(uuid.uuid4()),
+        "name": request.name,
+        "credits": request.credits,
+        "price": request.price,
+        "discount": request.discount,
+        "is_active": request.is_active,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": admin.get('id', 'admin')
+    }
+    
+    await db.offers.insert_one(offer)
+    
+    await log_activity(
+        admin.get('id', 'admin'),
+        "offer_created",
+        "create",
+        f"Created offer: {request.name}"
+    )
+    
+    return {"offer": {k: v for k, v in offer.items() if k != '_id'}}
+
+@api_router.put("/admin/offers/{offer_id}")
+async def update_offer(offer_id: str, request: OfferUpdateRequest, admin: dict = Depends(require_admin)):
+    """Update credit offer"""
+    update_data = {k: v for k, v in request.model_dump().items() if v is not None}
+    
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No data to update")
+    
+    result = await db.offers.update_one(
+        {"id": offer_id},
+        {"$set": update_data}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Offer not found")
+    
+    return {"message": "Offer updated"}
+
+@api_router.delete("/admin/offers/{offer_id}")
+async def delete_offer(offer_id: str, admin: dict = Depends(require_admin)):
+    """Delete credit offer"""
+    result = await db.offers.delete_one({"id": offer_id})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Offer not found")
+    
+    await log_activity(
+        admin.get('id', 'admin'),
+        "offer_deleted",
+        "delete",
+        f"Deleted offer: {offer_id}"
+    )
+    
+    return {"message": "Offer deleted"}
+
+
+# ============== PUBLIC OFFERS API ==============
+
+@api_router.get("/offers")
+async def get_public_offers():
+    """Get active credit offers for purchase"""
+    offers = await db.offers.find({"is_active": True}, {"_id": 0}).to_list(100)
+    return {"offers": offers}
+
 # ============== APP SETUP ==============
 
 # Import and setup chat router
