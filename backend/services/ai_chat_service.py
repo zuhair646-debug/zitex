@@ -402,6 +402,34 @@ type: product
 prompt: [وصف بالإنجليزية]
 [/IMAGE_GENERATE]
 
+### 🎨 استيحاء من صورة مرجعية (10 نقاط):
+عندما يرفق العميل صورة ويقول "سوّ لي مثلها" أو "استوحِ منها":
+1. شوف الصورة المرفقة وافهم تفاصيلها
+2. اكتب وصف دقيق لما تريد توليده بالإنجليزية
+3. أرسل:
+[IMAGE_INSPIRE]
+reference: [رابط الصورة المرجعية]
+prompt: [وصف تفصيلي بالإنجليزية للصورة المطلوبة مستوحاة من المرجع مع التعديلات المطلوبة]
+[/IMAGE_INSPIRE]
+
+### ✏️ تعديل صورة سابقة (8 نقاط):
+عندما يضغط العميل على صورة سبق إرسالها ويطلب تعديل:
+1. ابحث عن رابط الصورة الأصلية في المحادثة السابقة (ستجده في الرسائل كرابط https://...)
+2. أرسل الأمر مع الرابط الفعلي (ليس نص وصفي - الرابط الحقيقي من المحادثة):
+[IMAGE_EDIT]
+original: https://... (الرابط الفعلي للصورة من المحادثة)
+changes: [وصف التعديلات بالإنجليزية]
+[/IMAGE_EDIT]
+⚠️ ممنوع كتابة [رابط الصورة] - لازم تحط الرابط الحقيقي https://...
+
+### قواعد الصور:
+- عندما يرفق العميل صورة، شوفها وعلّق عليها فوراً
+- إذا قال "سوّ مثلها" استخدم [IMAGE_INSPIRE] مع الرابط الحقيقي
+- إذا قال "عدّل" على صورة سابقة، ابحث عن رابطها في المحادثة واستخدم [IMAGE_EDIT] مع الرابط الحقيقي
+- إذا قال "صمم لي صورة" بدون مرجع استخدم [IMAGE_GENERATE]
+- اكتب الـ prompt دائماً بالإنجليزية وبتفاصيل كثيرة
+- ⚠️ دائماً استخدم الرابط الحقيقي (https://...) وليس نص وصفي مثل [رابط الصورة]
+
 ---
 
 ## 📱 قسم تطبيقات الموبايل:
@@ -1006,7 +1034,8 @@ class AIAssistant:
                 "request_type": request_type,
                 "credits_used": credits_used,
                 "credits_remaining": credits - credits_used,
-                "has_buttons": has_buttons
+                "has_buttons": has_buttons,
+                "image_urls": [a["url"] for a in attachments if a.get("type") == "image" and a.get("url")]
             },
             "created_at": datetime.now(timezone.utc).isoformat()
         }
@@ -1310,9 +1339,191 @@ class AIAssistant:
                         processed_response
                     )
         
+        # معالجة أمر الاستيحاء من صورة [IMAGE_INSPIRE]
+        inspire_match = re.search(
+            r'\[IMAGE_INSPIRE\]\s*'
+            r'reference:\s*(\S+)\s*'
+            r'prompt:\s*([^\[]+?)\s*'
+            r'\[/IMAGE_INSPIRE\]',
+            processed_response, re.IGNORECASE | re.DOTALL
+        )
+        
+        if inspire_match:
+            ref_url = inspire_match.group(1).strip()
+            inspire_prompt = inspire_match.group(2).strip()
+            inspire_cost = 10
+            
+            if available_credits - total_credits >= inspire_cost:
+                inspired_url = await self._generate_inspired_image(ref_url, inspire_prompt)
+                if inspired_url:
+                    attachments.append({
+                        "type": "image",
+                        "url": inspired_url,
+                        "image_type": "inspired",
+                        "prompt": inspire_prompt,
+                        "reference": ref_url
+                    })
+                    total_credits += inspire_cost
+                    
+                    processed_response = re.sub(
+                        r'\[IMAGE_INSPIRE\][\s\S]*?\[/IMAGE_INSPIRE\]',
+                        f"""
+## ✅ تم إنشاء صورة مستوحاة من المرجع!
+
+💰 التكلفة: {inspire_cost} نقطة
+
+[BUTTONS]
+✏️ عدّل الصورة|🎨 نسخة أخرى|💾 حفظ|🔄 مختلفة تماماً
+[/BUTTONS]""",
+                        processed_response
+                    )
+                else:
+                    processed_response = re.sub(
+                        r'\[IMAGE_INSPIRE\][\s\S]*?\[/IMAGE_INSPIRE\]',
+                        "❌ فشل توليد الصورة. حاول مرة أخرى.",
+                        processed_response
+                    )
+        
+        # معالجة أمر تعديل صورة [IMAGE_EDIT]
+        edit_match = re.search(
+            r'\[IMAGE_EDIT\]\s*'
+            r'original:\s*(\S+)\s*'
+            r'changes:\s*([^\[]+?)\s*'
+            r'\[/IMAGE_EDIT\]',
+            processed_response, re.IGNORECASE | re.DOTALL
+        )
+        
+        if edit_match:
+            original_url = edit_match.group(1).strip()
+            edit_changes = edit_match.group(2).strip()
+            edit_cost = 8
+            
+            if available_credits - total_credits >= edit_cost:
+                edited_url = await self._edit_image_with_prompt(original_url, edit_changes)
+                if edited_url:
+                    attachments.append({
+                        "type": "image",
+                        "url": edited_url,
+                        "image_type": "edited",
+                        "prompt": edit_changes,
+                        "original": original_url
+                    })
+                    total_credits += edit_cost
+                    
+                    processed_response = re.sub(
+                        r'\[IMAGE_EDIT\][\s\S]*?\[/IMAGE_EDIT\]',
+                        f"""
+## ✅ تم تعديل الصورة!
+
+💰 التكلفة: {edit_cost} نقطة
+
+[BUTTONS]
+✏️ تعديل إضافي|🔄 إعادة التعديل|💾 حفظ|↩️ الرجوع للأصلية
+[/BUTTONS]""",
+                        processed_response
+                    )
+                else:
+                    processed_response = re.sub(
+                        r'\[IMAGE_EDIT\][\s\S]*?\[/IMAGE_EDIT\]',
+                        "❌ فشل تعديل الصورة. حاول مرة أخرى.",
+                        processed_response
+                    )
+        
         return processed_response, attachments, total_credits
     
-    async def _generate_video(self, user_id: str, session_id: str, prompt: str, duration: int, size: str, video_type: str) -> Optional[Dict]:
+    async def _generate_inspired_image(self, reference_url: str, prompt: str) -> Optional[str]:
+        """توليد صورة مستوحاة من صورة مرجعية"""
+        try:
+            from emergentintegrations.llm.openai.image_generation import OpenAIImageGeneration
+            
+            image_gen = OpenAIImageGeneration(api_key=self.emergent_key)
+            
+            # Download reference image and analyze it with vision
+            ref_description = ""
+            try:
+                ref_resp = requests.get(reference_url, timeout=15)
+                if ref_resp.status_code == 200:
+                    ref_b64 = base64.b64encode(ref_resp.content).decode('utf-8')
+                    # Use GPT-4o to describe the reference image
+                    if EMERGENT_LLM_AVAILABLE and self.emergent_key:
+                        from emergentintegrations.llm.chat import FileContent
+                        chat = LlmChat(api_key=self.emergent_key, session_id="img-analyze", system_message="You are an expert image analyst. Describe this image in great detail for an artist to recreate it. Focus on: art style, colors, composition, characters, buildings, landscape, UI elements. Be very specific. Answer in English.")
+                        chat.with_model("openai", "gpt-4o")
+                        content_type = ref_resp.headers.get('Content-Type', 'image/png')
+                        fc = FileContent(content_type=content_type, file_content_base64=ref_b64)
+                        msg = UserMessage(text="Describe this image in full detail for recreation:", file_contents=[fc])
+                        ref_description = await chat.send_message(msg)
+            except Exception as e:
+                logger.error(f"Failed to analyze reference image: {e}")
+            
+            # Generate new image inspired by the reference
+            full_prompt = f"Create a high quality game art illustration. {prompt}. "
+            if ref_description:
+                full_prompt += f"Style reference: {ref_description[:500]}"
+            
+            images = await image_gen.generate_images(
+                prompt=full_prompt,
+                model="gpt-image-1",
+                number_of_images=1
+            )
+            
+            if images and len(images) > 0:
+                image_id = str(uuid.uuid4())
+                image_path = f"{APP_NAME}/images/{image_id}.png"
+                upload_result = upload_to_storage(image_path, images[0], "image/png")
+                if upload_result:
+                    return f"{STORAGE_URL.replace('/api/v1/storage', '')}/images/{image_id}.png"
+                else:
+                    return f"data:image/png;base64,{base64.b64encode(images[0]).decode('utf-8')}"
+            return None
+        except Exception as e:
+            logger.error(f"Inspired image generation error: {e}")
+            return None
+    
+    async def _edit_image_with_prompt(self, original_url: str, edit_prompt: str) -> Optional[str]:
+        """تعديل صورة بناءً على تعليق العميل"""
+        try:
+            from emergentintegrations.llm.openai.image_generation import OpenAIImageGeneration
+            
+            image_gen = OpenAIImageGeneration(api_key=self.emergent_key)
+            
+            # Describe original image first
+            original_description = ""
+            try:
+                ref_resp = requests.get(original_url, timeout=15)
+                if ref_resp.status_code == 200:
+                    ref_b64 = base64.b64encode(ref_resp.content).decode('utf-8')
+                    if EMERGENT_LLM_AVAILABLE and self.emergent_key:
+                        from emergentintegrations.llm.chat import FileContent
+                        chat = LlmChat(api_key=self.emergent_key, session_id="img-edit", system_message="Describe this image in detail in English. Focus on every visual element.")
+                        chat.with_model("openai", "gpt-4o")
+                        fc = FileContent(content_type="image/png", file_content_base64=ref_b64)
+                        msg = UserMessage(text="Describe this image:", file_contents=[fc])
+                        original_description = await chat.send_message(msg)
+            except Exception as e:
+                logger.error(f"Failed to analyze original image: {e}")
+            
+            # Generate edited version
+            full_prompt = f"Recreate this image with modifications: {original_description[:500]}. CHANGES REQUESTED: {edit_prompt}"
+            
+            images = await image_gen.generate_images(
+                prompt=full_prompt,
+                model="gpt-image-1",
+                number_of_images=1
+            )
+            
+            if images and len(images) > 0:
+                image_id = str(uuid.uuid4())
+                image_path = f"{APP_NAME}/images/{image_id}.png"
+                upload_result = upload_to_storage(image_path, images[0], "image/png")
+                if upload_result:
+                    return f"{STORAGE_URL.replace('/api/v1/storage', '')}/images/{image_id}.png"
+                else:
+                    return f"data:image/png;base64,{base64.b64encode(images[0]).decode('utf-8')}"
+            return None
+        except Exception as e:
+            logger.error(f"Image edit error: {e}")
+            return None
         """توليد فيديو باستخدام Sora 2"""
         try:
             from emergentintegrations.llm.openai.video_generation import OpenAIVideoGeneration
@@ -1430,6 +1641,14 @@ class AIAssistant:
         for msg in session.get("messages", [])[-12:]:
             role_label = "المستخدم" if msg["role"] == "user" else "زيتكس"
             conversation_history += f"\n{role_label}: {msg['content']}\n"
+            # Include image URLs from attachments so AI can reference them
+            if msg.get("metadata", {}).get("image_urls"):
+                for img_url in msg["metadata"]["image_urls"]:
+                    conversation_history += f"[صورة مولّدة: {img_url}]\n"
+            elif msg.get("attachments"):
+                for att in msg["attachments"]:
+                    if att.get("type") == "image" and att.get("url"):
+                        conversation_history += f"[صورة مولّدة: {att['url']}]\n"
         
         full_prompt = f"{conversation_history}\nالمستخدم: {message}"
         
