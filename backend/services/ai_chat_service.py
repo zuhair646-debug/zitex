@@ -119,11 +119,9 @@ MASTER_SYSTEM_PROMPT = """أنت "زيتكس" (Zitex) - مهندس ذكاء اص
 كل الألعاب والمواقع تُبنى بـ **HTML + CSS + Tailwind + JavaScript** وليس Canvas العادي.
 
 ### CDNs إجبارية في كل كود:
-```
-<script src="https://cdn.tailwindcss.com"></script>
-<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-```
+- script src="https://cdn.tailwindcss.com"
+- link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet"
+- link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
 
 ### أسلوب التصميم الموحد لكل الألعاب:
 كل لعبة مهما كان نوعها تُبنى بنفس المبادئ:
@@ -188,8 +186,7 @@ MASTER_SYSTEM_PROMPT = """أنت "زيتكس" (Zitex) - مهندس ذكاء اص
 - تأثيرات: flip, match glow, shake عند الخطأ
 - HUD: ⏱️ وقت + 🔄 محاولات + ⭐ نقاط + 📊 مستوى
 
-### نموذج CSS الأساسي (لكل الألعاب):
-```
+### نموذج CSS الأساسي (لكل الألعاب) - استخدم هذا الأسلوب:
 *{margin:0;box-sizing:border-box;font-family:'Tajawal',sans-serif}
 body{background:linear-gradient(135deg,#0a0a1a,#1a1a2e);color:#fff;min-height:100vh;overflow:hidden}
 .hud{background:rgba(0,0,0,0.85);backdrop-filter:blur(12px);border-bottom:2px solid #ffd700;padding:12px 20px;display:flex;justify-content:space-between;align-items:center;position:fixed;top:0;width:100%;z-index:50}
@@ -207,7 +204,6 @@ body{background:linear-gradient(135deg,#0a0a1a,#1a1a2e);color:#fff;min-height:10
 @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
 @keyframes glow{0%,100%{box-shadow:0 0 5px rgba(255,215,0,0.3)}50%{box-shadow:0 0 20px rgba(255,215,0,0.8)}}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
-```
 
 ### ممنوع منعاً باتاً:
 - ❌ Canvas بدائي بـ fillRect فقط
@@ -1027,15 +1023,29 @@ class AIAssistant:
         # Extract code from [CODE_BLOCK] or regular code blocks
         code = None
         
-        # First try CODE_BLOCK format
+        # First try CODE_BLOCK format with backticks
         code_block_match = re.search(r'\[CODE_BLOCK\]\s*```(?:html|javascript|js)?\n?([\s\S]*?)```\s*\[/CODE_BLOCK\]', ai_response)
         if code_block_match:
             code = code_block_match.group(1).strip()
         else:
-            # Fall back to regular code block
-            code_match = re.search(r'```(?:html|javascript|js)?\n?([\s\S]*?)```', ai_response)
-            if code_match:
-                code = code_match.group(1).strip()
+            # Try CODE_BLOCK without backticks (direct HTML)
+            code_block_match2 = re.search(r'\[CODE_BLOCK\]\s*(<!DOCTYPE[\s\S]*?</html>)\s*\[/CODE_BLOCK\]', ai_response, re.IGNORECASE)
+            if code_block_match2:
+                code = code_block_match2.group(1).strip()
+            else:
+                # Try CODE_BLOCK with any content
+                code_block_match3 = re.search(r'\[CODE_BLOCK\]\s*([\s\S]*?)\s*\[/CODE_BLOCK\]', ai_response)
+                if code_block_match3:
+                    code = code_block_match3.group(1).strip()
+                    # Remove backtick wrappers if present
+                    code = re.sub(r'^```(?:html|javascript|js)?\s*', '', code)
+                    code = re.sub(r'```\s*$', '', code)
+                    code = code.strip()
+                else:
+                    # Fall back to regular code block
+                    code_match = re.search(r'```(?:html|javascript|js)?\n?([\s\S]*?)```', ai_response)
+                    if code_match:
+                        code = code_match.group(1).strip()
         
         if code:
             code_with_badge = inject_zitex_badge(code)
