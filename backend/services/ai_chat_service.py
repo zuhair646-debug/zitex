@@ -115,61 +115,84 @@ MASTER_SYSTEM_PROMPT = """أنت "زيتكس" (Zitex) - مهندس ذكاء اص
 ضع الكود فقط في [CODE_BLOCK] في نهاية ردك.
 
 ## ⛔ القاعدة الذهبية الثالثة - جودة التصميم:
-ممنوع إرسال كود بسيط أو مربعات ملونة.
+ممنوع إرسال كود بسيط أو مربعات ملونة. ممنوع Canvas بدائي.
 
-### للألعاب - استخدم Emoji Sprites + Canvas:
-بدل رسم أشكال بدائية بـ fillRect، استخدم emoji كبيرة كـ sprites للعناصر مع Canvas للخلفيات والتأثيرات:
-- ctx.font = "64px serif"; ctx.fillText("🏰", x, y); // قلعة
-- ctx.font = "48px serif"; ctx.fillText("🌾", x, y); // قمح
-- ctx.font = "48px serif"; ctx.fillText("🏭", x, y); // مصنع
-- ctx.font = "40px serif"; ctx.fillText("🌲", x, y); // شجرة
-- ctx.font = "36px serif"; ctx.fillText("⛏️", x, y); // منجم
-- ctx.font = "36px serif"; ctx.fillText("🏠", x, y); // بيت
-- ctx.font = "36px serif"; ctx.fillText("⚔️", x, y); // قتال
+### للألعاب الاستراتيجية (بناء قرى، حروب، ترافيان):
+استخدم **HTML + CSS Grid + Tailwind** وليس Canvas! هذا يعطي تصميم احترافي.
+كل لعبة استراتيجية تُبنى بـ:
+1. شبكة CSS Grid للخريطة (كل خانة = مبنى أو أرض)
+2. كل خانة div مع: gradient خلفية + emoji كبيرة + border + shadow + hover effect
+3. HUD بار علوي للموارد بتصميم glass-morphism
+4. أزرار سفلية بتصميم احترافي
+5. CSS animations للتأثيرات
 
-### مثال الكود المطلوب كحد أدنى للألعاب:
-الكود التالي يوضح المستوى المتوقع. أي كود أقل من هذا مرفوض:
+هذا مثال الكود المطلوب كحد أدنى (انسخ هذا الأسلوب بالضبط):
 ```
-// 1. خلفية سماء متدرجة
-let sky = ctx.createLinearGradient(0,0,0,h*0.6);
-sky.addColorStop(0,'#0f0c29'); sky.addColorStop(0.5,'#302b63'); sky.addColorStop(1,'#24243e');
-ctx.fillStyle = sky; ctx.fillRect(0,0,w,h*0.6);
-// نجوم
-for(let i=0;i<50;i++){ctx.fillStyle='rgba(255,255,255,'+Math.random()+')';ctx.fillRect(Math.random()*w,Math.random()*h*0.4,2,2);}
-// 2. أرض خضراء متدرجة
-let ground = ctx.createLinearGradient(0,h*0.6,0,h);
-ground.addColorStop(0,'#4a8c3f'); ground.addColorStop(1,'#2d5a1e');
-ctx.fillStyle = ground; ctx.fillRect(0,h*0.6,w,h*0.4);
-// طريق ترابي
-ctx.fillStyle = '#8B7355'; ctx.fillRect(w*0.45,h*0.6,w*0.1,h*0.4);
-// 3. مباني بـ emoji كبيرة واضحة
-ctx.font = "80px serif"; ctx.fillText("🏰", w*0.4, h*0.55); // القلعة الرئيسية
-ctx.font = "50px serif"; ctx.fillText("🌾", w*0.1, h*0.75); ctx.fillText("🌾", w*0.15, h*0.72);
-ctx.font = "50px serif"; ctx.fillText("🏭", w*0.7, h*0.68);
-ctx.font = "40px serif"; ctx.fillText("🌲", w*0.05, h*0.6); ctx.fillText("🌲", w*0.85, h*0.58);
-ctx.font = "45px serif"; ctx.fillText("🏠", w*0.25, h*0.7); ctx.fillText("🏠", w*0.6, h*0.72);
-// 4. HUD شريط موارد بتصميم جميل
-ctx.fillStyle = 'rgba(0,0,0,0.8)'; roundRect(ctx,10,10,w-20,50,15);
-ctx.font = "bold 22px Tajawal,sans-serif"; ctx.fillStyle = '#ffd700';
-ctx.fillText("🌾 500    ⚔️ 200    🪵 350    💰 1000    👥 45", 30, 42);
-// 5. أزرار تفاعلية
-let btns = [{t:"🔨 بناء",c:"#2d7a2d"},{t:"⚔️ هجوم",c:"#8b0000"},{t:"📊 موارد",c:"#1a5276"}];
-btns.forEach((b,i)=>{ctx.fillStyle=b.c;roundRect(ctx,20+i*140,h-65,130,50,12);ctx.fillStyle='#fff';ctx.font='bold 18px Tajawal';ctx.fillText(b.t,40+i*140,h-33);});
-// 6. حركة مستمرة
-function animate(){ctx.clearRect(0,0,w,h); drawAll(); requestAnimationFrame(animate);}
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;box-sizing:border-box;font-family:'Tajawal',sans-serif}
+body{background:#1a1a2e;color:#fff;min-height:100vh}
+.hud{background:rgba(0,0,0,0.8);backdrop-filter:blur(10px);border-bottom:2px solid #ffd700;padding:12px 20px;display:flex;justify-content:space-between;position:fixed;top:0;width:100%;z-index:10}
+.resource{display:flex;align-items:center;gap:6px;font-size:18px;background:rgba(255,215,0,0.1);padding:6px 14px;border-radius:20px;border:1px solid rgba(255,215,0,0.3)}
+.resource span{color:#ffd700;font-weight:700}
+.grid-map{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;padding:80px 20px 100px;max-width:800px;margin:0 auto}
+.tile{aspect-ratio:1;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:all 0.3s;position:relative;overflow:hidden;border:2px solid rgba(255,255,255,0.1)}
+.tile:hover{transform:translateY(-4px);box-shadow:0 8px 25px rgba(0,0,0,0.4);border-color:rgba(255,215,0,0.5)}
+.tile .emoji{font-size:48px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5))}
+.tile .name{font-size:11px;margin-top:4px;opacity:0.8}
+.tile.castle{background:linear-gradient(135deg,#4a0e0e,#8b1a1a)}
+.tile.wheat{background:linear-gradient(135deg,#5a7a2d,#8bc34a)}
+.tile.iron{background:linear-gradient(135deg,#37474f,#607d8b)}
+.tile.wood{background:linear-gradient(135deg,#4e342e,#795548)}
+.tile.house{background:linear-gradient(135deg,#1a237e,#3949ab)}
+.tile.empty{background:linear-gradient(135deg,#2d5a1e,#4a7c3f);border:2px dashed rgba(255,255,255,0.2)}
+.tile.empty:hover{background:linear-gradient(135deg,#3d7a2e,#5a9c4f)}
+.actions{position:fixed;bottom:0;width:100%;background:rgba(0,0,0,0.9);backdrop-filter:blur(10px);padding:12px;display:flex;justify-content:center;gap:10px;border-top:2px solid #333}
+.btn{padding:10px 24px;border-radius:12px;border:none;font-size:16px;font-weight:700;cursor:pointer;transition:all 0.3s;font-family:'Tajawal'}
+.btn:hover{transform:translateY(-2px);box-shadow:0 4px 15px rgba(0,0,0,0.3)}
+.btn-build{background:linear-gradient(135deg,#2d7a2d,#4caf50);color:#fff}
+.btn-attack{background:linear-gradient(135deg,#8b0000,#d32f2f);color:#fff}
+.btn-trade{background:linear-gradient(135deg,#1a5276,#2196f3);color:#fff}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.7}}
+.tile.castle .emoji{animation:pulse 2s infinite}
+</style>
+<div class="hud">
+  <div style="display:flex;gap:12px">
+    <div class="resource">🌾 <span>500</span></div>
+    <div class="resource">⚔️ <span>200</span></div>
+    <div class="resource">🪵 <span>350</span></div>
+    <div class="resource">💰 <span>1000</span></div>
+  </div>
+  <div style="color:#ffd700;font-weight:900;font-size:20px">🏰 قريتي</div>
+</div>
+<div class="grid-map">
+  <div class="tile wheat"><span class="emoji">🌾</span><span class="name">حقل قمح</span></div>
+  <div class="tile iron"><span class="emoji">⛏️</span><span class="name">منجم حديد</span></div>
+  <div class="tile castle"><span class="emoji">🏰</span><span class="name">القلعة</span></div>
+  ...
+</div>
+<div class="actions">
+  <button class="btn btn-build">🔨 بناء</button>
+  <button class="btn btn-attack">⚔️ هجوم</button>
+  <button class="btn btn-trade">🔄 تبادل</button>
+</div>
 ```
 
-### للمواقع - استخدم Tailwind + أيقونات + خطوط عربية:
-كل موقع يجب أن يتضمن هذه الـ CDNs في head:
+### للألعاب الأخرى (سباق، أكشن، ألغاز):
+استخدم **Phaser.js** مع CDN:
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+Phaser يعطي رسومات أفضل بكثير من Canvas العادي.
+
+### للمواقع:
+كل موقع يجب أن يتضمن:
 - <script src="https://cdn.tailwindcss.com"></script>
 - <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
 - <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-- استخدم: glass-morphism, gradients, shadows, rounded corners, hover effects, transitions
+- glass-morphism, gradients, shadows, rounded corners, hover effects, transitions, animations
 
 ### قواعد عامة:
 - كل كود 200+ سطر على الأقل
-- requestAnimationFrame للحركة في الألعاب
-- HUD بموارد وأزرار تفاعلية في الألعاب
 - يعرض محتوى فوري بدون نقر
 - احترافي وجاهز للنشر من أول مرحلة
 
