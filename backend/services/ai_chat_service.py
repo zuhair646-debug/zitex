@@ -26,6 +26,7 @@ AI_FEATURES_ENABLED = True
 STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
 EMERGENT_KEY = os.environ.get('EMERGENT_LLM_KEY')
 APP_NAME = "zitex-hosting"
+BACKEND_URL = os.environ.get('BACKEND_URL', '')
 storage_key = None
 
 def init_storage():
@@ -1406,7 +1407,7 @@ class AIAssistant:
                 image_path = f"{APP_NAME}/images/{image_id}.png"
                 upload_result = upload_to_storage(image_path, images[0], "image/png")
                 if upload_result:
-                    return f"{STORAGE_URL.replace('/api/v1/storage', '')}/images/{image_id}.png"
+                    return f"{BACKEND_URL}/api/storage/images/{image_id}.png"
                 else:
                     return f"data:image/png;base64,{base64.b64encode(images[0]).decode('utf-8')}"
             return None
@@ -1451,7 +1452,7 @@ class AIAssistant:
                 image_path = f"{APP_NAME}/images/{image_id}.png"
                 upload_result = upload_to_storage(image_path, images[0], "image/png")
                 if upload_result:
-                    return f"{STORAGE_URL.replace('/api/v1/storage', '')}/images/{image_id}.png"
+                    return f"{BACKEND_URL}/api/storage/images/{image_id}.png"
                 else:
                     return f"data:image/png;base64,{base64.b64encode(images[0]).decode('utf-8')}"
             return None
@@ -1494,7 +1495,7 @@ class AIAssistant:
                 upload_result = upload_to_storage(video_path, video_bytes, "video/mp4")
                 
                 if upload_result:
-                    video_url = f"{STORAGE_URL.replace('/api/v1/storage', '')}/videos/{user_id}/{video_id}.mp4"
+                    video_url = f"{BACKEND_URL}/api/storage/videos/{user_id}/{video_id}.mp4"
                     
                     # حفظ في قاعدة البيانات
                     asset = {
@@ -1541,7 +1542,7 @@ class AIAssistant:
                 upload_result = upload_to_storage(image_path, images[0], "image/png")
                 
                 if upload_result:
-                    image_url = f"{STORAGE_URL.replace('/api/v1/storage', '')}/images/{image_id}.png"
+                    image_url = f"{BACKEND_URL}/api/storage/images/{image_id}.png"
                     return image_url
                 else:
                     # إذا فشل الرفع، إرجاع base64
