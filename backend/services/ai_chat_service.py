@@ -1574,6 +1574,66 @@ class AIAssistant:
             logger.error(f"Image generation error: {e}")
             return None
     
+    async def _get_training_examples(self, request_type: str, message: str) -> str:
+        """Fetch relevant training examples for few-shot learning"""
+        try:
+            # Map request types to categories
+            category_map = {
+                "game": "game", "game_3d": "game",
+                "website": "website", "webapp": "website",
+                "image": None, "video": None,
+                "mobile": "mobile"
+            }
+            category = category_map.get(request_type)
+            if not category:
+                return ""
+            
+            # Find matching examples
+            query = {"is_active": True, "category": category}
+            
+            # Try to find subcategory match from message
+            subcategories = {
+                "game": ["استراتيجية", "أكشن", "سباق", "ألغاز", "مطعم", "أطفال", "strategy", "action", "racing", "puzzle", "restaurant"],
+                "website": ["شركة", "متجر", "مدونة", "هبوط", "بورتفوليو", "company", "shop", "blog", "landing", "portfolio"],
+            }
+            
+            for sub in subcategories.get(category, []):
+                if sub in message.lower():
+                    query["$or"] = [{"subcategory": sub}, {"tags": sub}]
+                    break
+            
+            examples = await self.db.training_examples.find(
+                query, {"_id": 0, "html_code": 1, "title": 1, "category": 1, "subcategory": 1}
+            ).sort("usage_count", -1).limit(2).to_list(2)
+            
+            if not examples:
+                # Fallback: get any example from this category
+                examples = await self.db.training_examples.find(
+                    {"is_active": True, "category": category},
+                    {"_id": 0, "html_code": 1, "title": 1}
+                ).limit(1).to_list(1)
+            
+            if not examples:
+                return ""
+            
+            # Build examples context (limit code to 3000 chars each to save tokens)
+            examples_text = "\n\n## أمثلة مرجعية لجودة الكود المطلوبة (التزم بنفس المستوى أو أفضل):\n"
+            for i, ex in enumerate(examples):
+                code = ex.get("html_code", "")[:3000]
+                examples_text += f"\nمثال {i+1} - {ex.get('title', '')}:\n[CODE_BLOCK]\n{code}\n[/CODE_BLOCK]\n"
+                # Update usage count
+                await self.db.training_examples.update_one(
+                    {"title": ex.get("title")},
+                    {"$inc": {"usage_count": 1}}
+                )
+            
+            examples_text += "\nالتزم بنفس مستوى الجودة والتفاصيل في الأمثلة أعلاه. لا تبنِ كود أبسط منها.\n"
+            return examples_text
+            
+        except Exception as e:
+            logger.error(f"Training examples error: {e}")
+            return ""
+    
     async def _generate_with_gpt(self, session: Dict, message: str, request_type: str, credits: int, settings: Dict) -> Tuple[str, int, bool]:
         # Build context about the project
         project_data = session.get("project_data", {})
@@ -1586,6 +1646,11 @@ class AIAssistant:
 """
         
         system_prompt = MASTER_SYSTEM_PROMPT + context
+        
+        # Add training examples for few-shot learning
+        training_context = await self._get_training_examples(request_type, message)
+        if training_context:
+            system_prompt += training_context
         
         # Extract image URLs from message
         image_urls = re.findall(r'(https?://\S+\.(?:png|jpg|jpeg|gif|webp))', message, re.IGNORECASE)

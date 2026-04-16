@@ -2460,6 +2460,132 @@ async def get_export_history(current_user: dict = Depends(get_current_user)):
     ).sort("created_at", -1).to_list(50)
     return {"history": history}
 
+# ============== AI TRAINING SYSTEM (Admin Only) ==============
+
+class TrainingExampleCreate(BaseModel):
+    category: str  # game, website, landing, ecommerce, portfolio, dashboard
+    subcategory: str = ""  # strategy, racing, puzzle, restaurant, etc.
+    title: str
+    description: str = ""
+    design_image_url: str = ""  # URL to the design reference image
+    html_code: str  # The high-quality HTML code
+    tags: List[str] = []
+
+class TrainingExampleUpdate(BaseModel):
+    category: Optional[str] = None
+    subcategory: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    design_image_url: Optional[str] = None
+    html_code: Optional[str] = None
+    tags: Optional[List[str]] = None
+
+@api_router.post("/admin/training/examples")
+async def add_training_example(data: TrainingExampleCreate, admin: dict = Depends(require_admin)):
+    """Add a new training example for AI learning"""
+    example = {
+        "id": str(uuid.uuid4()),
+        "category": data.category,
+        "subcategory": data.subcategory,
+        "title": data.title,
+        "description": data.description,
+        "design_image_url": data.design_image_url,
+        "html_code": data.html_code,
+        "tags": data.tags,
+        "is_active": True,
+        "usage_count": 0,
+        "created_by": admin.get('id', 'admin'),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.training_examples.insert_one(example)
+    return {"id": example["id"], "message": "تم إضافة المثال التدريبي بنجاح"}
+
+@api_router.get("/admin/training/examples")
+async def get_training_examples(
+    category: Optional[str] = None,
+    subcategory: Optional[str] = None,
+    admin: dict = Depends(require_admin)
+):
+    """Get all training examples"""
+    query = {"is_active": True}
+    if category:
+        query["category"] = category
+    if subcategory:
+        query["subcategory"] = subcategory
+    examples = await db.training_examples.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return {"examples": examples, "total": len(examples)}
+
+@api_router.get("/admin/training/examples/{example_id}")
+async def get_training_example(example_id: str, admin: dict = Depends(require_admin)):
+    """Get a single training example"""
+    example = await db.training_examples.find_one({"id": example_id, "is_active": True}, {"_id": 0})
+    if not example:
+        raise HTTPException(status_code=404, detail="المثال غير موجود")
+    return example
+
+@api_router.put("/admin/training/examples/{example_id}")
+async def update_training_example(example_id: str, data: TrainingExampleUpdate, admin: dict = Depends(require_admin)):
+    """Update a training example"""
+    update_data = {k: v for k, v in data.model_dump().items() if v is not None}
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    result = await db.training_examples.update_one(
+        {"id": example_id},
+        {"$set": update_data}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="المثال غير موجود")
+    return {"message": "تم تحديث المثال بنجاح"}
+
+@api_router.delete("/admin/training/examples/{example_id}")
+async def delete_training_example(example_id: str, admin: dict = Depends(require_admin)):
+    """Soft delete a training example"""
+    result = await db.training_examples.update_one(
+        {"id": example_id},
+        {"$set": {"is_active": False}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="المثال غير موجود")
+    return {"message": "تم حذف المثال بنجاح"}
+
+@api_router.post("/admin/training/upload-image")
+async def upload_training_image(
+    file: UploadFile = File(...),
+    admin: dict = Depends(require_admin)
+):
+    """Upload a design reference image for training"""
+    contents = await file.read()
+    if len(contents) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="حجم الصورة أكبر من 10MB")
+    
+    try:
+        from services.ai_chat_service import upload_to_storage, APP_NAME, STORAGE_URL
+        
+        image_id = str(uuid.uuid4())
+        ext = file.filename.split('.')[-1] if '.' in file.filename else 'png'
+        storage_path = f"{APP_NAME}/training/{image_id}.{ext}"
+        
+        result = upload_to_storage(storage_path, contents, file.content_type or "image/png")
+        if result:
+            return {"image_url": f"/api/storage/training/{image_id}.{ext}", "id": image_id}
+        else:
+            img_b64 = base64.b64encode(contents).decode()
+            return {"image_url": f"data:{file.content_type};base64,{img_b64}", "id": image_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"فشل رفع الصورة: {str(e)}")
+
+@api_router.get("/admin/training/stats")
+async def get_training_stats(admin: dict = Depends(require_admin)):
+    """Get training system statistics"""
+    total = await db.training_examples.count_documents({"is_active": True})
+    by_category = {}
+    categories = ["game", "website", "landing", "ecommerce", "portfolio", "dashboard", "mobile"]
+    for cat in categories:
+        count = await db.training_examples.count_documents({"is_active": True, "category": cat})
+        if count > 0:
+            by_category[cat] = count
+    return {"total_examples": total, "by_category": by_category}
+
 # ============== APP SETUP ==============
 
 # Import and setup chat router
