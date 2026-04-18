@@ -26,15 +26,24 @@ from typing import List, Dict, Any, Optional
 # ---------------------------------------------------------------------------
 STEPS: List[Dict[str, Any]] = [
     {
+        "id": "variant",
+        "title": "النمط البصري",
+        "question": "ممتاز! ✨ اخترت هذا القالب. الآن اختر النمط البصري — كل نمط مختلف بألوانه وإحساسه:",
+        "chips": [],   # rendered as rich variant-picker in UI
+        "render": "variants",
+        "applies": "variant",
+    },
+    {
         "id": "buttons",
         "title": "شكل الأزرار",
-        "question": "ممتاز! ✨ اخترت هذا القالب. الآن أخبرني — ما شكل الأزرار اللي يعجبك؟",
+        "question": "جميل! الآن أخبرني — ما شكل الأزرار اللي يعجبك؟",
         "chips": [
             {"id": "pill",    "label": "دائرية كاملة",    "value": "full"},
             {"id": "rounded", "label": "زوايا ناعمة",     "value": "large"},
             {"id": "medium",  "label": "زوايا متوسطة",    "value": "medium"},
             {"id": "sharp",   "label": "حادة (مستطيلة)",   "value": "none"},
         ],
+        "render": "chips",
         "applies": "button_radius",
     },
     {
@@ -201,7 +210,7 @@ RADIUS_MAP = {
 def default_wizard_state() -> Dict[str, Any]:
     return {
         "active": True,
-        "step": "buttons",
+        "step": "variant",
         "answers": {},
         "completed": [],
     }
@@ -257,7 +266,14 @@ def apply_answer(project: Dict[str, Any], step_id: str, value: Any) -> Dict[str,
     wizard = project.get("wizard") or default_wizard_state()
     ans = dict(wizard.get("answers") or {})
 
-    if step_id == "buttons":
+    if step_id == "variant":
+        # Apply the chosen visual variant theme (preserves template sections)
+        from .variants import STYLE_VARIANTS
+        v = next((x for x in STYLE_VARIANTS if x["id"] == str(value)), None)
+        if v:
+            theme.update(v["theme_override"])
+        ans["variant"] = value
+    elif step_id == "buttons":
         # value is radius token (full/large/medium/none)
         theme["radius"] = RADIUS_MAP.get(str(value), "medium")
         ans["buttons"] = value
