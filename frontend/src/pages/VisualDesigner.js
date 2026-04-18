@@ -150,6 +150,7 @@ export default function VisualDesigner({ user }) {
   const [snap, setSnap] = useState(false);
   const [savedDesigns, setSavedDesigns] = useState([]);
   const [userElements, setUserElements] = useState([]);
+  const [userImages, setUserImages] = useState([]);
   const [showLibrary, setShowLibrary] = useState(false);
   const [showCrop, setShowCrop] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -193,8 +194,8 @@ export default function VisualDesigner({ user }) {
     return () => window.removeEventListener('resize', fit);
   }, [canvas.width, canvas.height]);
 
-  // Load designs + user elements
-  useEffect(() => { loadDesigns(); loadUserElements(); }, []);
+  // Load designs + user elements + user images
+  useEffect(() => { loadDesigns(); loadUserElements(); loadUserImages(); }, []);
 
   // Auto-save every 6s if there's any change
   useEffect(() => {
@@ -231,6 +232,15 @@ export default function VisualDesigner({ user }) {
       const res = await fetch(`${API}/api/user-elements`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       setUserElements(data.elements || []);
+    } catch (e) { /* ignore */ }
+  };
+
+  const loadUserImages = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API}/api/user-images`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      setUserImages(data.images || []);
     } catch (e) { /* ignore */ }
   };
 
@@ -438,7 +448,7 @@ export default function VisualDesigner({ user }) {
             <FolderOpen className="w-4 h-4" /><span className="text-sm">مكتبتي ({savedDesigns.length})</span>
           </button>
           <button onClick={() => setShowCrop(true)} className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-purple-600/40 to-pink-600/40 hover:from-purple-600/60 hover:to-pink-600/60 rounded-lg border border-purple-500/30" data-testid="open-crop-btn">
-            <Scissors className="w-4 h-4" /><span className="text-sm">استخراج من صورة</span>
+            <Scissors className="w-4 h-4" /><span className="text-sm">استخراج ({userImages.length} صور)</span>
           </button>
           <button onClick={newDesign} className="flex items-center gap-2 px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg" data-testid="new-design-btn">
             <Plus className="w-4 h-4" /><span className="text-sm">جديد</span>
@@ -537,9 +547,18 @@ export default function VisualDesigner({ user }) {
           </div>
           {/* Empty state */}
           {elements.length === 0 && (
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none opacity-60">
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none opacity-80 max-w-md">
               <div className="text-6xl mb-4">🎨</div>
-              <div className="text-lg">اسحب عنصراً من الجانب لبدء التصميم</div>
+              <div className="text-xl font-bold mb-3">ابدأ التصميم</div>
+              <div className="text-sm space-y-2 text-white/70">
+                <div>• اسحب عناصر جاهزة من الجانب الأيمن</div>
+                <div>• أو استخرج قطعاً من صور AI بضغط "استخراج" في الأعلى</div>
+              </div>
+              {userImages.length === 0 && (
+                <div className="mt-4 p-3 bg-purple-600/20 border border-purple-500/40 rounded-lg text-xs pointer-events-auto">
+                  💡 نصيحة: اذهب للشات، ولّد صور تصميم، ثم اضغط <b>"✂️ حفظ للمحرر"</b> على الصور التي تعجبك — ستظهر هنا لتستخرج منها عناصر.
+                </div>
+              )}
             </div>
           )}
         </main>

@@ -1553,12 +1553,17 @@ const AIChat = ({ user }) => {
                       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                       body: JSON.stringify({ url: attachment.url, prompt: attachment.prompt || '', source_session_id: currentSession?.id || null }),
                     });
-                    if (res.ok) { toast.success('حُفظت الصورة في المحرر ✂️'); }
-                    else { toast.error('فشل الحفظ'); }
-                  } catch (e) { toast.error('فشل الاتصال'); }
+                    if (res.ok) {
+                      toast.success('✅ حُفظت الصورة في المحرر — افتح "المحرر المرئي" لاستخراج عناصر منها', { duration: 5000 });
+                    } else {
+                      const t = await res.text();
+                      toast.error('فشل الحفظ: ' + t);
+                    }
+                  } catch (e) { toast.error('فشل الاتصال: ' + e.message); }
                 }}
-                className="bg-yellow-500/80 backdrop-blur hover:bg-yellow-500 text-black font-bold"
+                className="bg-yellow-500 backdrop-blur hover:bg-yellow-400 text-black font-bold"
                 data-testid={`save-img-to-designer-${attachment.id || 'x'}`}
+                title="احفظ الصورة في مكتبة المحرر لاستخراج عناصر منها لاحقاً"
               >
                 ✂️ حفظ للمحرر
               </Button>

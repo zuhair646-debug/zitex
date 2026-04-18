@@ -84,8 +84,8 @@ export default function CropModal({ onClose, onExtracted }) {
   const onMouseUp = () => setIsDragging(false);
 
   const save = async () => {
-    if (!selectedImage || !crop || crop.w < 10 || crop.h < 10) { toast.error('حدد مستطيل قص صالح'); return; }
-    if (!elementName.trim()) { toast.error('أعطِ العنصر اسماً'); return; }
+    if (!selectedImage || !crop || crop.w < 10 || crop.h < 10) { toast.error('ارسم مستطيل حول العنصر بالماوس أولاً'); return; }
+    if (!elementName.trim()) { toast.error('أعطِ العنصر اسماً (مثل: حقل قمح)'); return; }
     setSaving(true);
     try {
       const token = localStorage.getItem('token');
@@ -104,12 +104,21 @@ export default function CropModal({ onClose, onExtracted }) {
           category: category || 'custom',
         }),
       });
+      if (!res.ok) {
+        const errTxt = await res.text();
+        throw new Error(errTxt || 'server error');
+      }
       const data = await res.json();
-      toast.success(`تم استخراج: ${data.name}`);
+      toast.success(`✅ تم استخراج "${data.name}" — تجده الآن في الشريط الجانبي`);
       onExtracted && onExtracted(data);
       setCrop(null);
       setElementName('');
-    } catch (e) { toast.error('فشل الحفظ'); } finally { setSaving(false); }
+      // Close modal after successful extraction so user sees the new element in sidebar
+      setTimeout(() => onClose && onClose(), 800);
+    } catch (e) {
+      console.error('Extract failed:', e);
+      toast.error('فشل الحفظ: ' + (e.message || 'خطأ غير معروف'));
+    } finally { setSaving(false); }
   };
 
   // Build the visible overlay rectangle in display (px) coords
@@ -190,34 +199,47 @@ export default function CropModal({ onClose, onExtracted }) {
               </button>
             </div>
 
-            <div ref={wrapRef} className="flex-1 overflow-auto p-4 bg-[#030509] flex items-start justify-center">
+            <div className="flex-1 overflow-auto p-4 bg-[#030509] flex items-start justify-center" ref={wrapRef}>
               {!selectedImage ? (
-                <div className="text-center py-16 text-white/50">
-                  <div className="text-5xl mb-3">👈</div>
-                  <div>اختر صورة من اليمين لتبدأ</div>
+                <div className="text-center py-16 text-white/70" data-testid="empty-select-state">
+                  <div className="text-6xl mb-4">👈</div>
+                  <div className="text-xl font-bold mb-2">اختر صورة من اليمين</div>
+                  <div className="text-sm opacity-70 max-w-md mx-auto">أولاً، احفظ صور تصميم من الشات بضغط زر "✂️ حفظ للمحرر" عليها، ثم ستظهر هنا.</div>
                 </div>
               ) : (
-                <div className="relative inline-block" style={{ cursor: 'crosshair', userSelect: 'none' }}
-                  onMouseDown={onMouseDown}
-                  onMouseMove={onMouseMove}
-                  onMouseUp={onMouseUp}
-                  onMouseLeave={onMouseUp}>
-                  <img ref={imgRef} src={selectedImage.url} alt="source" className="max-w-full max-h-[65vh] block" draggable={false} crossOrigin="anonymous" />
-                  {crop && overlayStyle && (
-                    <>
-                      <div className="absolute inset-0 pointer-events-none" style={{ boxShadow: `0 0 0 9999px rgba(0,0,0,0.6)`, clipPath: `polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${overlayStyle.left}px ${overlayStyle.top}px, ${overlayStyle.left}px ${overlayStyle.top + overlayStyle.height}px, ${overlayStyle.left + overlayStyle.width}px ${overlayStyle.top + overlayStyle.height}px, ${overlayStyle.left + overlayStyle.width}px ${overlayStyle.top}px, ${overlayStyle.left}px ${overlayStyle.top}px)` }} />
-                      <div className="absolute border-2 border-yellow-500 pointer-events-none" style={overlayStyle}>
-                        <div className="absolute -top-6 left-0 text-xs text-yellow-500 font-bold bg-black/70 px-1 py-0.5 rounded">
-                          {Math.round(crop.w)} × {Math.round(crop.h)}
-                        </div>
-                      </div>
-                    </>
+                <div className="relative">
+                  {!crop && (
+                    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-yellow-500 text-black px-4 py-2 rounded-full font-bold text-sm animate-pulse shadow-xl pointer-events-none" data-testid="crop-hint">
+                      🖱️ اسحب ماوسك لرسم مربع حول العنصر الذي تريده
+                    </div>
                   )}
+                  <div className="relative inline-block" style={{ cursor: 'crosshair', userSelect: 'none' }}
+                    onMouseDown={onMouseDown}
+                    onMouseMove={onMouseMove}
+                    onMouseUp={onMouseUp}
+                    onMouseLeave={onMouseUp}>
+                    <img ref={imgRef} src={selectedImage.url} alt="source" className="max-w-full max-h-[65vh] block" draggable={false} crossOrigin="anonymous" />
+                    {crop && overlayStyle && (
+                      <>
+                        <div className="absolute inset-0 pointer-events-none" style={{ background: 'rgba(0,0,0,0.55)', clipPath: `polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${overlayStyle.left}px ${overlayStyle.top}px, ${overlayStyle.left}px ${overlayStyle.top + overlayStyle.height}px, ${overlayStyle.left + overlayStyle.width}px ${overlayStyle.top + overlayStyle.height}px, ${overlayStyle.left + overlayStyle.width}px ${overlayStyle.top}px, ${overlayStyle.left}px ${overlayStyle.top}px)` }} />
+                        <div className="absolute border-[3px] border-yellow-400 pointer-events-none shadow-[0_0_20px_rgba(250,204,21,0.8)]" style={overlayStyle}>
+                          <div className="absolute -top-7 left-0 text-xs text-black font-bold bg-yellow-400 px-2 py-0.5 rounded">
+                            {Math.round(crop.w)} × {Math.round(crop.h)} px
+                          </div>
+                          {/* Corner markers */}
+                          <div className="absolute -top-1 -left-1 w-3 h-3 bg-yellow-400 rounded-full" />
+                          <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full" />
+                          <div className="absolute -bottom-1 -left-1 w-3 h-3 bg-yellow-400 rounded-full" />
+                          <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full" />
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
-            <div className="p-2 border-t border-white/10 text-[11px] text-white/50 text-center bg-[#0a0e1c]">
-              🖱️ اسحب ماوسك لرسم مستطيل حول العنصر الذي تريده. أعطِه اسماً، اضغط "استخراج"، وسيظهر في مكتبتك.
+            <div className="p-2 border-t border-white/10 text-[12px] text-white/70 text-center bg-[#0a0e1c]">
+              <span className="font-bold text-yellow-500">📝 خطوات الاستخدام:</span> ١) اختر صورة ← ٢) اسحب ماوسك على العنصر ← ٣) اكتب اسمه ← ٤) اضغط "استخراج"
             </div>
           </main>
         </div>
