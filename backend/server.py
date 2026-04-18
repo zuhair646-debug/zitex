@@ -1,6 +1,6 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -2896,6 +2896,17 @@ set_deployment_service(deployment_service)
 @app.get("/api/health")
 async def health_check():
     return {"status": "healthy", "service": "zitex-api"}
+
+# Serve static game engine
+@app.get("/api/game-engine.js")
+async def serve_game_engine():
+    """Serve the Zitex game engine JavaScript"""
+    import os
+    engine_path = os.path.join(os.path.dirname(__file__), "static", "game-engine.js")
+    if os.path.exists(engine_path):
+        with open(engine_path, 'r') as f:
+            content = f.read()
+        return Response(content=content, media_type="application/javascript", headers={"Cache-Control": "public, max-age=3600"})
 
 # Storage proxy endpoint - serve images/videos from Object Storage
 @app.get("/api/storage/{file_path:path}")

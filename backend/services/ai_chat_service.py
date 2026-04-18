@@ -270,9 +270,10 @@ prompt: [وصف شاشة اللعبة الرئيسية بالتفصيل - الخ
 مرحلة 3 - بناء الواجهة فوراً (بعد الموافقة):
 لما العميل يوافق:
 - ابنِ الكود فوراً في [CODE_BLOCK]
-- انظر للصورة المرجعية المرفقة وطابق تخطيطها وألوانها وعناصرها بالضبط
-- استخدم SVG لرسم كل العناصر (لا إيموجي أبداً)
-- ابدأ دائماً بالكود التالي كأساس وعدّل عليه حسب طلب العميل:
+- انظر للصورة المرجعية المرفقة وطابق ألوانها وأسلوبها
+
+للألعاب الاستراتيجية وبناء القرى، استخدم محرك Zitex الجاهز:
+كود بسيط جداً ينتج لعبة مليئة بالعناصر (40+ عنصر: قلاع، بيوت، أشجار، مزارع، جنود، غيوم، زهور):
 
 [CODE_BLOCK]
 <!DOCTYPE html>
@@ -282,78 +283,31 @@ prompt: [وصف شاشة اللعبة الرئيسية بالتفصيل - الخ
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>لعبة بناء القرى</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
-<style>
-*{margin:0;padding:0;box-sizing:border-box;font-family:Tajawal,sans-serif}
-body{overflow:hidden}
-.w{position:relative;width:100vw;height:100vh;background:linear-gradient(180deg,#87CEEB 0%,#6BB3D9 22%,#90EE90 22%,#3D8B37 60%,#2D6B27 100%);overflow:hidden}
-.rb{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;justify-content:center;gap:15px;padding:8px;background:rgba(0,0,0,0.75);backdrop-filter:blur(10px)}
-.ri{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.1);padding:5px 14px;border-radius:20px;color:#fff;font-weight:bold;font-size:14px}
-.b{position:absolute;cursor:pointer;transition:transform 0.3s,filter 0.3s;filter:drop-shadow(3px 5px 8px rgba(0,0,0,0.5))}
-.b:hover{transform:scale(1.15);z-index:50;filter:drop-shadow(3px 5px 15px rgba(255,215,0,0.5))}
-.tt{display:none;position:absolute;bottom:105%;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.9);color:#fff;padding:8px 14px;border-radius:10px;white-space:nowrap;font-size:12px;z-index:99;border:1px solid rgba(255,215,0,0.3)}
-.b:hover .tt{display:block}
-.c{position:absolute;opacity:0.7}
-.c1{animation:fc 40s linear infinite}
-.c2{animation:fc 55s linear infinite}
-.c3{animation:fc 35s linear infinite}
-.ts{animation:sw 3s ease-in-out infinite;transform-origin:bottom center}
-.ab{position:fixed;bottom:0;left:0;right:0;z-index:100;display:flex;justify-content:center;gap:10px;padding:12px;background:rgba(0,0,0,0.75);backdrop-filter:blur(10px)}
-.abtn{padding:10px 22px;border:2px solid rgba(255,215,0,0.4);border-radius:14px;background:rgba(255,215,0,0.1);color:#FFD700;font-weight:bold;cursor:pointer;transition:all 0.3s;font-size:13px}
-.abtn:hover{background:rgba(255,215,0,0.3);transform:translateY(-3px);box-shadow:0 5px 15px rgba(255,215,0,0.2)}
-@keyframes fc{0%{transform:translateX(-200px)}100%{transform:translateX(calc(100vw + 200px))}}
-@keyframes sw{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(3deg)}}
-.hill{position:absolute;border-radius:50%;background:linear-gradient(180deg,#4A8B3F,#3D7A35)}
-.path{position:absolute;background:#8B7355;border-radius:5px;opacity:0.5}
-</style>
 </head>
 <body>
-<div class="w">
-<!-- شريط الموارد -->
-<div class="rb">
-<div class="ri"><svg viewBox="0 0 20 20" width="18" height="18"><circle cx="10" cy="10" r="9" fill="#FFD700" stroke="#B8860B" stroke-width="1.5"/><text x="10" y="14" text-anchor="middle" font-size="10" fill="#8B6914" font-weight="bold">$</text></svg><span id="gold">500</span></div>
-<div class="ri"><svg viewBox="0 0 20 14" width="20" height="14"><rect x="1" y="1" width="18" height="5" fill="#8B5E3C" rx="2"/><rect x="1" y="7" width="18" height="5" fill="#A0522D" rx="2"/></svg><span id="wood">300</span></div>
-<div class="ri"><svg viewBox="0 0 20 20" width="16" height="16"><circle cx="10" cy="12" r="7" fill="#FFD700"/><rect x="8" y="2" width="4" height="10" fill="#228B22" rx="1"/><rect x="5" y="5" width="3" height="6" fill="#2D8B2D" rx="1"/></svg><span id="food">400</span></div>
-<div class="ri"><svg viewBox="0 0 20 20" width="16" height="16"><polygon points="4,18 10,3 16,18" fill="#808080"/><circle cx="8" cy="14" r="2" fill="#FFD700"/></svg><span id="stone">150</span></div>
-</div>
-<!-- تلال خلفية -->
-<div class="hill" style="width:300px;height:80px;bottom:55%;left:5%"></div>
-<div class="hill" style="width:250px;height:60px;bottom:58%;right:10%"></div>
-<!-- ممرات -->
-<div class="path" style="width:200px;height:10px;top:55%;left:35%;transform:rotate(-5deg)"></div>
-<div class="path" style="width:150px;height:10px;top:65%;left:20%;transform:rotate(10deg)"></div>
-<!-- غيوم -->
-<div class="c c1" style="top:3%"><svg viewBox="0 0 120 45" width="100" height="35"><ellipse cx="60" cy="28" rx="50" ry="16" fill="white"/><ellipse cx="35" cy="22" rx="30" ry="14" fill="white"/><ellipse cx="85" cy="24" rx="28" ry="12" fill="white"/></svg></div>
-<div class="c c2" style="top:8%"><svg viewBox="0 0 100 40" width="80" height="28"><ellipse cx="50" cy="25" rx="40" ry="14" fill="white"/><ellipse cx="30" cy="20" rx="25" ry="11" fill="white"/></svg></div>
-<div class="c c3" style="top:12%"><svg viewBox="0 0 90 35" width="70" height="25"><ellipse cx="45" cy="22" rx="38" ry="13" fill="white"/><ellipse cx="65" cy="18" rx="22" ry="10" fill="white"/></svg></div>
-<!-- القلعة الرئيسية -->
-<div class="b" style="top:28%;left:38%;width:140px">
-<div class="tt">القلعة الرئيسية - مستوى 5</div>
-<svg viewBox="0 0 120 110" width="140" height="130"><rect x="25" y="45" width="70" height="55" fill="#8B7355" rx="3"/><rect x="12" y="32" width="18" height="68" fill="#9B8465"/><rect x="90" y="32" width="18" height="68" fill="#9B8465"/><polygon points="12,32 21,14 30,32" fill="#C41E3A"/><polygon points="90,32 99,14 108,32" fill="#C41E3A"/><rect x="48" y="60" width="24" height="40" fill="#5C4033" rx="12 12 0 0"/><rect x="32" y="52" width="12" height="12" fill="#87CEEB" rx="2"/><rect x="76" y="52" width="12" height="12" fill="#87CEEB" rx="2"/><polygon points="25,45 60,22 95,45" fill="#C41E3A"/><rect x="55" y="10" width="4" height="14" fill="#8B7355"/><polygon points="52,10 60,2 68,10" fill="#FFD700"/></svg>
-</div>
-<!-- أضف المزيد من المباني والأشجار والجنود هنا بنفس الأسلوب -->
-<!-- أزرار الأوامر -->
-<div class="ab">
-<button class="abtn" onclick="build()">بناء</button>
-<button class="abtn" onclick="train()">تدريب</button>
-<button class="abtn" onclick="upgrade()">ترقية</button>
-<button class="abtn" onclick="attack()">هجوم</button>
-</div>
-</div>
+<div id="game-world"></div>
+<script src="/api/game-engine.js"></script>
 <script>
-let res={gold:500,wood:300,food:400,stone:150};
-function upd(){for(let k in res)document.getElementById(k).textContent=res[k]}
-function build(){if(res.wood>=50&&res.stone>=30){res.wood-=50;res.stone-=30;upd();alert('تم بناء مبنى جديد!')}else alert('موارد غير كافية!')}
-function train(){if(res.food>=30&&res.gold>=20){res.food-=30;res.gold-=20;upd();alert('تم تدريب جندي!')}else alert('موارد غير كافية!')}
-function upgrade(){if(res.gold>=100){res.gold-=100;upd();alert('تمت الترقية!')}else alert('ذهب غير كافٍ!')}
-function attack(){alert('جاري الهجوم...')}
-setInterval(()=>{res.gold+=5;res.wood+=3;res.food+=4;res.stone+=2;upd()},3000);
+ZitexGame.init({
+  theme: 'medieval',
+  buildings: 6,
+  trees: 12,
+  soldiers: 4,
+  farms: 3,
+  clouds: 4,
+  flowers: 20,
+  bushes: 8,
+  rocks: 5
+});
 </script>
 </body>
 </html>
 [/CODE_BLOCK]
 
-عدّل هذا القالب حسب طلب العميل: أضف بيوت ومزارع وأشجار وجنود بنفس أسلوب SVG. غيّر الألوان والتخطيط ليطابق الصورة المرجعية.
-- اكتب: "تم بناء المرحلة 1 في اللايف! شوف المعاينة."
+عدّل الأرقام حسب طلب العميل (مثلاً buildings:10 لقرية أكبر).
+لأنواع أخرى من الألعاب (سباق، ألغاز، أكشن): ابنِ الكود من الصفر باستخدام Canvas أو SVG.
+اكتب: "تم بناء المرحلة 1 في اللايف! شوف المعاينة."
+
 [BUTTONS]
 ممتاز، المرحلة التالية|عدّل|غيّر
 [/BUTTONS]
