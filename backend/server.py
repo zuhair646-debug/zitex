@@ -2939,6 +2939,16 @@ async def serve_image_backed_test():
             content = f.read()
         return Response(content=content, media_type="text/html")
 
+
+@app.get("/api/final-preview")
+async def serve_final_preview():
+    import os
+    p = os.path.join(os.path.dirname(__file__), "static", "final-preview.html")
+    if os.path.exists(p):
+        with open(p, 'r') as f:
+            content = f.read()
+        return Response(content=content, media_type="text/html")
+
 # Storage proxy endpoint - serve images/videos from Object Storage
 @app.get("/api/storage/{file_path:path}")
 async def serve_storage_file(file_path: str):

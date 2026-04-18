@@ -1099,8 +1099,22 @@ def _build_image_backed_game(genre: str, title: str, hint: str, image_url: str) 
 </html>"""
 
 
-def should_override_game_code(code: Optional[str]) -> bool:
-    """Decide if GPT's game output is too weak and must be replaced by the engine template."""
+def should_override_game_code(code: Optional[str], has_design_image: bool = False) -> bool:
+    """Decide if GPT's game output should be replaced by the engine template.
+
+    If the session already has an approved design image, we ALWAYS override —
+    because the user explicitly wants the live preview to match that image 1:1,
+    and any GPT-generated SVG/Canvas scene will inevitably drift from the image.
+    Without a design image, fall back to a quality heuristic.
+    """
+    # Highest-priority rule: if we have a design image, the image-backed preview
+    # guarantees match-to-design, so we always prefer it.
+    if has_design_image:
+        # Respect GPT only if it explicitly wired in our engine
+        if code and ("game-engine.js" in code or "ZitexGame.init" in code):
+            return False
+        return True
+
     if not code:
         return True
     c = code.strip()
@@ -1112,7 +1126,6 @@ def should_override_game_code(code: Optional[str]) -> bool:
     # Heuristic: simplistic HTML with very few nodes -> weak
     svg_count = c.lower().count("<svg")
     div_count = c.lower().count("<div")
-    # If it has no interactive pieces AND low element count
     has_script = "<script" in c.lower()
     has_canvas = "<canvas" in c.lower()
     if not has_script and not has_canvas and svg_count + div_count < 20:
@@ -1339,17 +1352,17 @@ class AIAssistant:
             # whenever GPT's output is weak (short, no <script>, basic SVG scene, etc.).
             if request_type in ("game", "game_3d"):
                 try:
-                    if should_override_game_code(code):
+                    # Look up the latest design image from the session (may have been saved earlier in this turn)
+                    fresh = await self.db.chat_sessions.find_one({"id": session_id}, {"_id": 0, "project_data": 1}) or {}
+                    design_url = (fresh.get("project_data") or {}).get("last_design_image") \
+                                 or (session.get("project_data") or {}).get("last_design_image")
+                    if should_override_game_code(code, has_design_image=bool(design_url)):
                         # Build full conversational context for genre detection
                         ctx_text = ""
                         for m in session.get("messages", [])[-10:]:
                             ctx_text += " " + (m.get("content") or "")
                         genre = detect_game_genre_prioritized(primary=message, context=ctx_text, fallback="strategy")
                         title = session.get("title") or "لعبة Zitex"
-                        # Re-fetch session to pick up any design image saved during this response
-                        fresh = await self.db.chat_sessions.find_one({"id": session_id}, {"_id": 0, "project_data": 1}) or {}
-                        design_url = (fresh.get("project_data") or {}).get("last_design_image") \
-                                     or (session.get("project_data") or {}).get("last_design_image")
                         overridden = build_game_html(genre=genre, title=title, hint=message[:400], design_image_url=design_url)
                         logger.info(f"GAME OVERRIDE: genre={genre}, original_len={len(code)}, new_len={len(overridden)}")
                         code = overridden

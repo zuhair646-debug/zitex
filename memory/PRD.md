@@ -5,60 +5,53 @@
 
 ## User Language: Arabic (العربية)
 
-## ✅ تم إنجازه (محدّث - 18 أبريل 2026)
+## ✅ تم إنجازه (محدّث - 18 فبراير 2026)
 
-### Session Feb 2026 - Bulletproof Game Engine
-1. **Zitex Game Engine v2.0** (`/app/backend/static/game-engine.js`)
-   - محرك متعدد الأنواع: **Strategy / Platformer / Racing / Snake / Shooter / Match-3 / Memory / Breakout / Flappy**
-   - ألعاب فعلية قابلة للعب (ليست مجرد مشاهد ثابتة) مع HUD، مدخلات keyboard/touch، حلقات game loop، انتهاء/إعادة
-   - كشف genre تلقائي من الـ config
-2. **Backend Game Override** (في `ai_chat_service.py`)
-   - `build_game_html(genre, title, hint, design_image_url)` - يبني HTML shell جاهز
-   - `_build_image_backed_game()` - **وضع Image-Backed الجديد**: يستخدم صورة التصميم المُولَّدة كخلفية فعلية للعبة مع overlay تفاعلي شفاف (HUD + 12 hotspot + أزرار تحكم) — المعاينة = الصورة 100%
-   - `detect_game_genre_prioritized()` - يكتشف النوع من الرسالة + السياق (عربي/إنجليزي)
-   - `should_override_game_code()` - يقرر استبدال كود GPT الضعيف
-   - **حفظ تلقائي**: عند توليد `[DESIGN_IMAGE]` نحفظ URL في `session.project_data.last_design_image`
-   - **Override تلقائي**: إذا كان request_type لعبة والكود ضعيف، يُستبدل بقالب image-backed
-   - **Fallback تلقائي**: إذا GPT لم يُخرج كوداً والمستخدم وافق، نبني اللعبة من صورة التصميم
-3. **iframe Preview Fix** (`AIChat.js`)
-   - استبدال الروابط النسبية `/api/*` بالـ BACKEND_URL الكامل قبل الكتابة في iframe
+### Session Feb 2026 - Image-Match Game Preview (الحل النهائي)
+**المشكلة الجذرية** (التي كانت مخفية):
+- `BACKEND_URL` غير موجود في `/app/backend/.env` → كل روابط الصور كانت `None/api/storage/...` (مكسورة)
+- iframe patcher يُصلح `src=/href=` فقط، ليس CSS `url(...)`
+- Heuristic override كان يحترم SVG الثابت لـ GPT حتى لو لدينا صورة تصميم
+- بيانات اختبار قديمة (URL صورة ظباء) بقيت في DB
+
+**الإصلاحات**:
+1. ✅ أُضيف `BACKEND_URL` إلى `.env` (preview URL الكامل)
+2. ✅ iframe patcher في `AIChat.js` الآن يُصلح `url(/api/...)` CSS + `src=/href=` HTML
+3. ✅ `should_override_game_code(code, has_design_image)` — إذا لدينا صورة تصميم، نستخدم image-backed دائماً (تطابق 1:1)
+4. ✅ تم تنظيف بيانات الاختبار السيئة من DB
+5. ✅ `_process_ai_commands` يحفظ `last_design_image` في `project_data` عند توليد DESIGN_IMAGE
+
+**كيف يعمل التدفق الآن**:
+- المستخدم يطلب لعبة → GPT يولّد `[DESIGN_IMAGE]` → نحفظ URL كامل في session
+- المستخدم يوافق → backend يُبني HTML image-backed: الصورة المُولَّدة = خلفية كاملة + HUD شفاف + 12 hotspot + أزرار تحكم
+- iframe يُصلح أي مسارات `/api/*` قبل الكتابة → الصور تُحمَّل في about:blank بنجاح
+- **النتيجة**: Live Preview = الصورة المعتمدة 100% + تفاعلية
+
+### Zitex Game Engine v2.0 (Generic mode - بدون صورة)
+`/app/backend/static/game-engine.js` — محرك متعدد الأنواع كـ fallback عند عدم وجود صورة:
+Strategy / Platformer / Racing / Snake / Shooter / Match-3 / Memory / Breakout / Flappy
 
 ### Sessions السابقة
 - نظام تدريب AI + جلب من GitHub + تعلم ذاتي
-- Vision Auto-Attach - GPT يرى صورة التصميم قبل بناء الكود
-- إصلاح توليد الصور/الفيديو + Dockerfile لـ Railway
-- Storage proxy endpoint + video consultative flow
+- Vision Auto-Attach + إصلاح توليد الصور/الفيديو
+- Dockerfile لـ Railway
 
 ## Credentials
 - Email: owner@zitex.com | Password: owner123
 
-## Key Files
-- `/backend/static/game-engine.js` - محرك الألعاب v2.0 (متعدد الأنواع)
-- `/backend/services/ai_chat_service.py` - LLM logic + game override
-- `/backend/server.py` - APIs + `/api/game-engine.js` + `/api/storage`
-- `/frontend/src/pages/AIChat.js` - iframe preview مع URL patching
-- `/frontend/src/pages/AdminTraining.js` - صفحة التدريب
+## Key Files (يجب نسخها إلى GitHub للنشر على Railway)
+1. `backend/services/ai_chat_service.py` — LLM + game override + image-backed builder
+2. `backend/static/game-engine.js` — محرك الألعاب (fallback)
+3. `backend/server.py` — APIs + `/api/game-engine.js`
+4. `backend/.env` — **يجب إضافة `BACKEND_URL=https://zitex-xxx.railway.app` في Railway ENV vars**
+5. `frontend/src/pages/AIChat.js` — iframe URL patching (HTML + CSS)
 
-## Tested Genres (via API + curl)
-| Input | Detected |
-|---|---|
-| لعبة سباق سيارات | ✅ racing |
-| لعبة ثعبان | ✅ snake |
-| لعبة منصات ماريو | ✅ platformer |
-| لعبة فضاء إطلاق نار | ✅ shooter |
-| لعبة ألغاز جواهر | ✅ match3 |
-| لعبة ذاكرة بطاقات | ✅ memory |
-| لعبة كسر الطوب | ✅ breakout |
-| لعبة استراتيجية قرية | ✅ strategy |
+## Next Steps
+- **P1**: لوحة تحكم المالك للتسعير الديناميكي
+- **P2**: GPT-4o Vision لتحليل الصورة واستخراج bounding boxes تلقائياً (hotspots فوق المباني الفعلية)
+- **P2**: i18n + Mobile App compilation (APK/IPA)
 
-## Deployment Notes (for user → Railway)
-ملفات يجب نسخها إلى GitHub:
-1. `/app/backend/services/ai_chat_service.py`
-2. `/app/backend/static/game-engine.js` (جديد - ضروري!)
-3. `/app/backend/server.py` (endpoint `/api/game-engine.js` و `/api/game-test`)
-4. `/app/frontend/src/pages/AIChat.js` (iframe URL patching)
-
-## Next Steps (P1/P2)
-- **P1**: لوحة تحكم المالك للتسعير الديناميكي (استبدال `SERVICE_COSTS` بـ DB)
-- **P2**: i18n (الترجمة الكاملة)
-- **P2**: Mobile App compilation (APK/IPA)
+## Backlog
+- دعم Image-Backed لأنواع غير الاستراتيجية بطرق مخصصة
+- السماح بسحب hotspots يدوياً
+- AdminTraining لتحسين hotspots تلقائياً
