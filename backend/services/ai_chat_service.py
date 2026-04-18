@@ -198,54 +198,55 @@ prompt: [وصف تفصيلي بالإنجليزية - اذكر كل عنصر: he
 
 قاعدة ذهبية للألعاب: الكود يجب أن يكون لعبة حقيقية مرسومة بـ SVG وليس إيموجي أو صفحة ويب!
 
-### مكتبة SVG للألعاب (استخدمها دائماً بدل الإيموجي):
+### طريقة بناء الألعاب - استخدم هذا القالب الأساسي:
+عند بناء لعبة استراتيجية، ابدأ دائماً بهذا الهيكل في الـ head:
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;font-family:Tajawal,sans-serif}
+  body{overflow:hidden}
+  .game-world{position:relative;width:100vw;height:100vh;background:linear-gradient(180deg,#87CEEB 0%,#5BA3D9 25%,#90EE90 25%,#4A8B3F 100%);overflow:hidden}
+  .resource-bar{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;justify-content:center;gap:20px;padding:10px;background:rgba(0,0,0,0.7);backdrop-filter:blur(10px)}
+  .res-item{display:flex;align-items:center;gap:5px;background:rgba(255,255,255,0.1);padding:5px 15px;border-radius:20px;color:white;font-weight:bold}
+  .building{position:absolute;cursor:pointer;transition:transform 0.3s;filter:drop-shadow(2px 4px 6px rgba(0,0,0,0.4))}
+  .building:hover{transform:scale(1.15);z-index:50}
+  .tooltip{display:none;position:absolute;bottom:105%;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.85);color:white;padding:8px 12px;border-radius:10px;white-space:nowrap;font-size:12px;z-index:99}
+  .building:hover .tooltip{display:block}
+  .cloud{position:absolute;animation:float-cloud linear infinite;opacity:0.8}
+  .tree-sway{animation:sway 3s ease-in-out infinite}
+  .action-bar{position:fixed;bottom:0;left:0;right:0;z-index:100;display:flex;justify-content:center;gap:10px;padding:15px;background:rgba(0,0,0,0.7);backdrop-filter:blur(10px)}
+  .action-btn{padding:10px 20px;border:2px solid rgba(255,215,0,0.5);border-radius:12px;background:rgba(255,215,0,0.15);color:#FFD700;font-weight:bold;cursor:pointer;transition:all 0.3s}
+  .action-btn:hover{background:rgba(255,215,0,0.3);transform:translateY(-2px)}
+  @keyframes float-cloud{0%{transform:translateX(-150px)}100%{transform:translateX(calc(100vw + 150px))}}
+  @keyframes sway{0%,100%{transform:rotate(-2deg)}50%{transform:rotate(2deg)}}
+  @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+  .path{position:absolute;height:8px;background:#8B6914;border-radius:4px;opacity:0.6}
+  .fence{position:absolute;width:4px;background:#8B5E3C;border-radius:2px}
+  .grass-patch{position:absolute;width:15px;height:10px;border-radius:50% 50% 0 0}
+</style>
 
-عند بناء أي لعبة، ارسم كل العناصر بـ inline SVG بهذا الأسلوب:
+ثم ضع عناصر اللعبة في body بهذا الشكل:
+- div.game-world يحتوي كل العناصر
+- div.resource-bar في الأعلى (ذهب، خشب، طعام، حجر، جنود) كل واحد مع SVG أيقونة صغيرة
+- كل مبنى div.building مع position absolute وبداخله SVG كامل
+- div.cloud مع SVG للغيوم
+- div.action-bar في الأسفل (بناء، تدريب، ترقية، هجوم)
+- JavaScript: موارد ديناميكية، بناء مباني جديدة عند الضغط، ترقية، مؤقتات
 
-قلعة/حصن:
-<svg viewBox="0 0 100 100" width="80" height="80"><rect x="20" y="40" width="60" height="50" fill="#8B7355" rx="3"/><rect x="10" y="30" width="15" height="60" fill="#9B8465"/><rect x="75" y="30" width="15" height="60" fill="#9B8465"/><polygon points="10,30 17,15 25,30" fill="#C41E3A"/><polygon points="75,30 82,15 90,30" fill="#C41E3A"/><rect x="40" y="55" width="20" height="35" fill="#5C4033" rx="10 10 0 0"/><rect x="30" y="45" width="10" height="10" fill="#87CEEB" rx="2"/><rect x="60" y="45" width="10" height="10" fill="#87CEEB" rx="2"/><polygon points="20,40 50,20 80,40" fill="#C41E3A"/></svg>
-
-شجرة:
-<svg viewBox="0 0 60 80" width="50" height="65"><rect x="25" y="50" width="10" height="25" fill="#8B5E3C" rx="2"/><ellipse cx="30" cy="35" rx="22" ry="25" fill="#2D8B2D"/><ellipse cx="20" cy="30" rx="15" ry="18" fill="#3AA63A"/><ellipse cx="40" cy="32" rx="14" ry="17" fill="#248F24"/><circle cx="25" cy="40" r="3" fill="#FF6B6B" opacity="0.8"/><circle cx="35" cy="28" r="2" fill="#FF6B6B" opacity="0.7"/></svg>
-
-بيت/كوخ:
-<svg viewBox="0 0 80 70" width="65" height="55"><rect x="10" y="35" width="60" height="35" fill="#D4A574" rx="2"/><polygon points="5,35 40,10 75,35" fill="#8B4513"/><rect x="30" y="45" width="15" height="25" fill="#5C3317" rx="5 5 0 0"/><circle cx="40" cy="57" r="2" fill="#FFD700"/><rect x="12" y="40" width="12" height="10" fill="#87CEEB" rx="1"/><line x1="18" y1="40" x2="18" y2="50" stroke="#5C3317" stroke-width="1"/><line x1="12" y1="45" x2="24" y2="45" stroke="#5C3317" stroke-width="1"/><rect x="55" y="40" width="12" height="10" fill="#87CEEB" rx="1"/><rect x="60" y="15" width="8" height="20" fill="#8B7355"/><ellipse cx="64" cy="12" rx="8" ry="5" fill="#808080" opacity="0.6"/></svg>
-
-مزرعة/حقل:
-<svg viewBox="0 0 80 60" width="70" height="50"><rect x="0" y="20" width="80" height="40" fill="#8B6914" rx="5"/><line x1="0" y1="30" x2="80" y2="30" stroke="#6B4F12" stroke-width="1"/><line x1="0" y1="40" x2="80" y2="40" stroke="#6B4F12" stroke-width="1"/><line x1="0" y1="50" x2="80" y2="50" stroke="#6B4F12" stroke-width="1"/><g fill="#228B22"><rect x="8" y="22" width="3" height="12" rx="1"/><rect x="20" y="24" width="3" height="10" rx="1"/><rect x="32" y="21" width="3" height="13" rx="1"/><rect x="44" y="23" width="3" height="11" rx="1"/><rect x="56" y="22" width="3" height="12" rx="1"/><rect x="68" y="24" width="3" height="10" rx="1"/></g><circle cx="10" cy="20" r="4" fill="#FFD700"/><circle cx="34" cy="19" r="4" fill="#FFD700"/><circle cx="58" cy="20" r="4" fill="#FFD700"/></svg>
-
-جندي/محارب:
-<svg viewBox="0 0 40 60" width="35" height="50"><circle cx="20" cy="12" r="8" fill="#FDBCB4"/><rect x="12" y="20" width="16" height="22" fill="#C41E3A" rx="3"/><rect x="8" y="22" width="6" height="16" fill="#C41E3A" rx="2"/><rect x="26" y="22" width="6" height="16" fill="#C41E3A" rx="2"/><rect x="14" y="42" width="5" height="15" fill="#4A3728" rx="2"/><rect x="21" y="42" width="5" height="15" fill="#4A3728" rx="2"/><polygon points="6,20 2,35 10,35" fill="#808080"/><ellipse cx="20" cy="5" rx="10" ry="4" fill="#808080"/><rect x="16" y="1" width="8" height="4" fill="#808080"/><circle cx="15" cy="10" r="1.5" fill="#333"/><circle cx="25" cy="10" r="1.5" fill="#333"/></svg>
-
-منجم/صخور:
-<svg viewBox="0 0 70 50" width="60" height="45"><polygon points="15,45 35,10 55,45" fill="#808080"/><polygon points="5,45 20,20 35,45" fill="#696969"/><polygon points="40,45 55,15 70,45" fill="#A9A9A9"/><rect x="30" y="25" width="4" height="15" fill="#8B5E3C"/><polygon points="28,25 34,15 40,25" fill="#696969"/><circle cx="25" cy="35" r="3" fill="#FFD700"/><circle cx="50" cy="38" r="2" fill="#FFD700"/></svg>
-
-ذهب/عملة:
-<svg viewBox="0 0 30 30" width="22" height="22"><circle cx="15" cy="15" r="13" fill="#FFD700" stroke="#DAA520" stroke-width="2"/><text x="15" y="20" text-anchor="middle" font-size="14" font-weight="bold" fill="#8B6914">$</text></svg>
-
-خشب:
-<svg viewBox="0 0 40 25" width="30" height="20"><rect x="2" y="2" width="36" height="8" fill="#8B5E3C" rx="3"/><rect x="2" y="12" width="36" height="8" fill="#A0522D" rx="3"/><circle cx="15" cy="6" r="3" fill="#6B4226"/><circle cx="30" cy="16" r="2" fill="#6B4226"/></svg>
-
-عشب/أرضية:
-استخدم CSS gradient مع SVG pattern:
-background: linear-gradient(180deg, #87CEEB 0%, #87CEEB 30%, #90EE90 30%, #228B22 100%);
-أضف SVG أعشاب صغيرة متكررة على الأرضية.
-
-غيوم:
-<svg viewBox="0 0 100 40" width="80" height="30"><ellipse cx="50" cy="25" rx="40" ry="15" fill="white" opacity="0.8"/><ellipse cx="30" cy="20" rx="25" ry="12" fill="white" opacity="0.9"/><ellipse cx="70" cy="22" rx="22" ry="10" fill="white" opacity="0.85"/></svg>
-
-### قواعد رسم الألعاب:
-1. لا تستخدم إيموجي أبداً - ارسم كل شيء بـ SVG
-2. كل SVG يكون inline في الـ HTML (لا تستخدم ملفات خارجية)
-3. أضف ظلال (filter: drop-shadow) على كل عنصر SVG
-4. أضف CSS animations: الأشجار تتمايل، الغيوم تتحرك، الجنود يتنفسون
-5. الخلفية تكون تدرج سماء + أرض خضراء مع SVG pattern للعشب
-6. شريط الموارد يستخدم SVG أيقونات (عملة ذهبية، خشب، قمح) وليس إيموجي
-7. كل مبنى يكون بحجم مختلف وموقع مختلف على الخريطة (position: absolute)
-8. عند hover على أي عنصر: يكبر قليلاً (transform: scale(1.1)) + يظهر tooltip بمعلوماته
-9. أضف أشجار وصخور وعشب كديكور حول المباني
-10. JavaScript كامل: بناء مباني، جمع موارد، ترقية مستويات، مؤقتات إنتاج
-11. الكود يكون طويل ومفصّل (3000+ حرف) - لعبة حقيقية وليس demo
+### قاعدة حرجة - ملء الخريطة بالكامل:
+يجب أن تكون الخريطة مليئة مثل الصورة المرجعية!
+ضع على الأقل:
+- القلعة: حجم كبير (width:120px+) في المركز
+- 5+ بيوت بأحجام وأماكن مختلفة
+- 3+ مزارع
+- 1+ منجم
+- 8+ أشجار (كبيرة وصغيرة)
+- 3+ غيوم متحركة
+- 3+ جنود
+- ممرات/طرق بين المباني
+- سياج خشبي حول القرية
+- زهور وشجيرات صغيرة كديكور
+- تلال في الخلفية
+لا مساحات فارغة!
 
 مرحلة 1 - فهم اللعبة:
 اسأل عن: نوع اللعبة، الفكرة، الميزات الأساسية
@@ -268,15 +269,90 @@ prompt: [وصف شاشة اللعبة الرئيسية بالتفصيل - الخ
 
 مرحلة 3 - بناء الواجهة فوراً (بعد الموافقة):
 لما العميل يوافق:
-- ابنِ الكود فوراً في [CODE_BLOCK] - كود لعبة مرسومة بـ SVG حقيقية!
-- ارسم كل العناصر بـ inline SVG (قلاع، بيوت، أشجار، جنود، موارد) من المكتبة أعلاه
-- لا تستخدم إيموجي أبداً - SVG فقط
-- خلفية: تدرج سماء + أرض خضراء
-- أضف أشجار وغيوم وصخور كديكور
-- شريط موارد بأيقونات SVG
-- JavaScript تفاعلي كامل
-- CSS animations (أشجار تتمايل، غيوم تتحرك)
-- الكود يظهر في اللايف مباشرة
+- ابنِ الكود فوراً في [CODE_BLOCK]
+- انظر للصورة المرجعية المرفقة وطابق تخطيطها وألوانها وعناصرها بالضبط
+- استخدم SVG لرسم كل العناصر (لا إيموجي أبداً)
+- ابدأ دائماً بالكود التالي كأساس وعدّل عليه حسب طلب العميل:
+
+[CODE_BLOCK]
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>لعبة بناء القرى</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:Tajawal,sans-serif}
+body{overflow:hidden}
+.w{position:relative;width:100vw;height:100vh;background:linear-gradient(180deg,#87CEEB 0%,#6BB3D9 22%,#90EE90 22%,#3D8B37 60%,#2D6B27 100%);overflow:hidden}
+.rb{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;justify-content:center;gap:15px;padding:8px;background:rgba(0,0,0,0.75);backdrop-filter:blur(10px)}
+.ri{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.1);padding:5px 14px;border-radius:20px;color:#fff;font-weight:bold;font-size:14px}
+.b{position:absolute;cursor:pointer;transition:transform 0.3s,filter 0.3s;filter:drop-shadow(3px 5px 8px rgba(0,0,0,0.5))}
+.b:hover{transform:scale(1.15);z-index:50;filter:drop-shadow(3px 5px 15px rgba(255,215,0,0.5))}
+.tt{display:none;position:absolute;bottom:105%;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.9);color:#fff;padding:8px 14px;border-radius:10px;white-space:nowrap;font-size:12px;z-index:99;border:1px solid rgba(255,215,0,0.3)}
+.b:hover .tt{display:block}
+.c{position:absolute;opacity:0.7}
+.c1{animation:fc 40s linear infinite}
+.c2{animation:fc 55s linear infinite}
+.c3{animation:fc 35s linear infinite}
+.ts{animation:sw 3s ease-in-out infinite;transform-origin:bottom center}
+.ab{position:fixed;bottom:0;left:0;right:0;z-index:100;display:flex;justify-content:center;gap:10px;padding:12px;background:rgba(0,0,0,0.75);backdrop-filter:blur(10px)}
+.abtn{padding:10px 22px;border:2px solid rgba(255,215,0,0.4);border-radius:14px;background:rgba(255,215,0,0.1);color:#FFD700;font-weight:bold;cursor:pointer;transition:all 0.3s;font-size:13px}
+.abtn:hover{background:rgba(255,215,0,0.3);transform:translateY(-3px);box-shadow:0 5px 15px rgba(255,215,0,0.2)}
+@keyframes fc{0%{transform:translateX(-200px)}100%{transform:translateX(calc(100vw + 200px))}}
+@keyframes sw{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(3deg)}}
+.hill{position:absolute;border-radius:50%;background:linear-gradient(180deg,#4A8B3F,#3D7A35)}
+.path{position:absolute;background:#8B7355;border-radius:5px;opacity:0.5}
+</style>
+</head>
+<body>
+<div class="w">
+<!-- شريط الموارد -->
+<div class="rb">
+<div class="ri"><svg viewBox="0 0 20 20" width="18" height="18"><circle cx="10" cy="10" r="9" fill="#FFD700" stroke="#B8860B" stroke-width="1.5"/><text x="10" y="14" text-anchor="middle" font-size="10" fill="#8B6914" font-weight="bold">$</text></svg><span id="gold">500</span></div>
+<div class="ri"><svg viewBox="0 0 20 14" width="20" height="14"><rect x="1" y="1" width="18" height="5" fill="#8B5E3C" rx="2"/><rect x="1" y="7" width="18" height="5" fill="#A0522D" rx="2"/></svg><span id="wood">300</span></div>
+<div class="ri"><svg viewBox="0 0 20 20" width="16" height="16"><circle cx="10" cy="12" r="7" fill="#FFD700"/><rect x="8" y="2" width="4" height="10" fill="#228B22" rx="1"/><rect x="5" y="5" width="3" height="6" fill="#2D8B2D" rx="1"/></svg><span id="food">400</span></div>
+<div class="ri"><svg viewBox="0 0 20 20" width="16" height="16"><polygon points="4,18 10,3 16,18" fill="#808080"/><circle cx="8" cy="14" r="2" fill="#FFD700"/></svg><span id="stone">150</span></div>
+</div>
+<!-- تلال خلفية -->
+<div class="hill" style="width:300px;height:80px;bottom:55%;left:5%"></div>
+<div class="hill" style="width:250px;height:60px;bottom:58%;right:10%"></div>
+<!-- ممرات -->
+<div class="path" style="width:200px;height:10px;top:55%;left:35%;transform:rotate(-5deg)"></div>
+<div class="path" style="width:150px;height:10px;top:65%;left:20%;transform:rotate(10deg)"></div>
+<!-- غيوم -->
+<div class="c c1" style="top:3%"><svg viewBox="0 0 120 45" width="100" height="35"><ellipse cx="60" cy="28" rx="50" ry="16" fill="white"/><ellipse cx="35" cy="22" rx="30" ry="14" fill="white"/><ellipse cx="85" cy="24" rx="28" ry="12" fill="white"/></svg></div>
+<div class="c c2" style="top:8%"><svg viewBox="0 0 100 40" width="80" height="28"><ellipse cx="50" cy="25" rx="40" ry="14" fill="white"/><ellipse cx="30" cy="20" rx="25" ry="11" fill="white"/></svg></div>
+<div class="c c3" style="top:12%"><svg viewBox="0 0 90 35" width="70" height="25"><ellipse cx="45" cy="22" rx="38" ry="13" fill="white"/><ellipse cx="65" cy="18" rx="22" ry="10" fill="white"/></svg></div>
+<!-- القلعة الرئيسية -->
+<div class="b" style="top:28%;left:38%;width:140px">
+<div class="tt">القلعة الرئيسية - مستوى 5</div>
+<svg viewBox="0 0 120 110" width="140" height="130"><rect x="25" y="45" width="70" height="55" fill="#8B7355" rx="3"/><rect x="12" y="32" width="18" height="68" fill="#9B8465"/><rect x="90" y="32" width="18" height="68" fill="#9B8465"/><polygon points="12,32 21,14 30,32" fill="#C41E3A"/><polygon points="90,32 99,14 108,32" fill="#C41E3A"/><rect x="48" y="60" width="24" height="40" fill="#5C4033" rx="12 12 0 0"/><rect x="32" y="52" width="12" height="12" fill="#87CEEB" rx="2"/><rect x="76" y="52" width="12" height="12" fill="#87CEEB" rx="2"/><polygon points="25,45 60,22 95,45" fill="#C41E3A"/><rect x="55" y="10" width="4" height="14" fill="#8B7355"/><polygon points="52,10 60,2 68,10" fill="#FFD700"/></svg>
+</div>
+<!-- أضف المزيد من المباني والأشجار والجنود هنا بنفس الأسلوب -->
+<!-- أزرار الأوامر -->
+<div class="ab">
+<button class="abtn" onclick="build()">بناء</button>
+<button class="abtn" onclick="train()">تدريب</button>
+<button class="abtn" onclick="upgrade()">ترقية</button>
+<button class="abtn" onclick="attack()">هجوم</button>
+</div>
+</div>
+<script>
+let res={gold:500,wood:300,food:400,stone:150};
+function upd(){for(let k in res)document.getElementById(k).textContent=res[k]}
+function build(){if(res.wood>=50&&res.stone>=30){res.wood-=50;res.stone-=30;upd();alert('تم بناء مبنى جديد!')}else alert('موارد غير كافية!')}
+function train(){if(res.food>=30&&res.gold>=20){res.food-=30;res.gold-=20;upd();alert('تم تدريب جندي!')}else alert('موارد غير كافية!')}
+function upgrade(){if(res.gold>=100){res.gold-=100;upd();alert('تمت الترقية!')}else alert('ذهب غير كافٍ!')}
+function attack(){alert('جاري الهجوم...')}
+setInterval(()=>{res.gold+=5;res.wood+=3;res.food+=4;res.stone+=2;upd()},3000);
+</script>
+</body>
+</html>
+[/CODE_BLOCK]
+
+عدّل هذا القالب حسب طلب العميل: أضف بيوت ومزارع وأشجار وجنود بنفس أسلوب SVG. غيّر الألوان والتخطيط ليطابق الصورة المرجعية.
 - اكتب: "تم بناء المرحلة 1 في اللايف! شوف المعاينة."
 [BUTTONS]
 ممتاز، المرحلة التالية|عدّل|غيّر
@@ -1044,8 +1120,16 @@ class AIAssistant:
             # Store code in metadata for frontend to use
             assistant_msg["metadata"]["generated_code"] = code_with_badge
             assistant_msg["metadata"]["has_preview"] = True
+            logger.info(f"CODE EXTRACTED: {len(code)} chars, saved to session")
+        else:
+            # Debug: log why code wasn't found
+            has_doctype = '<!DOCTYPE' in ai_response
+            has_codeblock = '[CODE_BLOCK]' in ai_response
+            has_codetag = '[CODE' in ai_response
+            logger.warning(f"NO CODE EXTRACTED from response. has_doctype={has_doctype}, has_codeblock={has_codeblock}, has_codetag={has_codetag}, response_len={len(ai_response)}")
         
-        await self.db.chat_sessions.update_one({"id": session_id}, update_data)
+        result = await self.db.chat_sessions.update_one({"id": session_id}, update_data)
+        logger.info(f"Session update: matched={result.matched_count}, modified={result.modified_count}")
         
         # === SELF-LEARNING SYSTEM ===
         await self._auto_learn(session_id, user_id, message, ai_response, code, request_type, session)
