@@ -1909,6 +1909,30 @@ class AIAssistant:
         # Also check for objstore URLs
         image_urls += re.findall(r'(https?://integrations\.emergentagent\.com/objstore/\S+)', message)
         
+        # KEY FEATURE: When user approves design (says ممتاز/ابنِ), find the last design image
+        # and attach it so GPT-4o can SEE the design and build code that matches it
+        is_build_request = any(w in message.lower() for w in ["ممتاز", "ابنِ", "ابني", "ابن", "الكود", "موافق", "نعم ابدأ"])
+        if is_build_request and not image_urls:
+            # Find the most recent design image from session attachments
+            for msg in reversed(session.get("messages", [])):
+                if msg.get("attachments"):
+                    for att in msg["attachments"]:
+                        if att.get("type") == "image" and att.get("url") and att.get("image_type") == "design_mockup":
+                            design_url = att["url"]
+                            # Convert relative URL to full URL
+                            if design_url.startswith("/api/"):
+                                design_url = f"{BACKEND_URL}{design_url}" if BACKEND_URL else design_url
+                            image_urls.append(design_url)
+                            logger.info(f"Auto-attached design image for code building: {design_url[:80]}")
+                            break
+                if msg.get("metadata", {}).get("image_urls"):
+                    for img_url in msg["metadata"]["image_urls"]:
+                        image_urls.append(img_url)
+                        logger.info(f"Auto-attached design image from metadata: {img_url[:80]}")
+                        break
+                if image_urls:
+                    break
+        
         # Build conversation history (strip base64 data to avoid token explosion)
         conversation_history = ""
         for msg in session.get("messages", [])[-8:]:
@@ -1934,6 +1958,11 @@ class AIAssistant:
         
         # Clean base64 from current message too
         clean_message = re.sub(r'data:image/[^;]+;base64,[A-Za-z0-9+/=]+', '[صورة مرفقة]', message)
+        
+        # If building code and design image is attached, add instruction to match it
+        if is_build_request and image_urls:
+            clean_message += "\n\n[تعليمة مهمة: الصورة المرفقة هي التصميم المعتمد. ابنِ كود HTML يطابق هذا التصميم بالضبط - نفس الألوان، نفس التخطيط، نفس العناصر، نفس الأسلوب. انظر للصورة بعناية وطابق كل تفصيلة فيها.]"
+        
         full_prompt = f"{conversation_history}\nالمستخدم: {clean_message}"
         
         try:

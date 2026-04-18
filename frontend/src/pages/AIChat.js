@@ -80,6 +80,12 @@ const parseMessageContent = (content, metadata = {}) => {
   
   // First, remove CODE_BLOCK from display (code goes to Live Preview only)
   let displayContent = content.replace(/\[CODE_BLOCK\]\s*```[\s\S]*?```\s*\[\/CODE_BLOCK\]/g, '');
+  // Also handle [CODES_BLOCK] and other variations
+  displayContent = displayContent.replace(/\[CODE\w*_?BLOCK\]\s*```[\s\S]*?```\s*\[\/CODE\w*_?BLOCK\]/g, '');
+  displayContent = displayContent.replace(/\[CODE\w*_?BLOCK\]\s*[\s\S]*?\[\/CODE\w*_?BLOCK\]/g, '');
+  
+  // Remove raw HTML blocks that are code output (<!DOCTYPE...>)
+  displayContent = displayContent.replace(/<!DOCTYPE\s+html[\s\S]*?<\/html>/gi, '');
   
   // Also remove any regular code blocks from display (they go to preview)
   displayContent = displayContent.replace(/```(?:html|javascript|js)?\n?[\s\S]*?```/g, '');
