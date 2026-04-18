@@ -1126,15 +1126,44 @@ def render_design_to_html(design: dict) -> str:
         props = el.get("props") or {}
         label = (props.get("label") or "").replace('"', "'")[:60]
         eid = (el.get("id") or "").replace('"', "'")[:40]
-
-        svg_inner = _element_svg(etype, props)
         transform = f"translate({x}px,{y}px) rotate({rot}deg) scale({sx},{sy})"
         tip = f'<div class="tt">{label}</div>' if label else ''
-        parts.append(
-            f'<div class="el" data-id="{eid}" data-type="{etype}" '
-            f'style="width:{ew}px;height:{eh}px;transform:{transform};z-index:{el.get("z_index",0)}">'
-            f'{tip}{svg_inner}</div>'
-        )
+
+        # User-extracted element (cropped from AI-generated image)
+        if etype == "user_element":
+            src = (props.get("source_image_url") or "").replace('"', "'")
+            crop = props.get("crop") or {}
+            cx = float(crop.get("x", 0))
+            cy = float(crop.get("y", 0))
+            cw = float(crop.get("w", 100))
+            ch = float(crop.get("h", 100))
+            # Scale the background so the crop window covers exactly the element box
+            natural_w = float(props.get("natural_width") or 0)
+            natural_h = float(props.get("natural_height") or 0)
+            if natural_w > 0 and natural_h > 0 and cw > 0 and ch > 0:
+                bg_w = natural_w * (ew / cw)
+                bg_h = natural_h * (eh / ch)
+                bg_x = -cx * (ew / cw)
+                bg_y = -cy * (eh / ch)
+                bg_style = (f"background-image:url('{src}');"
+                            f"background-size:{bg_w}px {bg_h}px;"
+                            f"background-position:{bg_x}px {bg_y}px;"
+                            f"background-repeat:no-repeat")
+            else:
+                bg_style = f"background-image:url('{src}');background-size:cover"
+            data_cat = (props.get("category") or "custom").replace('"', "'")[:30]
+            parts.append(
+                f'<div class="el el-user" data-id="{eid}" data-type="user_element" data-category="{data_cat}" '
+                f'style="width:{ew}px;height:{eh}px;transform:{transform};z-index:{el.get("z_index",0)};{bg_style}">'
+                f'{tip}</div>'
+            )
+        else:
+            svg_inner = _element_svg(etype, props)
+            parts.append(
+                f'<div class="el" data-id="{eid}" data-type="{etype}" '
+                f'style="width:{ew}px;height:{eh}px;transform:{transform};z-index:{el.get("z_index",0)}">'
+                f'{tip}{svg_inner}</div>'
+            )
 
     bg_layer = (
         f'<div class="bg-img" style="background-image:url(\'{bg_img}\')"></div>' if bg_img else ''

@@ -7,86 +7,76 @@
 
 ## ✅ تم إنجازه
 
-### Session Feb 2026 - Visual Designer Studio (احترافي)
-**طلب المستخدم**: محرر مرئي احترافي يسمح للعميل بالبناء بنفسه (سحب، حذف، تبديل، إضافة)، مع حفظ تصاميم متعددة و AI يبني على نفس ترتيب العميل.
+### Session Feb 2026 - Image-Element Extraction Workflow (الحل الحقيقي!)
+**المشكلة الجذرية**: العميل يحب صور AI لكن يريد قطعاً منها (حقل القمح فقط، سلاح معين، إلخ)، ويريد تلك القطعات تظهر حرفياً في اللعبة بدون إعادة رسم.
 
-**المُنَفَّذ** (مكتمل وَمختبر):
-1. **محرر مرئي Konva-based** في `/app/frontend/src/pages/VisualDesigner.js` (route: `/designer`)
-   - Canvas 1280×720 مع zoom/pan/grid
-   - Drag & drop، resize، rotate، delete، duplicate
-   - Undo/Redo (50 خطوة، Ctrl+Z / Ctrl+Y)
-   - Keyboard shortcuts (Delete, Ctrl+D)
-   - Auto-save كل 6 ثوان
-   - مكتبة التصاميم المتعددة (open/duplicate/delete)
-   - Preview modal بـ iframe (live play)
-   - Export HTML كملف
-2. **17 نوع عنصر** في `elementLibrary.js` + `_element_svg()` backend متزامن:
-   - مباني: قلعة، بيت (4 أنماط)، مزرعة، منجم
-   - حقول: حقل قمح، حقل طين، بحيرة
-   - طبيعة: شجرة (4 ألوان)، شجيرة، زهرة (5 ألوان)، صخرة، غيمة
-   - وحدات: جندي
-   - أشكال: دائرة، مربع، نجمة، نص (قابل للتحرير)
-3. **Backend APIs** في `server.py`:
-   - `GET/POST/PATCH/DELETE /api/designs`
-   - `POST /api/designs/{id}/duplicate`
-   - `POST /api/designs/{id}/build` → HTML قابل للعب
-   - حماية per-user
-4. **`render_design_to_html()`** في `ai_chat_service.py`:
-   - يقرأ JSON التصميم ويُنتج HTML كامل بنفس إحداثيات العميل (zero AI drift)
-   - HUD + أزرار تفاعل + سلوك لكل نوع (قمح يعطي طعام، طين يعطي حجر، إلخ)
-5. **زر "المحرر المرئي"** بارز في AIChat page للوصول السريع
+**Workflow المُنَفَّذ**:
+1. AI يولّد صورة تصميم في الشات
+2. العميل يضغط **"✂️ حفظ للمحرر"** على الصورة → تُحفَظ في مكتبته
+3. في المحرر يضغط **"استخراج من صورة"** → نافذة cropping:
+   - يختار صورة من مكتبته
+   - يسحب الماوس لرسم مستطيل حول العنصر (حقل القمح، بيت، سلاح)
+   - يسمّيه + يختار فئة (مباني/حقول/أسلحة/...) → "استخراج"
+4. العنصر المستخرج يظهر في sidebar المحرر (thumbnail حقيقي بقَصّ CSS)
+5. العميل يخلط عناصر من **صور مختلفة** في canvas واحد
+6. "عرض اللايف" → Backend يُنتج HTML **يستخدم نفس الصور الأصلية** مع `background-position/size` لعرض القطعة الصحيحة بالضبط
 
-### Flow التكامل
-- المستخدم يطلب لعبة في الشات → يفتح المحرر بضغطة زر
-- يسحب العناصر، يرتب قريته، يسميها، يحفظها
-- يضغط "عرض اللايف" → backend يُنتج HTML من JSON → iframe يعرض اللعبة قابلة للعب
-- يقدر يبني 5+ قرى مختلفة ويفتحها من المكتبة
+### المكونات التقنية
+**Backend** (`server.py` + `ai_chat_service.py`):
+- `user_images` collection: صور الشات المحفوظة
+- `user_elements` collection: القطعات المستخرجة `{name, source_image_url, crop:{x,y,w,h}, natural_width, natural_height, category}`
+- 7 endpoints: POST/GET/DELETE for user-images + POST/GET/PATCH/DELETE for user-elements
+- `render_design_to_html` يدعم `type="user_element"` برندر CSS `background-position` دقيق
+
+**Frontend**:
+- `VisualDesigner.js`: محرر Konva-based كامل
+- `designer/CropModal.js`: نافذة cropping احترافية بسحب الماوس + overlay مرئي
+- `designer/elementLibrary.js`: مكتبة العناصر المدمجة (17 نوع SVG)
+- `UserElementThumb`: thumbnail يعرض القطعة المستخرجة بـ CSS cropping
+- `CanvasElement`: يدعم user_element عبر Konva `crop` property (pixel-perfect)
+- زر "✂️ حفظ للمحرر" على كل صورة في الشات
+
+### الميزات الكاملة في المحرر
+- 17 عنصر جاهز (قلعة/بيوت/حقول/أشجار/جنود/إلخ)
+- **عناصر مستخرجة غير محدودة** من صور AI
+- Drag/resize/rotate/delete/duplicate/layers
+- Undo/Redo 50 خطوة (Ctrl+Z/Y)
+- Auto-save كل 6 ثوان
+- مكتبة تصاميم متعددة (open/duplicate/delete)
+- Preview modal + Export HTML
+- Zoom/Pan/Grid
 
 ### Previous Sessions
 - Bulletproof game engine fallback (v2.0)
 - Image-backed preview mode
-- DESIGN_IMAGE auto-save to session
 - iframe URL patcher (HTML + CSS)
-- `BACKEND_URL` في .env لإصلاح روابط الصور
-- نظام تدريب AI + Vision Auto-Attach
+- BACKEND_URL في .env
 
 ## Credentials
 - Email: owner@zitex.com | Password: owner123
 
 ## Key Files (للنشر على Railway)
-1. `backend/services/ai_chat_service.py` - AI + `render_design_to_html` + `_element_svg`
-2. `backend/server.py` - APIs + Designer endpoints
-3. `backend/static/game-engine.js` - fallback engine
-4. `backend/.env` - **يجب إضافة `BACKEND_URL=...` في Railway ENV**
-5. `frontend/src/pages/VisualDesigner.js` - المحرر الاحترافي
-6. `frontend/src/pages/designer/elementLibrary.js` - مكتبة العناصر
-7. `frontend/src/pages/AIChat.js` - زر "المحرر المرئي"
-8. `frontend/src/App.js` - route `/designer`
-9. `frontend/package.json` - `konva`, `react-konva`, `use-image`
+1. `backend/services/ai_chat_service.py` - render_design_to_html مع user_element
+2. `backend/server.py` - Designer + user-images + user-elements APIs
+3. `frontend/src/pages/VisualDesigner.js` - محرر
+4. `frontend/src/pages/designer/elementLibrary.js` - عناصر مدمجة
+5. `frontend/src/pages/designer/CropModal.js` - نافذة استخراج
+6. `frontend/src/pages/AIChat.js` - زر "حفظ للمحرر"
+7. `frontend/package.json` - konva, react-konva, use-image
+8. **Railway ENV: `BACKEND_URL=https://your-app.railway.app`**
 
-## Next Steps (P1/P2)
-- **P1**: AI يفهم رغبات العميل من التصميم (reads JSON → يقترح تحسينات)
-- **P1**: معرض تصاميم عام (shareable) لزيادة الفيروسية
-- **P2**: دعم Websites + Mobile في المحرر بعناصر خاصة
-- **P2**: Multi-scene (قرى متعددة مرتبطة)
-- **P2**: Version history per design
+## API Endpoints الجديدة
+- `POST /api/user-images` - حفظ صورة من الشات
+- `GET /api/user-images` - قائمة
+- `DELETE /api/user-images/{id}`
+- `POST /api/user-elements` - إنشاء عنصر بقَصّ
+- `GET /api/user-elements` - قائمة
+- `PATCH /api/user-elements/{id}`
+- `DELETE /api/user-elements/{id}`
 
-## Data Model
-```
-designs: {
-  id, user_id, name, category, genre,
-  canvas: {width, height, background_color, background_image_url},
-  elements: [{id, type, x, y, width, height, rotation, scale_x, scale_y, z_index, props: {variant, color, label, text}}],
-  meta: {},
-  created_at, updated_at
-}
-```
-
-## Backend API Endpoints
-- `GET /api/designs` - list
-- `GET /api/designs/:id` - fetch
-- `POST /api/designs` - create
-- `PATCH /api/designs/:id` - update (used by auto-save)
-- `DELETE /api/designs/:id` - delete
-- `POST /api/designs/:id/duplicate` - clone
-- `POST /api/designs/:id/build` - generate HTML
+## Next Steps
+- **P1**: AI يقرأ التصميم ويقترح عناصر من صور أخرى
+- **P1**: AI auto-detect bounding boxes (ضغطة زر "كشف العناصر")
+- **P2**: دعم cropping لـ websites/mobile apps
+- **P2**: Magic wand / freeform selection (حالياً مستطيل فقط)
+- **P2**: Shared library بين المستخدمين (marketplace)

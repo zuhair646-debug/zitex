@@ -2,17 +2,23 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Stage, Layer, Rect, Image as KonvaImage, Transformer, Group, Line } from 'react-konva';
 import useImage from 'use-image';
 import { ELEMENT_LIBRARY, CATEGORIES, elementSvg, svgToDataUrl } from './designer/elementLibrary';
+import CropModal from './designer/CropModal';
 import { toast } from 'sonner';
 import {
   Trash2, Copy, RotateCcw, ZoomIn, ZoomOut, Save, FolderOpen,
-  Play, Download, ArrowLeft, Eye, Plus, ChevronUp, ChevronDown, Undo2, Redo2
+  Play, Download, ArrowLeft, Eye, Plus, ChevronUp, ChevronDown, Undo2, Redo2,
+  Scissors, Sparkles
 } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
 // =============== CANVAS ELEMENT RENDERER ===============
 function CanvasElement({ el, isSelected, onSelect, onChange }) {
-  const [img] = useImage(svgToDataUrl(elementSvg(el.type, el.props)), 'anonymous');
+  // Build the image source: for user_element, load the source image; for built-ins use SVG data URL
+  const svgSrc = el.type === 'user_element'
+    ? (el.props?.source_image_url || '')
+    : svgToDataUrl(elementSvg(el.type, el.props));
+  const [img] = useImage(svgSrc, 'anonymous');
   const shapeRef = useRef();
   const trRef = useRef();
 
@@ -24,6 +30,18 @@ function CanvasElement({ el, isSelected, onSelect, onChange }) {
   }, [isSelected]);
 
   if (!img) return null;
+
+  // For user_element, apply crop so only the extracted region is shown, stretched to el.width/height
+  const cropProps = el.type === 'user_element' && el.props?.crop
+    ? {
+        crop: {
+          x: Math.max(0, Number(el.props.crop.x) || 0),
+          y: Math.max(0, Number(el.props.crop.y) || 0),
+          width: Math.max(1, Number(el.props.crop.w) || 1),
+          height: Math.max(1, Number(el.props.crop.h) || 1),
+        },
+      }
+    : {};
 
   return (
     <>
@@ -39,6 +57,7 @@ function CanvasElement({ el, isSelected, onSelect, onChange }) {
         onClick={onSelect}
         onTap={onSelect}
         onDragEnd={(e) => onChange({ ...el, x: e.target.x(), y: e.target.y() })}
+        {...cropProps}
         onTransformEnd={() => {
           const node = shapeRef.current;
           const sx = node.scaleX(); const sy = node.scaleY();
@@ -69,6 +88,51 @@ function CanvasElement({ el, isSelected, onSelect, onChange }) {
   );
 }
 
+// =============== USER ELEMENT THUMBNAIL (CSS-only crop preview) ===============
+function UserElementThumb({ el, onAdd, onDelete }) {
+  const { source_image_url, crop, natural_width, natural_height } = el;
+  const { x, y, w, h } = crop || {};
+  const cw = w || 1; const ch = h || 1;
+  const nw = natural_width || 1; const nh = natural_height || 1;
+  // We want the thumb to show only the crop region, scaled to fit 88x88
+  const targetW = 88;
+  const targetH = 88;
+  const bgW = nw * (targetW / cw);
+  const bgH = nh * (targetH / ch);
+  const bgX = -(x || 0) * (targetW / cw);
+  const bgY = -(y || 0) * (targetH / ch);
+  return (
+    <div className="relative group">
+      <button
+        onClick={() => onAdd(el)}
+        className="w-full flex flex-col items-center gap-1 p-2 bg-white/5 hover:bg-yellow-500/20 hover:border-yellow-500/50 border border-transparent rounded-lg transition-all"
+        data-testid={`add-user-${el.id}`}
+      >
+        <div
+          style={{
+            width: targetW,
+            height: targetH,
+            backgroundImage: `url('${source_image_url}')`,
+            backgroundSize: `${bgW}px ${bgH}px`,
+            backgroundPosition: `${bgX}px ${bgY}px`,
+            backgroundRepeat: 'no-repeat',
+            borderRadius: 8,
+          }}
+          className="border border-white/10"
+        />
+        <div className="text-[11px] truncate w-full text-center">{el.name}</div>
+      </button>
+      <button
+        onClick={() => onDelete(el)}
+        className="absolute top-1 left-1 p-1 bg-red-600/70 hover:bg-red-600 rounded opacity-0 group-hover:opacity-100"
+        data-testid={`delete-user-el-${el.id}`}
+      >
+        <Trash2 className="w-3 h-3" />
+      </button>
+    </div>
+  );
+}
+
 // =============== MAIN DESIGNER ===============
 export default function VisualDesigner({ user }) {
   const stageRef = useRef();
@@ -85,7 +149,9 @@ export default function VisualDesigner({ user }) {
   const [showGrid, setShowGrid] = useState(true);
   const [snap, setSnap] = useState(false);
   const [savedDesigns, setSavedDesigns] = useState([]);
+  const [userElements, setUserElements] = useState([]);
   const [showLibrary, setShowLibrary] = useState(false);
+  const [showCrop, setShowCrop] = useState(false);
   const [saving, setSaving] = useState(false);
   const [history, setHistory] = useState([[]]);
   const [historyIdx, setHistoryIdx] = useState(0);
@@ -127,8 +193,8 @@ export default function VisualDesigner({ user }) {
     return () => window.removeEventListener('resize', fit);
   }, [canvas.width, canvas.height]);
 
-  // Load designs list
-  useEffect(() => { loadDesigns(); }, []);
+  // Load designs + user elements
+  useEffect(() => { loadDesigns(); loadUserElements(); }, []);
 
   // Auto-save every 6s if there's any change
   useEffect(() => {
@@ -157,6 +223,55 @@ export default function VisualDesigner({ user }) {
       const data = await res.json();
       setSavedDesigns(data.designs || []);
     } catch (e) { /* ignore */ }
+  };
+
+  const loadUserElements = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API}/api/user-elements`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      setUserElements(data.elements || []);
+    } catch (e) { /* ignore */ }
+  };
+
+  const deleteUserElement = async (el) => {
+    if (!window.confirm(`حذف "${el.name}" من مكتبتك؟`)) return;
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`${API}/api/user-elements/${el.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      setUserElements((prev) => prev.filter((x) => x.id !== el.id));
+      toast.success('حُذف');
+    } catch (e) { toast.error('فشل الحذف'); }
+  };
+
+  const addUserElement = (userEl) => {
+    // Default size: keep aspect from crop, capped at 200
+    const cw = userEl.crop?.w || 100; const ch = userEl.crop?.h || 100;
+    const maxSide = 200;
+    let w, h;
+    if (cw >= ch) { w = Math.min(maxSide, cw); h = w * (ch / cw); }
+    else { h = Math.min(maxSide, ch); w = h * (cw / ch); }
+    const el = {
+      id: `el-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      type: 'user_element',
+      x: canvas.width / 2 - w / 2,
+      y: canvas.height / 2 - h / 2,
+      width: w,
+      height: h,
+      rotation: 0,
+      z_index: elements.length,
+      props: {
+        label: userEl.name,
+        source_image_url: userEl.source_image_url,
+        crop: userEl.crop,
+        natural_width: userEl.natural_width,
+        natural_height: userEl.natural_height,
+        category: userEl.category,
+        user_element_id: userEl.id,
+      },
+    };
+    setElementsH((prev) => [...prev, el]);
+    setSelectedId(el.id);
   };
 
   const addElement = (type) => {
@@ -322,6 +437,9 @@ export default function VisualDesigner({ user }) {
           <button onClick={() => setShowLibrary(true)} className="flex items-center gap-2 px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg" data-testid="open-library-btn">
             <FolderOpen className="w-4 h-4" /><span className="text-sm">مكتبتي ({savedDesigns.length})</span>
           </button>
+          <button onClick={() => setShowCrop(true)} className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-purple-600/40 to-pink-600/40 hover:from-purple-600/60 hover:to-pink-600/60 rounded-lg border border-purple-500/30" data-testid="open-crop-btn">
+            <Scissors className="w-4 h-4" /><span className="text-sm">استخراج من صورة</span>
+          </button>
           <button onClick={newDesign} className="flex items-center gap-2 px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg" data-testid="new-design-btn">
             <Plus className="w-4 h-4" /><span className="text-sm">جديد</span>
           </button>
@@ -363,6 +481,27 @@ export default function VisualDesigner({ user }) {
               </button>
             ))}
           </div>
+
+          {/* User-Extracted Elements */}
+          <div className="mt-6 pt-4 border-t border-white/10">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs font-bold text-purple-400 uppercase flex items-center gap-1"><Sparkles className="w-3 h-3" /> عناصري المستخرجة ({userElements.length})</div>
+              <button onClick={() => setShowCrop(true)} className="text-[10px] bg-purple-600/30 hover:bg-purple-600/50 px-2 py-1 rounded" data-testid="add-crop-mini-btn">+ جديد</button>
+            </div>
+            {userElements.length === 0 ? (
+              <div className="text-[11px] text-white/40 text-center py-3 border border-dashed border-white/10 rounded-lg">
+                <div className="text-2xl mb-1">✂️</div>
+                <div>قص أجزاء من صورك المحفوظة لإنشاء عناصر خاصة</div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {userElements.map((ue) => (
+                  <UserElementThumb key={ue.id} el={ue} onAdd={addUserElement} onDelete={deleteUserElement} />
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="mt-4 space-y-2 pt-3 border-t border-white/10">
             <label className="flex items-center gap-2 text-xs cursor-pointer">
               <input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid(e.target.checked)} />
@@ -536,6 +675,14 @@ export default function VisualDesigner({ user }) {
             <iframe srcDoc={previewHtml} className="flex-1 w-full border-0" sandbox="allow-scripts allow-same-origin" title="preview" />
           </div>
         </div>
+      )}
+
+      {/* Crop Modal — extract pieces from saved chat images */}
+      {showCrop && (
+        <CropModal
+          onClose={() => setShowCrop(false)}
+          onExtracted={(el) => { setUserElements((prev) => [el, ...prev]); }}
+        />
       )}
     </div>
   );

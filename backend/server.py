@@ -2995,6 +2995,102 @@ async def build_from_design(design_id: str, current_user: dict = Depends(get_cur
     from services.ai_chat_service import render_design_to_html
     html = render_design_to_html(d)
     return {"html": html, "design_id": design_id}
+
+
+# ============== USER IMAGES (saved from chat) ==============
+class UserImage(BaseModel):
+    id: Optional[str] = None
+    user_id: Optional[str] = None
+    url: str
+    prompt: str = ""
+    source_session_id: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+@api_router.post("/user-images")
+async def save_user_image(img: UserImage, current_user: dict = Depends(get_current_user)):
+    """Save a chat-generated image to the user's personal library so they can extract elements from it later."""
+    # Avoid duplicates: same URL for same user
+    existing = await db.user_images.find_one({"user_id": current_user["user_id"], "url": img.url}, {"_id": 0})
+    if existing:
+        return existing
+    d = img.model_dump()
+    d["id"] = str(uuid.uuid4())
+    d["user_id"] = current_user["user_id"]
+    d["created_at"] = datetime.now(timezone.utc).isoformat()
+    await db.user_images.insert_one(d)
+    d.pop("_id", None)
+    return d
+
+
+@api_router.get("/user-images")
+async def list_user_images(current_user: dict = Depends(get_current_user)):
+    items = await db.user_images.find(
+        {"user_id": current_user["user_id"]},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(500)
+    return {"images": items}
+
+
+@api_router.delete("/user-images/{image_id}")
+async def delete_user_image(image_id: str, current_user: dict = Depends(get_current_user)):
+    r = await db.user_images.delete_one({"id": image_id, "user_id": current_user["user_id"]})
+    if r.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Image not found")
+    return {"ok": True}
+
+
+# ============== USER ELEMENTS (cropped pieces from saved images) ==============
+class UserElement(BaseModel):
+    id: Optional[str] = None
+    user_id: Optional[str] = None
+    name: str                                  # e.g. "حقل قمح" (user-picked label)
+    source_image_url: str                      # URL of the source image
+    source_image_id: Optional[str] = None      # reference to user_images.id
+    crop: dict                                 # {x, y, w, h} — in natural image pixels
+    natural_width: int                          # source image natural width
+    natural_height: int
+    category: str = "custom"                   # user-defined grouping
+    created_at: Optional[str] = None
+
+
+@api_router.post("/user-elements")
+async def create_user_element(el: UserElement, current_user: dict = Depends(get_current_user)):
+    d = el.model_dump()
+    d["id"] = str(uuid.uuid4())
+    d["user_id"] = current_user["user_id"]
+    d["created_at"] = datetime.now(timezone.utc).isoformat()
+    await db.user_elements.insert_one(d)
+    d.pop("_id", None)
+    return d
+
+
+@api_router.get("/user-elements")
+async def list_user_elements(current_user: dict = Depends(get_current_user)):
+    items = await db.user_elements.find(
+        {"user_id": current_user["user_id"]},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(500)
+    return {"elements": items}
+
+
+@api_router.patch("/user-elements/{el_id}")
+async def update_user_element(el_id: str, el: UserElement, current_user: dict = Depends(get_current_user)):
+    existing = await db.user_elements.find_one({"id": el_id, "user_id": current_user["user_id"]})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Element not found")
+    update = el.model_dump(exclude={"id", "user_id", "created_at"})
+    await db.user_elements.update_one({"id": el_id}, {"$set": update})
+    updated = await db.user_elements.find_one({"id": el_id}, {"_id": 0})
+    return updated
+
+
+@api_router.delete("/user-elements/{el_id}")
+async def delete_user_element(el_id: str, current_user: dict = Depends(get_current_user)):
+    r = await db.user_elements.delete_one({"id": el_id, "user_id": current_user["user_id"]})
+    if r.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Element not found")
+    return {"ok": True}
 # ============== END VISUAL DESIGNER APIS ==============
 
 
@@ -3070,6 +3166,16 @@ async def serve_designer_preview_test():
 async def serve_user_designed_preview():
     import os
     p = os.path.join(os.path.dirname(__file__), "static", "user-designed-preview.html")
+    if os.path.exists(p):
+        with open(p, 'r') as f:
+            content = f.read()
+        return Response(content=content, media_type="text/html")
+
+
+@app.get("/api/user-crop-preview")
+async def serve_user_crop_preview():
+    import os
+    p = os.path.join(os.path.dirname(__file__), "static", "user-crop-preview.html")
     if os.path.exists(p):
         with open(p, 'r') as f:
             content = f.read()

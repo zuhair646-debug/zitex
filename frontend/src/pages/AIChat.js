@@ -1543,6 +1543,25 @@ const AIChat = ({ user }) => {
               <Button size="sm" onClick={() => downloadAsset(attachment.url, 'zitex-image.png')} className="bg-white/20 backdrop-blur">
                 <Download className="w-4 h-4 me-1" /> تحميل
               </Button>
+              <Button
+                size="sm"
+                onClick={async () => {
+                  try {
+                    const token = localStorage.getItem('token');
+                    const res = await fetch(`${API_URL}/api/user-images`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                      body: JSON.stringify({ url: attachment.url, prompt: attachment.prompt || '', source_session_id: currentSession?.id || null }),
+                    });
+                    if (res.ok) { toast.success('حُفظت الصورة في المحرر ✂️'); }
+                    else { toast.error('فشل الحفظ'); }
+                  } catch (e) { toast.error('فشل الاتصال'); }
+                }}
+                className="bg-yellow-500/80 backdrop-blur hover:bg-yellow-500 text-black font-bold"
+                data-testid={`save-img-to-designer-${attachment.id || 'x'}`}
+              >
+                ✂️ حفظ للمحرر
+              </Button>
               <Button size="sm" onClick={() => openSocialExport({ id: attachment.id || 'temp', url: attachment.url, type: 'image' })} className="bg-purple-500/80 backdrop-blur hover:bg-purple-500">
                 <Share2 className="w-4 h-4 me-1" /> نشر
               </Button>
