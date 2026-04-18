@@ -7,6 +7,7 @@ from .models import WebsiteProject, ChatMessageIn, AIGenerateIn
 from .templates import list_templates, get_template
 from .renderer import render_website_to_html
 from .ai_service import chat_with_assistant, extract_build_payload, clean_display_text, build_sections_from_payload
+from .variants import list_variants_for_template, get_variant_project
 
 
 def register_routes(app, database, auth_dep):
