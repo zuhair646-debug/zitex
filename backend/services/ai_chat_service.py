@@ -995,6 +995,9 @@ class AIAssistant:
         
         await self.db.chat_sessions.update_one({"id": session_id}, update_data)
         
+        # === SELF-LEARNING SYSTEM ===
+        await self._auto_learn(session_id, user_id, message, ai_response, code, request_type, session)
+        
         # Update title
         non_welcome = [m for m in session.get("messages", []) if not m.get("metadata", {}).get("is_welcome")]
         if len(non_welcome) == 0:
@@ -1007,6 +1010,198 @@ class AIAssistant:
             "assistant_message": assistant_msg,
             "credits_used": credits_used
         }
+    
+    # ============== SELF-LEARNING SYSTEM ==============
+    
+    APPROVAL_WORDS = ["ممتاز", "رائع", "حلو", "جميل", "موافق", "ابنِ", "كمّل", "المرحلة التالية", "ابدأ", "تمام", "اوكي", "ok", "great", "perfect", "عظيم", "يجنن"]
+    REJECTION_WORDS = ["عدّل", "غيّر", "ما عجبني", "سيء", "بشع", "خطأ", "مو كذا", "غلط", "لا", "ما يصلح", "ضعيف", "بدائي"]
+    
+    async def _auto_learn(self, session_id: str, user_id: str, user_message: str, ai_response: str, code: Optional[str], request_type: str, session: Dict):
+        """Self-learning: analyze user feedback and auto-save successful patterns"""
+        try:
+            msg_lower = user_message.lower().strip()
+            
+            # 1. Detect approval words
+            is_approval = any(word in msg_lower for word in self.APPROVAL_WORDS)
+            is_rejection = any(word in msg_lower for word in self.REJECTION_WORDS)
+            
+            # Get the previous code from session (the one built before this message)
+            prev_code = session.get("generated_code")
+            
+            # If user approved AND there's existing code, save it
+            if is_approval and prev_code and len(prev_code) > 500:
+                await self._save_successful_project(session, prev_code, request_type, user_message)
+            
+            # If new code was just generated in THIS response, track quality
+            if code and len(code) > 500:
+                await self._track_generated_code(session_id, code, request_type)
+                
+                # Also save the new code if user gave approval in same message (like "ممتاز ابنِ الكود")
+                if is_approval:
+                    await self._save_successful_project(session, code, request_type, user_message)
+            
+            # Learn from rejection
+            if is_rejection:
+                await self._learn_from_rejection(session, user_message, request_type)
+            
+        except Exception as e:
+            logger.error(f"Auto-learn error: {e}")
+    
+    async def _save_successful_project(self, session: Dict, code: str, request_type: str, approval_msg: str):
+        """Auto-save approved code as a training example"""
+        try:
+            # Check if already saved
+            title = session.get("title", "مشروع بدون عنوان")
+            existing = await self.db.training_examples.find_one({"title": title, "source": "auto_learned"})
+            if existing:
+                return
+            
+            # Determine category
+            cat_map = {"game": "game", "game_3d": "game", "website": "website", "webapp": "website", "mobile": "mobile"}
+            category = cat_map.get(request_type, "website")
+            
+            example = {
+                "id": str(uuid.uuid4()),
+                "category": category,
+                "subcategory": "",
+                "title": title,
+                "description": f"تم اعتماده تلقائياً - رد العميل: {approval_msg[:100]}",
+                "design_image_url": "",
+                "html_code": code[:15000],
+                "tags": [category, "auto-learned", "client-approved"],
+                "is_active": True,
+                "usage_count": 0,
+                "source": "auto_learned",
+                "quality_score": 8,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+            await self.db.training_examples.insert_one(example)
+            logger.info(f"Auto-learned: saved approved project '{title}' as training example")
+        except Exception as e:
+            logger.error(f"Save successful project error: {e}")
+    
+    async def _learn_from_rejection(self, session: Dict, rejection_msg: str, request_type: str):
+        """Learn from negative feedback - save as knowledge rule"""
+        try:
+            # Extract the insight from rejection
+            insight = {
+                "id": str(uuid.uuid4()),
+                "type": "rejection_pattern",
+                "category": request_type,
+                "user_feedback": rejection_msg[:500],
+                "session_title": session.get("title", ""),
+                "lesson": "",
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            
+            # Auto-categorize the rejection
+            msg = rejection_msg.lower()
+            if any(w in msg for w in ["لون", "ألوان", "غامق", "فاتح", "داكن"]):
+                insight["lesson"] = "العميل غير راضي عن الألوان - يجب تنويع التدرجات"
+                insight["rule_type"] = "colors"
+            elif any(w in msg for w in ["بسيط", "بدائي", "ضعيف", "فاضي"]):
+                insight["lesson"] = "الكود بسيط جداً - يجب إضافة تفاصيل وتأثيرات أكثر"
+                insight["rule_type"] = "complexity"
+            elif any(w in msg for w in ["حجم", "كبير", "صغير", "خط"]):
+                insight["lesson"] = "مشكلة في الأحجام والخطوط"
+                insight["rule_type"] = "sizing"
+            elif any(w in msg for w in ["ما يشتغل", "خطأ", "خربان", "ما يتحرك"]):
+                insight["lesson"] = "الكود فيه أخطاء تقنية - يجب اختبار JavaScript"
+                insight["rule_type"] = "bugs"
+            else:
+                insight["lesson"] = f"عدم رضا: {rejection_msg[:200]}"
+                insight["rule_type"] = "general"
+            
+            await self.db.knowledge_base.insert_one(insight)
+            logger.info(f"Learned from rejection: {insight['rule_type']}")
+        except Exception as e:
+            logger.error(f"Learn from rejection error: {e}")
+    
+    async def _track_generated_code(self, session_id: str, code: str, request_type: str):
+        """Track generated code for quality analysis"""
+        try:
+            # Simple quality scoring
+            score = 0
+            if "cdn.tailwindcss.com" in code: score += 2
+            if "font-awesome" in code.lower(): score += 1
+            if "gradient" in code: score += 1
+            if "hover:" in code: score += 1
+            if "transition" in code or "animation" in code: score += 1
+            if "addEventListener" in code or "onclick" in code.lower(): score += 1
+            if len(code) > 3000: score += 1
+            if "responsive" in code.lower() or "md:" in code: score += 1
+            if "Tajawal" in code: score += 1
+            
+            await self.db.code_quality_log.insert_one({
+                "session_id": session_id,
+                "request_type": request_type,
+                "code_length": len(code),
+                "quality_score": score,
+                "max_score": 10,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            logger.error(f"Track code error: {e}")
+    
+    async def _get_knowledge_rules(self, request_type: str) -> str:
+        """Fetch accumulated knowledge rules for the prompt"""
+        try:
+            # Get top insights from knowledge base
+            rules = await self.db.knowledge_base.find(
+                {"category": {"$in": [request_type, "general"]}},
+                {"_id": 0, "lesson": 1, "rule_type": 1}
+            ).sort("created_at", -1).limit(10).to_list(10)
+            
+            if not rules:
+                return ""
+            
+            # Deduplicate by rule_type
+            seen_types = set()
+            unique_rules = []
+            for r in rules:
+                rt = r.get("rule_type", "general")
+                if rt not in seen_types:
+                    seen_types.add(rt)
+                    unique_rules.append(r["lesson"])
+            
+            if not unique_rules:
+                return ""
+            
+            rules_text = "\n\n## قواعد مستفادة من تجارب سابقة (مهم - تعلّمتها من ملاحظات العملاء):\n"
+            for i, rule in enumerate(unique_rules, 1):
+                rules_text += f"{i}. {rule}\n"
+            
+            return rules_text
+        except Exception as e:
+            logger.error(f"Get knowledge rules error: {e}")
+            return ""
+    
+    async def get_learning_stats(self) -> Dict:
+        """Get self-learning statistics"""
+        try:
+            auto_learned = await self.db.training_examples.count_documents({"source": "auto_learned", "is_active": True})
+            knowledge_rules = await self.db.knowledge_base.count_documents({})
+            quality_logs = await self.db.code_quality_log.count_documents({})
+            
+            # Average quality score
+            avg_quality = 0
+            if quality_logs > 0:
+                pipeline = [{"$group": {"_id": None, "avg": {"$avg": "$quality_score"}}}]
+                result = await self.db.code_quality_log.aggregate(pipeline).to_list(1)
+                if result:
+                    avg_quality = round(result[0]["avg"], 1)
+            
+            return {
+                "auto_learned_examples": auto_learned,
+                "knowledge_rules": knowledge_rules,
+                "total_generations": quality_logs,
+                "avg_quality_score": avg_quality,
+                "max_quality_score": 10
+            }
+        except Exception as e:
+            logger.error(f"Learning stats error: {e}")
+            return {}
     
     async def _generate_image(self, user_id: str, session_id: str, prompt: str, credits: int) -> Tuple[str, List[Dict], int]:
         try:
@@ -1651,6 +1846,11 @@ class AIAssistant:
         training_context = await self._get_training_examples(request_type, message)
         if training_context:
             system_prompt += training_context
+        
+        # Add accumulated knowledge rules from user feedback
+        knowledge_rules = await self._get_knowledge_rules(request_type)
+        if knowledge_rules:
+            system_prompt += knowledge_rules
         
         # Extract image URLs from message
         image_urls = re.findall(r'(https?://\S+\.(?:png|jpg|jpeg|gif|webp))', message, re.IGNORECASE)

@@ -200,17 +200,52 @@ export default function AdminTraining({ user }) {
       <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
         {/* Stats */}
         {stats && (
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3" data-testid="training-stats">
-            <div className="bg-gradient-to-br from-amber-500/20 to-yellow-500/10 border border-amber-500/30 rounded-xl p-4 text-center">
-              <p className="text-2xl font-bold text-amber-400">{stats.total_examples}</p>
-              <p className="text-xs text-gray-400">إجمالي الأمثلة</p>
-            </div>
-            {CATEGORIES.map(cat => (
-              <div key={cat.id} className="bg-slate-800/30 border border-slate-700 rounded-xl p-4 text-center">
-                <p className="text-2xl font-bold">{stats.by_category?.[cat.id] || 0}</p>
-                <p className="text-xs text-gray-400">{cat.label}</p>
+          <div className="space-y-4">
+            {/* Learning Stats Banner */}
+            <div className="bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 border border-emerald-500/30 rounded-2xl p-5" data-testid="learning-stats">
+              <div className="flex items-center gap-2 mb-3">
+                <Brain className="w-5 h-5 text-emerald-400" />
+                <h2 className="font-bold text-emerald-300">التعلم الذاتي</h2>
+                <span className="text-xs px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded-full animate-pulse">نشط</span>
               </div>
-            ))}
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div className="bg-black/30 rounded-xl p-3 text-center">
+                  <p className="text-xl font-bold text-emerald-400">{stats.auto_learned || 0}</p>
+                  <p className="text-xs text-gray-400">تعلّم تلقائي</p>
+                </div>
+                <div className="bg-black/30 rounded-xl p-3 text-center">
+                  <p className="text-xl font-bold text-cyan-400">{stats.knowledge_rules || 0}</p>
+                  <p className="text-xs text-gray-400">قواعد مكتسبة</p>
+                </div>
+                <div className="bg-black/30 rounded-xl p-3 text-center">
+                  <p className="text-xl font-bold text-blue-400">{stats.total_generations || 0}</p>
+                  <p className="text-xs text-gray-400">مشروع تم بناؤه</p>
+                </div>
+                <div className="bg-black/30 rounded-xl p-3 text-center">
+                  <p className="text-xl font-bold text-amber-400">{stats.avg_quality_score || 0}/10</p>
+                  <p className="text-xs text-gray-400">متوسط الجودة</p>
+                </div>
+                <div className="bg-black/30 rounded-xl p-3 text-center">
+                  <p className="text-xl font-bold text-purple-400">{stats.total_examples || 0}</p>
+                  <p className="text-xs text-gray-400">إجمالي الأمثلة</p>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mt-3">الذكاء يتحسّن تلقائياً مع كل مشروع ناجح. لما العميل يوافق على التصميم، الكود ينحفظ كمثال تدريبي. لما يرفض، النظام يتعلم السبب.</p>
+            </div>
+
+            {/* Category Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3" data-testid="training-stats">
+              <div className="bg-gradient-to-br from-amber-500/20 to-yellow-500/10 border border-amber-500/30 rounded-xl p-4 text-center">
+                <p className="text-2xl font-bold text-amber-400">{stats.total_examples}</p>
+                <p className="text-xs text-gray-400">إجمالي الأمثلة</p>
+              </div>
+              {CATEGORIES.map(cat => (
+                <div key={cat.id} className="bg-slate-800/30 border border-slate-700 rounded-xl p-4 text-center">
+                  <p className="text-2xl font-bold">{stats.by_category?.[cat.id] || 0}</p>
+                  <p className="text-xs text-gray-400">{cat.label}</p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

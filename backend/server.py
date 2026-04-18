@@ -2578,13 +2578,34 @@ async def upload_training_image(
 async def get_training_stats(admin: dict = Depends(require_admin)):
     """Get training system statistics"""
     total = await db.training_examples.count_documents({"is_active": True})
+    auto_learned = await db.training_examples.count_documents({"is_active": True, "source": "auto_learned"})
+    manual = total - auto_learned
     by_category = {}
     categories = ["game", "website", "landing", "ecommerce", "portfolio", "dashboard", "mobile"]
     for cat in categories:
         count = await db.training_examples.count_documents({"is_active": True, "category": cat})
         if count > 0:
             by_category[cat] = count
-    return {"total_examples": total, "by_category": by_category}
+    
+    # Learning stats
+    knowledge_rules = await db.knowledge_base.count_documents({})
+    quality_logs = await db.code_quality_log.count_documents({})
+    avg_quality = 0
+    if quality_logs > 0:
+        pipeline = [{"$group": {"_id": None, "avg": {"$avg": "$quality_score"}}}]
+        result = await db.code_quality_log.aggregate(pipeline).to_list(1)
+        if result:
+            avg_quality = round(result[0]["avg"], 1)
+    
+    return {
+        "total_examples": total,
+        "auto_learned": auto_learned,
+        "manual_added": manual,
+        "by_category": by_category,
+        "knowledge_rules": knowledge_rules,
+        "total_generations": quality_logs,
+        "avg_quality_score": avg_quality
+    }
 
 class FetchTemplatesRequest(BaseModel):
     query: str
