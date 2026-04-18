@@ -1,83 +1,132 @@
 # Zitex AI Platform - PRD
 
 ## Original Problem Statement
-منصة "Zitex" - ذكاء اصطناعي يولّد مواقع/ألعاب/صور/فيديو. نشر يدوي إلى Railway.
+منصة "Zitex" - ذكاء اصطناعي يولّد مواقع/ألعاب/صور/فيديو. الكل معزول في Modules. النشر يدوي إلى Railway.
 
 ## User Language: Arabic (العربية)
 
-## 🎯 Modular Architecture (New Strategy - Feb 2026)
+## 🎯 Modular Architecture (Feb 2026)
 **كل قسم في module مستقل تماماً** — يمكن تطويره/نشره/إصلاحه بدون لمس الأقسام الأخرى.
 
 ### Modules Status
-- ✅ **Websites**: `/backend/modules/websites/` + `/frontend/src/pages/websites/` — **LIVE**
-- 🔒 **Games**: قريباً (محرر + game engine موجودان في VisualDesigner.js كنواة)
+- ✅ **Websites**: `/backend/modules/websites/` — **LIVE + Wizard**
+- 🔒 **Games**: قريباً
 - 🔒 **Videos**: قريباً
 - 🔒 **Images**: قريباً
 
-## ✅ Websites Module (مكتمل)
-**Backend** (`/backend/modules/websites/` — 5 ملفات مستقلة):
-- `__init__.py` — exports `register_routes`
-- `models.py` — Pydantic (WebsiteProject, WebsiteSection, ChatMessageIn, AIGenerateIn)
-- `templates.py` — 6 قوالب جاهزة (متجر / مطعم / شركة / بورتفوليو / SaaS / فارغ)
-- `renderer.py` — يحوّل JSON → HTML responsive بـ 13 نوع قسم
-- `ai_service.py` — مستشار AI عبر litellm + Emergent LLM Key
-- `routes.py` — 11 endpoint تحت `/api/websites/*`
+---
 
-**Frontend** (`/frontend/src/pages/websites/WebsiteStudio.js`):
-- 3 tabs في sidebar: Chat / Sections / Theme
-- Templates picker مع live preview iframe
-- Section list: reorder / duplicate / delete / visibility / add من 13 نوع
-- Properties panel: تعديل كل حقل في القسم المحدد
-- Theme editor: 5 ألوان + خط + تدوير
-- Live preview iframe: يتحدّث فوراً
-- Auto-save كل 1.5 ث
-- Library modal: فتح/حذف مواقع محفوظة
-- Export HTML كملف
-- Empty state احترافي
+## ✅ Websites Module (مكتمل + محدّث Feb 2026)
 
-### Section Types (13)
-hero, features, about, products, menu, gallery, testimonials, team, pricing, faq, contact, cta, footer
+### Backend (`/backend/modules/websites/` — 7 ملفات):
+- `__init__.py`
+- `models.py` — WebsiteProject (يضم الآن `wizard` field)
+- `templates.py` — 6 قوالب
+- `variants.py` — 10 أنماط بصرية لكل قالب
+- `wizard.py` ⭐ **(جديد)** — محرك الـ wizard، 10 خطوات، تطبيق الإجابات
+- `renderer.py` — JSON → HTML (يدعم radius="full" للأزرار الدائرية)
+- `ai_service.py` — consultant أولوية + تفسير توجيهات [WIZARD_ACTION]
+- `routes.py` — 16 endpoint
 
-### Database Collections
-- `website_projects` — مشاريع المستخدمين
-- (العناصر القديمة لا تزال: `users`, `chat_sessions`, `designs`, `user_images`, `user_elements`)
+### Frontend (`/frontend/src/pages/websites/WebsiteStudio.js`):
+تخطيط جديد:
+1. **الأعلى**: شريط قوالب (6 بطاقات) + شريط أنماط بصرية (10 بطاقات بألوان)
+2. **الوسط**: معاينة لايف
+3. **الأسفل**: شات المستشار مع رقائق ديناميكية حسب خطوة الـ wizard + زر الاستقلالية
 
-### API Endpoints (all under `/api/websites/*`)
-- `GET /templates` - list 6 templates (public)
-- `GET /templates/{id}/preview-html` - HTML preview (public)
-- `GET /projects` - user's projects
-- `GET /projects/{id}` - single project
-- `POST /projects` - create (auto-fill from template)
-- `PATCH /projects/{id}` - update (auto-save)
-- `DELETE /projects/{id}`
+### Wizard Flow (10 خطوات):
+1. **buttons** — شكل الأزرار (دائري/ناعم/متوسط/حاد)
+2. **colors** — 8 أجواء لونية (كلاسيكي، عصري، دافئ، فاخر، داكن، طبيعي، باستيل، جريء)
+3. **typography** — 5 خطوط عربية (Tajawal/Cairo/Amiri/Readex/Almarai)
+4. **features** — متعدد: توصيل/حجز/سلة/واتساب/خريطة/تقييم/نشرة
+5. **dashboard** — لا/مالك/عملاء/الاثنين
+6. **dashboard_items** — (مشروط: يُتخطّى إن dashboard=none) عناصر الداشبورد
+7. **sections** — متعدد: أقسام الصفحة الرئيسية
+8. **branding** — نص حر: اسم العلامة
+9. **payment** — متعدد: Stripe/مدى/Apple Pay/STC/PayPal/COD/بنك
+10. **review** — مراجعة + اعتماد نهائي
+
+### AI Priority Listening:
+- يلتقط طلبات خاصة من النص الحرّ قبل/أثناء الـ wizard
+- يُرجع توجيه JSON `[WIZARD_ACTION]` يُطبَّق تلقائياً (advance/apply_theme/apply_button/apply_font/add_section/custom_feature)
+
+### Business Model:
+- الموقع مستضاف على Zitex افتراضياً
+- الكود محجوب حتى يطلب المستخدم "الاستقلالية"
+- زر `الاستقلالية` يفتح Modal يشرح Vercel/Netlify/GitHub Pages (بدون كشف كود)
+- التسليم سيكون مرحلياً بعد اعتماد التصميم ودفع رسوم الاستقلالية
+
+### API Endpoints (all under `/api/websites/*`):
+**قوالب وأنماط (public):**
+- `GET /templates`
+- `GET /templates/{id}/preview-html`
+- `GET /variants` — 10 أنماط
+- `GET /templates/{id}/variants` — 10 أنماط لقالب معيّن
+- `GET /templates/{id}/variants/{variant_id}/preview-html`
+- `GET /wizard/steps` — meta الخطوات
+
+**مشاريع (auth):**
+- `GET/POST /projects`, `GET/PATCH/DELETE /projects/{id}`
 - `POST /projects/{id}/duplicate`
-- `POST /projects/{id}/build` - render to HTML
-- `POST /projects/{id}/chat` - AI consultative chat (auto-builds on approval)
-- `POST /ai/instant-build` - one-shot build from brief
+- `POST /projects/{id}/build` — render HTML
+- `POST /projects/{id}/apply-variant` — تطبيق theme variant
+- `POST /projects/{id}/wizard/answer` — إجابة مرحلة
+- `POST /projects/{id}/wizard/chat` — شات حرّ واعٍ للـ wizard
+- `POST /projects/{id}/chat` — شات legacy
+- `POST /projects/{id}/independence/request` — بدء الاستقلالية
+- `POST /ai/instant-build`
+
+---
 
 ## Landing Page
 - "إنشاء المواقع" — ✨ **مفتوح** → `/websites`
-- "تصميم الألعاب" / "إنشاء الفيديو" / "توليد الصور" — 🔒 **قريباً** (grayscale + غير قابل للنقر)
-- زر "ابدأ مجاناً" يوجّه للمسجلين إلى `/websites`
+- "تصميم الألعاب" / "إنشاء الفيديو" / "توليد الصور" — 🔒 **قريباً**
 
 ## Credentials
 - Email: owner@zitex.com | Password: owner123
 
-## Key Files (للنشر على Railway)
-1. `backend/modules/websites/` - كامل المجلد (5 ملفات)
-2. `backend/server.py` - 7 أسطر لتسجيل الـ module فقط
-3. `frontend/src/pages/websites/WebsiteStudio.js` - استوديو المواقع
-4. `frontend/src/pages/LandingPage.js` - البطاقات المحدّثة
-5. `frontend/src/App.js` - route `/websites`
+---
+
+## Changelog
+### Feb 2026 — Website Studio v2 (Wizard + Top-Template Layout)
+- رقائق أنماط بصرية (10 variants) للقالب الواحد
+- Wizard تفاعلي بـ 10 خطوات مع تخطي مشروط
+- ChatBar بالأسفل مع رقائق ديناميكية + multi-select + free-text
+- Independence modal (Vercel/Netlify/GitHub) دون كشف كود
+- endpoint `/apply-variant` لتبديل الأنماط دون فقد الأقسام
+- AI directives `[WIZARD_ACTION]` لأولوية طلبات المستخدم
+
+### Feb 2026 — Isolated Modules
+- عزل websites في `/backend/modules/websites/`
+- Visual Designer مع Konva.js (سينتقل لاحقاً لـ games module)
+
+---
 
 ## Next Modules (مرحلة مرحلة)
-- 🔒 **Games Module**: استخدام البنية نفسها في `backend/modules/games/`
+- 🔒 **Games Module**: `backend/modules/games/` (استخدام البنية نفسها)
 - 🔒 **Videos Module**: `backend/modules/videos/`
 - 🔒 **Images Module**: `backend/modules/images/`
-- 🔒 **Chat Module**: مستشار عام (إن رُغب)
-- 🔒 **Admin Module**: لوحة تحكم موسّعة
 
-## Old Code (يبقى كما هو)
-- `/chat` (AIChat.js) — الشات العام القديم
-- `/designer` (VisualDesigner.js) — محرر الألعاب (سينتقل لـ games module لاحقاً)
-- `backend/services/ai_chat_service.py` — المنطق القديم (غير مُستخدم في websites module)
+## P1 Backlog
+- Phase B: Stripe subscription قبل الوصول لاستوديو
+- Phase C: تسليم الكود تدريجياً ملف-ملف + أدلة نشر تفاعلية
+- Dashboard compilation (حال اختار المستخدم dashboard=admin/customer) — بناء صفحة `/admin` داخل HTML المُصدَّر
+
+## P2 Backlog
+- Admin Control Panel (dynamic pricing)
+- Full i18n (EN/AR)
+- Mobile App Compilation (.apk/.ipa pipeline)
+
+---
+
+## Tech Stack
+- Frontend: React + Tailwind + sonner + lucide-react + Konva (designer)
+- Backend: FastAPI + Motor (MongoDB async) + litellm + Emergent LLM Key
+- Hosting: Railway (production) — preview على Emergent K8s
+
+## Key Files (للنشر على Railway)
+1. `backend/modules/websites/` — كامل المجلد (7 ملفات)
+2. `backend/server.py` — register_routes call
+3. `frontend/src/pages/websites/WebsiteStudio.js`
+4. `frontend/src/pages/LandingPage.js`
+5. `frontend/src/App.js`
