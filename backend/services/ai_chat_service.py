@@ -196,19 +196,56 @@ prompt: [وصف تفصيلي بالإنجليزية - اذكر كل عنصر: he
 
 الألعاب تُبنى بنفس المبدأ لكن على مراحل أكثر:
 
-قاعدة ذهبية للألعاب: الكود يجب أن يكون لعبة حقيقية وليس صفحة ويب بأزرار!
-- استخدم CSS Grid و Flexbox لبناء خريطة اللعبة
-- استخدم الإيموجي والـ SVG لرسم المباني والموارد والشخصيات (مثلاً: 🏠 🌾 ⛏️ 🏰 🌳 ⚔️ 🪙)
-- استخدم CSS animations لحركة العناصر
-- أضف خلفيات بتدرجات تمثل الأرض والسماء (bg-gradient-to-b from-sky-400 to-green-600)
-- كل عنصر في اللعبة يكون قابل للنقر ويتفاعل (hover effects, click handlers, tooltips)
-- أضف شريط موارد في الأعلى (ذهب 🪙، خشب 🪵، طعام 🌾، حجر ⛏️) بأرقام ديناميكية
-- أضف JavaScript كامل يعمل: تحديث الموارد، بناء مباني جديدة، نظام نقاط، مؤقتات
-- اجعل اللعبة تبدو مثل Clash of Clans أو Travian من حيث الواجهة
-- لا تبنِ صفحة ويب عادية - ابنِ لعبة تفاعلية حقيقية!
-- استخدم position: relative/absolute لوضع المباني على الخريطة بشكل واقعي
-- كل مبنى يكون بحجم مختلف ومكان مختلف على الخريطة (ليس grid منتظم)
-- أضف tooltip عند hover على كل مبنى يعرض معلوماته ومستواه
+قاعدة ذهبية للألعاب: الكود يجب أن يكون لعبة حقيقية مرسومة بـ SVG وليس إيموجي أو صفحة ويب!
+
+### مكتبة SVG للألعاب (استخدمها دائماً بدل الإيموجي):
+
+عند بناء أي لعبة، ارسم كل العناصر بـ inline SVG بهذا الأسلوب:
+
+قلعة/حصن:
+<svg viewBox="0 0 100 100" width="80" height="80"><rect x="20" y="40" width="60" height="50" fill="#8B7355" rx="3"/><rect x="10" y="30" width="15" height="60" fill="#9B8465"/><rect x="75" y="30" width="15" height="60" fill="#9B8465"/><polygon points="10,30 17,15 25,30" fill="#C41E3A"/><polygon points="75,30 82,15 90,30" fill="#C41E3A"/><rect x="40" y="55" width="20" height="35" fill="#5C4033" rx="10 10 0 0"/><rect x="30" y="45" width="10" height="10" fill="#87CEEB" rx="2"/><rect x="60" y="45" width="10" height="10" fill="#87CEEB" rx="2"/><polygon points="20,40 50,20 80,40" fill="#C41E3A"/></svg>
+
+شجرة:
+<svg viewBox="0 0 60 80" width="50" height="65"><rect x="25" y="50" width="10" height="25" fill="#8B5E3C" rx="2"/><ellipse cx="30" cy="35" rx="22" ry="25" fill="#2D8B2D"/><ellipse cx="20" cy="30" rx="15" ry="18" fill="#3AA63A"/><ellipse cx="40" cy="32" rx="14" ry="17" fill="#248F24"/><circle cx="25" cy="40" r="3" fill="#FF6B6B" opacity="0.8"/><circle cx="35" cy="28" r="2" fill="#FF6B6B" opacity="0.7"/></svg>
+
+بيت/كوخ:
+<svg viewBox="0 0 80 70" width="65" height="55"><rect x="10" y="35" width="60" height="35" fill="#D4A574" rx="2"/><polygon points="5,35 40,10 75,35" fill="#8B4513"/><rect x="30" y="45" width="15" height="25" fill="#5C3317" rx="5 5 0 0"/><circle cx="40" cy="57" r="2" fill="#FFD700"/><rect x="12" y="40" width="12" height="10" fill="#87CEEB" rx="1"/><line x1="18" y1="40" x2="18" y2="50" stroke="#5C3317" stroke-width="1"/><line x1="12" y1="45" x2="24" y2="45" stroke="#5C3317" stroke-width="1"/><rect x="55" y="40" width="12" height="10" fill="#87CEEB" rx="1"/><rect x="60" y="15" width="8" height="20" fill="#8B7355"/><ellipse cx="64" cy="12" rx="8" ry="5" fill="#808080" opacity="0.6"/></svg>
+
+مزرعة/حقل:
+<svg viewBox="0 0 80 60" width="70" height="50"><rect x="0" y="20" width="80" height="40" fill="#8B6914" rx="5"/><line x1="0" y1="30" x2="80" y2="30" stroke="#6B4F12" stroke-width="1"/><line x1="0" y1="40" x2="80" y2="40" stroke="#6B4F12" stroke-width="1"/><line x1="0" y1="50" x2="80" y2="50" stroke="#6B4F12" stroke-width="1"/><g fill="#228B22"><rect x="8" y="22" width="3" height="12" rx="1"/><rect x="20" y="24" width="3" height="10" rx="1"/><rect x="32" y="21" width="3" height="13" rx="1"/><rect x="44" y="23" width="3" height="11" rx="1"/><rect x="56" y="22" width="3" height="12" rx="1"/><rect x="68" y="24" width="3" height="10" rx="1"/></g><circle cx="10" cy="20" r="4" fill="#FFD700"/><circle cx="34" cy="19" r="4" fill="#FFD700"/><circle cx="58" cy="20" r="4" fill="#FFD700"/></svg>
+
+جندي/محارب:
+<svg viewBox="0 0 40 60" width="35" height="50"><circle cx="20" cy="12" r="8" fill="#FDBCB4"/><rect x="12" y="20" width="16" height="22" fill="#C41E3A" rx="3"/><rect x="8" y="22" width="6" height="16" fill="#C41E3A" rx="2"/><rect x="26" y="22" width="6" height="16" fill="#C41E3A" rx="2"/><rect x="14" y="42" width="5" height="15" fill="#4A3728" rx="2"/><rect x="21" y="42" width="5" height="15" fill="#4A3728" rx="2"/><polygon points="6,20 2,35 10,35" fill="#808080"/><ellipse cx="20" cy="5" rx="10" ry="4" fill="#808080"/><rect x="16" y="1" width="8" height="4" fill="#808080"/><circle cx="15" cy="10" r="1.5" fill="#333"/><circle cx="25" cy="10" r="1.5" fill="#333"/></svg>
+
+منجم/صخور:
+<svg viewBox="0 0 70 50" width="60" height="45"><polygon points="15,45 35,10 55,45" fill="#808080"/><polygon points="5,45 20,20 35,45" fill="#696969"/><polygon points="40,45 55,15 70,45" fill="#A9A9A9"/><rect x="30" y="25" width="4" height="15" fill="#8B5E3C"/><polygon points="28,25 34,15 40,25" fill="#696969"/><circle cx="25" cy="35" r="3" fill="#FFD700"/><circle cx="50" cy="38" r="2" fill="#FFD700"/></svg>
+
+ذهب/عملة:
+<svg viewBox="0 0 30 30" width="22" height="22"><circle cx="15" cy="15" r="13" fill="#FFD700" stroke="#DAA520" stroke-width="2"/><text x="15" y="20" text-anchor="middle" font-size="14" font-weight="bold" fill="#8B6914">$</text></svg>
+
+خشب:
+<svg viewBox="0 0 40 25" width="30" height="20"><rect x="2" y="2" width="36" height="8" fill="#8B5E3C" rx="3"/><rect x="2" y="12" width="36" height="8" fill="#A0522D" rx="3"/><circle cx="15" cy="6" r="3" fill="#6B4226"/><circle cx="30" cy="16" r="2" fill="#6B4226"/></svg>
+
+عشب/أرضية:
+استخدم CSS gradient مع SVG pattern:
+background: linear-gradient(180deg, #87CEEB 0%, #87CEEB 30%, #90EE90 30%, #228B22 100%);
+أضف SVG أعشاب صغيرة متكررة على الأرضية.
+
+غيوم:
+<svg viewBox="0 0 100 40" width="80" height="30"><ellipse cx="50" cy="25" rx="40" ry="15" fill="white" opacity="0.8"/><ellipse cx="30" cy="20" rx="25" ry="12" fill="white" opacity="0.9"/><ellipse cx="70" cy="22" rx="22" ry="10" fill="white" opacity="0.85"/></svg>
+
+### قواعد رسم الألعاب:
+1. لا تستخدم إيموجي أبداً - ارسم كل شيء بـ SVG
+2. كل SVG يكون inline في الـ HTML (لا تستخدم ملفات خارجية)
+3. أضف ظلال (filter: drop-shadow) على كل عنصر SVG
+4. أضف CSS animations: الأشجار تتمايل، الغيوم تتحرك، الجنود يتنفسون
+5. الخلفية تكون تدرج سماء + أرض خضراء مع SVG pattern للعشب
+6. شريط الموارد يستخدم SVG أيقونات (عملة ذهبية، خشب، قمح) وليس إيموجي
+7. كل مبنى يكون بحجم مختلف وموقع مختلف على الخريطة (position: absolute)
+8. عند hover على أي عنصر: يكبر قليلاً (transform: scale(1.1)) + يظهر tooltip بمعلوماته
+9. أضف أشجار وصخور وعشب كديكور حول المباني
+10. JavaScript كامل: بناء مباني، جمع موارد، ترقية مستويات، مؤقتات إنتاج
+11. الكود يكون طويل ومفصّل (3000+ حرف) - لعبة حقيقية وليس demo
 
 مرحلة 1 - فهم اللعبة:
 اسأل عن: نوع اللعبة، الفكرة، الميزات الأساسية
@@ -231,8 +268,14 @@ prompt: [وصف شاشة اللعبة الرئيسية بالتفصيل - الخ
 
 مرحلة 3 - بناء الواجهة فوراً (بعد الموافقة):
 لما العميل يوافق:
-- ابنِ الكود فوراً في [CODE_BLOCK] - كود لعبة تفاعلية حقيقية وليس صفحة ويب!
-- الكود يحتوي على: خريطة بصرية + مباني بإيموجي/SVG + شريط موارد + JavaScript تفاعلي
+- ابنِ الكود فوراً في [CODE_BLOCK] - كود لعبة مرسومة بـ SVG حقيقية!
+- ارسم كل العناصر بـ inline SVG (قلاع، بيوت، أشجار، جنود، موارد) من المكتبة أعلاه
+- لا تستخدم إيموجي أبداً - SVG فقط
+- خلفية: تدرج سماء + أرض خضراء
+- أضف أشجار وغيوم وصخور كديكور
+- شريط موارد بأيقونات SVG
+- JavaScript تفاعلي كامل
+- CSS animations (أشجار تتمايل، غيوم تتحرك)
 - الكود يظهر في اللايف مباشرة
 - اكتب: "تم بناء المرحلة 1 في اللايف! شوف المعاينة."
 [BUTTONS]
@@ -976,15 +1019,24 @@ class AIAssistant:
                 code_block_match3 = re.search(r'\[CODE_BLOCK\]\s*([\s\S]*?)\s*\[/CODE_BLOCK\]', ai_response)
                 if code_block_match3:
                     code = code_block_match3.group(1).strip()
-                    # Remove backtick wrappers if present
                     code = re.sub(r'^```(?:html|javascript|js)?\s*', '', code)
                     code = re.sub(r'```\s*$', '', code)
                     code = code.strip()
                 else:
-                    # Fall back to regular code block
-                    code_match = re.search(r'```(?:html|javascript|js)?\n?([\s\S]*?)```', ai_response)
-                    if code_match:
-                        code = code_match.group(1).strip()
+                    # Try any tag like [CODES] [CODE] etc
+                    alt_match = re.search(r'\[CODE\w*\]\s*(<!DOCTYPE[\s\S]*?</html>)\s*\[/CODE\w*\]', ai_response, re.IGNORECASE)
+                    if alt_match:
+                        code = alt_match.group(1).strip()
+                    else:
+                        # Try raw HTML without any tags
+                        raw_match = re.search(r'(<!DOCTYPE\s+html[\s\S]*?</html>)', ai_response, re.IGNORECASE)
+                        if raw_match:
+                            code = raw_match.group(1).strip()
+                        else:
+                            # Fall back to regular code block
+                            code_match = re.search(r'```(?:html|javascript|js)?\n?([\s\S]*?)```', ai_response)
+                            if code_match:
+                                code = code_match.group(1).strip()
         
         if code:
             code_with_badge = inject_zitex_badge(code)
