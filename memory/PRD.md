@@ -13,11 +13,13 @@
    - ألعاب فعلية قابلة للعب (ليست مجرد مشاهد ثابتة) مع HUD، مدخلات keyboard/touch، حلقات game loop، انتهاء/إعادة
    - كشف genre تلقائي من الـ config
 2. **Backend Game Override** (في `ai_chat_service.py`)
-   - `build_game_html(genre, title, hint)` - يبني HTML shell جاهز
+   - `build_game_html(genre, title, hint, design_image_url)` - يبني HTML shell جاهز
+   - `_build_image_backed_game()` - **وضع Image-Backed الجديد**: يستخدم صورة التصميم المُولَّدة كخلفية فعلية للعبة مع overlay تفاعلي شفاف (HUD + 12 hotspot + أزرار تحكم) — المعاينة = الصورة 100%
    - `detect_game_genre_prioritized()` - يكتشف النوع من الرسالة + السياق (عربي/إنجليزي)
    - `should_override_game_code()` - يقرر استبدال كود GPT الضعيف
-   - **Override تلقائي**: إذا كان request_type لعبة والكود ضعيف، يُستبدل بقالب يستخدم `game-engine.js`
-   - **Fallback تلقائي**: إذا GPT لم يُخرج كوداً والمستخدم وافق، نبني اللعبة من المحرك مباشرة
+   - **حفظ تلقائي**: عند توليد `[DESIGN_IMAGE]` نحفظ URL في `session.project_data.last_design_image`
+   - **Override تلقائي**: إذا كان request_type لعبة والكود ضعيف، يُستبدل بقالب image-backed
+   - **Fallback تلقائي**: إذا GPT لم يُخرج كوداً والمستخدم وافق، نبني اللعبة من صورة التصميم
 3. **iframe Preview Fix** (`AIChat.js`)
    - استبدال الروابط النسبية `/api/*` بالـ BACKEND_URL الكامل قبل الكتابة في iframe
 
