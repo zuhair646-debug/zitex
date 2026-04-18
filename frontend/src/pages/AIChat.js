@@ -561,8 +561,13 @@ const LivePreviewPanel = memo(({ code, isOpen, onClose, onRefresh, isFullscreen,
     if (code && iframeRef.current) {
       const iframe = iframeRef.current;
       const doc = iframe.contentDocument || iframe.contentWindow.document;
+      // iframe with about:blank can't resolve relative /api/* URLs — rewrite to absolute backend URL
+      const backend = process.env.REACT_APP_BACKEND_URL || '';
+      const patched = backend
+        ? code.replace(/(src|href)=["'](\/api\/[^"']+)["']/g, `$1="${backend}$2"`)
+        : code;
       doc.open();
-      doc.write(code);
+      doc.write(patched);
       doc.close();
     }
   }, [code]);

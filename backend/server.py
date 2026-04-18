@@ -2906,7 +2906,28 @@ async def serve_game_engine():
     if os.path.exists(engine_path):
         with open(engine_path, 'r') as f:
             content = f.read()
-        return Response(content=content, media_type="application/javascript", headers={"Cache-Control": "public, max-age=3600"})
+        return Response(content=content, media_type="application/javascript", headers={"Cache-Control": "no-cache"})
+
+
+# Internal game engine test page (used for QA/screenshots)
+@app.get("/api/game-test")
+async def serve_game_test():
+    import os
+    p = os.path.join(os.path.dirname(__file__), "static", "game-test.html")
+    if os.path.exists(p):
+        with open(p, 'r') as f:
+            content = f.read()
+        return Response(content=content, media_type="text/html")
+
+
+@app.get("/api/iframe-test")
+async def serve_iframe_test():
+    import os
+    p = os.path.join(os.path.dirname(__file__), "static", "iframe-test.html")
+    if os.path.exists(p):
+        with open(p, 'r') as f:
+            content = f.read()
+        return Response(content=content, media_type="text/html")
 
 # Storage proxy endpoint - serve images/videos from Object Storage
 @app.get("/api/storage/{file_path:path}")

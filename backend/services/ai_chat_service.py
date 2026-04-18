@@ -858,6 +858,126 @@ def inject_zitex_badge(html_code: str) -> str:
     return html_code + '\n' + ZITEX_BADGE
 
 
+# ============== GAME ENGINE FORCE-INJECTION ==============
+GAME_GENRE_KEYWORDS = {
+    "strategy": ["استراتيج", "قرية", "قلعة", "مبان", "جيش", "ممالك", "حرب", "مدينة", "بناء", "كلاش", "village", "castle", "kingdom", "rts", "clash"],
+    "racing":   ["سباق", "سيار", "race", "racing", "car", "drift"],
+    "platformer": ["منصات", "ماريو", "platformer", "mario", "قفز", "jump", "sonic"],
+    "snake":    ["ثعبان", "أفعى", "snake"],
+    "shooter":  ["فضاء", "إطلاق", "إطلاق نار", "سفينة", "space", "shooter", "invaders", "shoot"],
+    "match3":   ["ألغاز", "جواهر", "مطابقة", "candy", "puzzle", "match", "crush", "gems"],
+    "memory":   ["ذاكرة", "بطاقات", "memory", "match cards", "flip"],
+    "breakout": ["كسر الطوب", "طوب", "breakout", "arkanoid"],
+    "flappy":   ["طائر", "طيران", "flappy", "bird"],
+}
+
+
+def detect_game_genre(text: str, fallback: str = "strategy") -> str:
+    """Pick a game genre based on Arabic/English keywords in the full chat context."""
+    if not text:
+        return fallback
+    t = text.lower()
+    scores = {}
+    for genre, words in GAME_GENRE_KEYWORDS.items():
+        scores[genre] = sum(1 for w in words if w.lower() in t)
+    best = max(scores, key=scores.get)
+    return best if scores[best] > 0 else fallback
+
+
+def detect_game_genre_prioritized(primary: str, context: str = "", fallback: str = "strategy") -> str:
+    """First try to detect a genre from the primary (current) user message.
+    Only fall back to the broader conversation context if the primary is inconclusive.
+    This avoids cases where welcome messages or earlier generic words (e.g. "بناء")
+    drown out a clear request like "ثعبان" or "سباق"."""
+    g = detect_game_genre(primary, fallback="__none__")
+    if g != "__none__":
+        return g
+    g = detect_game_genre(context, fallback="__none__")
+    if g != "__none__":
+        return g
+    return fallback
+
+
+def build_game_html(genre: str, title: str = "لعبة Zitex", hint: str = "", engine_url: str = "/api/game-engine.js") -> str:
+    """Generate a bulletproof HTML shell that loads the Zitex multi-genre game engine.
+
+    This replaces whatever fragile SVG/Canvas code GPT generated, guaranteeing a real
+    playable game every time.
+    """
+    safe_hint = (hint or "").replace('"', "'").replace("\n", " ")[:600]
+    safe_title = (title or "لعبة Zitex").replace('"', "'")[:80]
+
+    # Per-genre suggested config
+    cfg_map = {
+        "strategy":  "{ genre:'strategy', theme:'medieval', buildings:8, trees:14, soldiers:5, farms:3, clouds:5, flowers:25, bushes:10, rocks:6 }",
+        "racing":    "{ genre:'racing' }",
+        "platformer":"{ genre:'platformer', theme:'forest' }",
+        "snake":     "{ genre:'snake' }",
+        "shooter":   "{ genre:'shooter' }",
+        "match3":    "{ genre:'match3' }",
+        "memory":    "{ genre:'memory' }",
+        "breakout":  "{ genre:'breakout' }",
+        "flappy":    "{ genre:'flappy' }",
+    }
+    cfg = cfg_map.get(genre, cfg_map["strategy"])
+
+    return f"""<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>{safe_title}</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  html,body{{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#0b1020;font-family:Tajawal,sans-serif}}
+  #game-world{{width:100vw;height:100vh}}
+  #zg-loading{{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:#FFD700;font-size:18px;background:radial-gradient(circle,#1a1f3a,#050818);z-index:500}}
+</style>
+</head>
+<body>
+<div id="zg-loading">⏳ جاري تحميل اللعبة...</div>
+<div id="game-world"></div>
+<script src="{engine_url}"></script>
+<script>
+(function(){{
+  function boot(){{
+    if (typeof ZitexGame === 'undefined') {{ setTimeout(boot, 100); return; }}
+    document.getElementById('zg-loading').remove();
+    try {{ ZitexGame.init({cfg}); }}
+    catch(e){{ console.error(e); document.body.innerHTML = '<div style="color:#fff;padding:40px;text-align:center">خطأ في تحميل المحرك: '+e.message+'</div>'; }}
+  }}
+  boot();
+}})();
+</script>
+<!-- Zitex: hint="{safe_hint}" genre="{genre}" -->
+</body>
+</html>"""
+
+
+def should_override_game_code(code: Optional[str]) -> bool:
+    """Decide if GPT's game output is too weak and must be replaced by the engine template."""
+    if not code:
+        return True
+    c = code.strip()
+    if len(c) < 200:
+        return True
+    # If GPT already wired in our engine, keep it
+    if "game-engine.js" in c or "ZitexGame.init" in c:
+        return False
+    # Heuristic: simplistic HTML with very few nodes -> weak
+    svg_count = c.lower().count("<svg")
+    div_count = c.lower().count("<div")
+    # If it has no interactive pieces AND low element count
+    has_script = "<script" in c.lower()
+    has_canvas = "<canvas" in c.lower()
+    if not has_script and not has_canvas and svg_count + div_count < 20:
+        return True
+    # If GPT just dropped raw SVG with no game loop
+    if not has_script and not has_canvas:
+        return True
+    return False
+
+
 class AIAssistant:
     def __init__(self, db: AsyncIOMotorDatabase, api_key: str = None, elevenlabs_key: str = None, openai_key: str = None):
         self.db = db
@@ -1069,6 +1189,27 @@ class AIAssistant:
                                 code = code_match.group(1).strip()
         
         if code:
+            # === FORCE GAME ENGINE OVERRIDE ===
+            # For game requests, guarantee a real playable game by injecting the Zitex engine template
+            # whenever GPT's output is weak (short, no <script>, basic SVG scene, etc.).
+            if request_type in ("game", "game_3d"):
+                try:
+                    if should_override_game_code(code):
+                        # Build full conversational context for genre detection
+                        ctx_text = ""
+                        for m in session.get("messages", [])[-10:]:
+                            ctx_text += " " + (m.get("content") or "")
+                        genre = detect_game_genre_prioritized(primary=message, context=ctx_text, fallback="strategy")
+                        title = session.get("title") or "لعبة Zitex"
+                        overridden = build_game_html(genre=genre, title=title, hint=message[:400])
+                        logger.info(f"GAME OVERRIDE: genre={genre}, original_len={len(code)}, new_len={len(overridden)}")
+                        code = overridden
+                        # Surface a friendly note to the user about auto-boosting
+                        ai_response = ai_response + f"\n\n✨ تم تفعيل محرك Zitex للألعاب تلقائياً (نوع: {genre}) لضمان لعبة كاملة وقابلة للعب."
+                        assistant_msg["content"] = ai_response
+                except Exception as ge:
+                    logger.error(f"Game override failed: {ge}")
+
             code_with_badge = inject_zitex_badge(code)
             update_data["$set"]["generated_code"] = code_with_badge
             # Store code in metadata for frontend to use
@@ -1081,6 +1222,32 @@ class AIAssistant:
             has_codeblock = '[CODE_BLOCK]' in ai_response
             has_codetag = '[CODE' in ai_response
             logger.warning(f"NO CODE EXTRACTED from response. has_doctype={has_doctype}, has_codeblock={has_codeblock}, has_codetag={has_codetag}, response_len={len(ai_response)}")
+
+            # === GAME FALLBACK ===
+            # If user clearly approved building a game but GPT failed to emit code, build the
+            # engine-backed game ourselves so the live preview is never empty for games.
+            if request_type in ("game", "game_3d"):
+                approval_hits = ["ممتاز", "رائع", "حلو", "جميل", "موافق", "ابنِ", "ابن", "كمّل", "كمل", "المرحلة التالية", "ابدأ", "تمام", "اوكي", "ok", "yes", "نعم"]
+                msg_lower = message.lower()
+                is_approval = any(w.lower() in msg_lower for w in approval_hits)
+                if is_approval:
+                    try:
+                        ctx_text = ""
+                        for m in session.get("messages", [])[-10:]:
+                            ctx_text += " " + (m.get("content") or "")
+                        genre = detect_game_genre_prioritized(primary=message, context=ctx_text, fallback="strategy")
+                        title = session.get("title") or "لعبة Zitex"
+                        generated = build_game_html(genre=genre, title=title, hint=message[:400])
+                        code_with_badge = inject_zitex_badge(generated)
+                        update_data["$set"]["generated_code"] = code_with_badge
+                        assistant_msg["metadata"]["generated_code"] = code_with_badge
+                        assistant_msg["metadata"]["has_preview"] = True
+                        ai_response = ai_response + f"\n\n✨ تم بناء اللعبة تلقائياً باستخدام محرك Zitex (نوع: {genre}). شوف المعاينة!"
+                        assistant_msg["content"] = ai_response
+                        code = generated
+                        logger.info(f"GAME FALLBACK TRIGGERED: genre={genre}, code_len={len(generated)}")
+                    except Exception as ge:
+                        logger.error(f"Game fallback failed: {ge}")
         
         result = await self.db.chat_sessions.update_one({"id": session_id}, update_data)
         logger.info(f"Session update: matched={result.matched_count}, modified={result.modified_count}")
