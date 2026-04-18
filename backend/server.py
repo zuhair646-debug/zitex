@@ -2586,6 +2586,270 @@ async def get_training_stats(admin: dict = Depends(require_admin)):
             by_category[cat] = count
     return {"total_examples": total, "by_category": by_category}
 
+class FetchTemplatesRequest(BaseModel):
+    query: str
+    category: str = "game"
+    count: int = 3
+    source: str = "codepen"  # codepen or ai
+
+@api_router.post("/admin/training/fetch")
+async def fetch_templates_from_sources(data: FetchTemplatesRequest, admin: dict = Depends(require_admin)):
+    """Fetch real templates from CodePen or generate via AI"""
+    try:
+        results = []
+        
+        if data.source == "codepen":
+            # Scrape real code from CodePen
+            results = await _fetch_from_codepen(data.query, data.category, data.count)
+        else:
+            # Fallback to AI generation
+            results = await _fetch_from_ai(data.query, data.category, data.count)
+        
+        # Store as pending
+        stored = []
+        for tmpl in results:
+            pending = {
+                "id": str(uuid.uuid4()),
+                "category": data.category,
+                "subcategory": tmpl.get("subcategory", ""),
+                "title": tmpl.get("title", "قالب بدون عنوان"),
+                "description": tmpl.get("description", ""),
+                "html_code": tmpl.get("html_code", ""),
+                "tags": tmpl.get("tags", []),
+                "source_url": tmpl.get("source_url", ""),
+                "source_author": tmpl.get("source_author", ""),
+                "status": "pending",
+                "query": data.query,
+                "fetch_source": data.source,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.pending_templates.insert_one(pending)
+            stored.append({k: v for k, v in pending.items() if k != '_id'})
+        
+        return {"templates": stored, "count": len(stored)}
+    except Exception as e:
+        logger.error(f"Fetch templates error: {e}")
+        raise HTTPException(status_code=500, detail=f"خطأ: {str(e)}")
+
+async def _fetch_from_codepen(query: str, category: str, count: int) -> list:
+    """Fetch real code examples from the web (GitHub, public repos) and enhance them"""
+    import httpx
+    
+    # Map Arabic to English search terms
+    search_map = {
+        "ألعاب استراتيجية": "strategy village building game html javascript",
+        "ألعاب سباق": "car racing game html canvas javascript",
+        "ألعاب ألغاز": "puzzle game html css javascript",
+        "ألعاب أطفال": "kids educational game html",
+        "ألعاب أكشن": "action shooter game javascript canvas",
+        "ألعاب منصات": "platformer game javascript phaser",
+        "ألعاب قتال": "fighting game javascript",
+        "مواقع شركات": "company website template html tailwind dark",
+        "صفحات هبوط": "saas landing page template html tailwind",
+        "متاجر إلكترونية": "ecommerce store template html tailwind",
+        "معارض أعمال": "portfolio website template html css modern",
+        "لوحات تحكم": "admin dashboard template html tailwind dark",
+    }
+    
+    en_query = query
+    for ar, en in search_map.items():
+        if ar in query:
+            en_query = en
+            break
+    else:
+        cat_map = {"game": "game html javascript", "website": "website html template", "landing": "landing page html", "ecommerce": "ecommerce store html", "portfolio": "portfolio html", "dashboard": "dashboard html"}
+        en_query = cat_map.get(category, "html css") + " " + query
+    
+    results = []
+    
+    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        
+        # Search GitHub for real HTML files
+        try:
+            gh_url = f"https://api.github.com/search/repositories?q={en_query}+language:html&sort=stars&per_page=10"
+            gh_resp = await client.get(gh_url, headers={**headers, "Accept": "application/vnd.github.v3+json"})
+            
+            if gh_resp.status_code == 200:
+                repos = gh_resp.json().get("items", [])
+                
+                for repo in repos[:count * 3]:
+                    try:
+                        # Try to get the main HTML file (index.html)
+                        raw_url = f"https://raw.githubusercontent.com/{repo['full_name']}/{repo.get('default_branch', 'main')}/index.html"
+                        html_resp = await client.get(raw_url, headers=headers)
+                        
+                        if html_resp.status_code != 200:
+                            # Try game.html or main.html
+                            for alt in ["game.html", "main.html", "src/index.html", "public/index.html"]:
+                                alt_url = f"https://raw.githubusercontent.com/{repo['full_name']}/{repo.get('default_branch', 'main')}/{alt}"
+                                html_resp = await client.get(alt_url, headers=headers)
+                                if html_resp.status_code == 200:
+                                    break
+                        
+                        if html_resp.status_code == 200 and len(html_resp.text) > 500:
+                            html_code = html_resp.text
+                            
+                            # Only accept if it has meaningful HTML
+                            if "<html" in html_code.lower() and ("<script" in html_code.lower() or "<style" in html_code.lower()):
+                                results.append({
+                                    "title": repo.get("name", "Template"),
+                                    "description": f"GitHub: {repo['full_name']} ({repo.get('stargazers_count', 0)} stars)",
+                                    "subcategory": "",
+                                    "html_code": html_code[:15000],
+                                    "tags": [category, "github", "real-code"],
+                                    "source_url": repo.get("html_url", ""),
+                                    "source_author": repo.get("owner", {}).get("login", "unknown")
+                                })
+                                
+                                if len(results) >= count:
+                                    break
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch repo {repo.get('full_name')}: {e}")
+                        continue
+        except Exception as e:
+            logger.error(f"GitHub search error: {e}")
+    
+    # If not enough from GitHub, use AI to generate based on real-world inspiration
+    if len(results) < count:
+        ai_results = await _fetch_from_ai(query, category, count - len(results))
+        results.extend(ai_results)
+    
+    return results[:count]
+
+async def _fetch_from_ai(query: str, category: str, count: int) -> list:
+    """Generate templates using AI as fallback"""
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        import json as json_module
+        
+        emergent_key = os.environ.get('EMERGENT_LLM_KEY')
+        if not emergent_key:
+            return []
+        
+        fetch_prompt = f"""أنشئ {count} قوالب HTML احترافية مختلفة.
+
+الطلب: {query}
+التصنيف: {category}
+
+القواعد:
+1. HTML كامل يبدأ بـ <!DOCTYPE html>
+2. استخدم <script src="https://cdn.tailwindcss.com"></script>
+3. استخدم Font Awesome CDN
+4. خط Tajawal العربي، اتجاه RTL
+5. تصميم احترافي مع تدرجات وظلال و hover و animations
+6. للألعاب: إيموجي للعناصر، JavaScript تفاعلي كامل، شريط موارد، خريطة بصرية
+7. كل قالب مختلف تماماً (ألوان وهيكل وأسلوب مختلف)
+8. كود طويل ومفصّل (2000+ حرف)
+
+أرجع JSON فقط:
+[{{"title":"عنوان","description":"وصف","subcategory":"فرعي","tags":["وسم"],"html_code":"<!DOCTYPE html>..."}}]"""
+
+        chat = LlmChat(api_key=emergent_key, session_id=f"fetch-{uuid.uuid4()}", system_message="أرجع JSON فقط بدون أي نص.")
+        chat.with_model("openai", "gpt-4o")
+        response = await chat.send_message(UserMessage(text=fetch_prompt))
+        
+        response_clean = response.strip()
+        if response_clean.startswith("```"):
+            response_clean = response_clean.split("\n", 1)[1] if "\n" in response_clean else response_clean[3:]
+            response_clean = response_clean.rsplit("```", 1)[0]
+        
+        templates = json_module.loads(response_clean.strip())
+        if not isinstance(templates, list):
+            templates = [templates]
+        
+        for t in templates:
+            t["source_url"] = ""
+            t["source_author"] = "AI Generated"
+        
+        return templates[:count]
+    except Exception as e:
+        logger.error(f"AI fetch error: {e}")
+        return []
+
+@api_router.get("/admin/training/pending")
+async def get_pending_templates(admin: dict = Depends(require_admin)):
+    """Get all pending fetched templates"""
+    pending = await db.pending_templates.find(
+        {"status": "pending"}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return {"templates": pending, "total": len(pending)}
+
+@api_router.post("/admin/training/approve/{template_id}")
+async def approve_pending_template(template_id: str, admin: dict = Depends(require_admin)):
+    """Approve a pending template and add it to training examples"""
+    pending = await db.pending_templates.find_one({"id": template_id, "status": "pending"}, {"_id": 0})
+    if not pending:
+        raise HTTPException(status_code=404, detail="القالب غير موجود")
+    
+    example = {
+        "id": str(uuid.uuid4()),
+        "category": pending["category"],
+        "subcategory": pending.get("subcategory", ""),
+        "title": pending["title"],
+        "description": pending.get("description", ""),
+        "design_image_url": "",
+        "html_code": pending["html_code"],
+        "tags": pending.get("tags", []),
+        "is_active": True,
+        "usage_count": 0,
+        "created_by": admin.get('id', 'admin'),
+        "source": "ai_fetched",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.training_examples.insert_one(example)
+    await db.pending_templates.update_one({"id": template_id}, {"$set": {"status": "approved"}})
+    
+    return {"id": example["id"], "message": "تم اعتماد القالب وإضافته للتدريب"}
+
+@api_router.delete("/admin/training/pending/{template_id}")
+async def reject_pending_template(template_id: str, admin: dict = Depends(require_admin)):
+    """Reject/delete a pending template"""
+    result = await db.pending_templates.update_one(
+        {"id": template_id, "status": "pending"},
+        {"$set": {"status": "rejected"}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="القالب غير موجود")
+    return {"message": "تم رفض القالب"}
+
+@api_router.post("/admin/training/approve-all")
+async def approve_all_pending(admin: dict = Depends(require_admin)):
+    """Approve all pending templates at once"""
+    pending = await db.pending_templates.find({"status": "pending"}, {"_id": 0}).to_list(100)
+    approved = 0
+    for p in pending:
+        example = {
+            "id": str(uuid.uuid4()),
+            "category": p["category"],
+            "subcategory": p.get("subcategory", ""),
+            "title": p["title"],
+            "description": p.get("description", ""),
+            "design_image_url": "",
+            "html_code": p["html_code"],
+            "tags": p.get("tags", []),
+            "is_active": True,
+            "usage_count": 0,
+            "created_by": admin.get('id', 'admin'),
+            "source": "ai_fetched",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.training_examples.insert_one(example)
+        await db.pending_templates.update_one({"id": p["id"]}, {"$set": {"status": "approved"}})
+        approved += 1
+    return {"approved": approved, "message": f"تم اعتماد {approved} قالب"}
+
+@api_router.delete("/admin/training/pending-all")
+async def reject_all_pending(admin: dict = Depends(require_admin)):
+    """Reject all pending templates"""
+    result = await db.pending_templates.update_many(
+        {"status": "pending"},
+        {"$set": {"status": "rejected"}}
+    )
+    return {"rejected": result.modified_count, "message": f"تم رفض {result.modified_count} قالب"}
+
 # ============== APP SETUP ==============
 
 # Import and setup chat router
