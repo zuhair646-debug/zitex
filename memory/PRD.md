@@ -1,82 +1,83 @@
 # Zitex AI Platform - PRD
 
 ## Original Problem Statement
-منصة ذكاء اصطناعي باسم "Zitex" تعمل كمستشار عبر محادثة، تولّد مواقع/ألعاب/تطبيقات/صور/فيديو. نشر يدوي إلى Railway عبر GitHub.
+منصة "Zitex" - ذكاء اصطناعي يولّد مواقع/ألعاب/صور/فيديو. نشر يدوي إلى Railway.
 
 ## User Language: Arabic (العربية)
 
-## ✅ تم إنجازه
+## 🎯 Modular Architecture (New Strategy - Feb 2026)
+**كل قسم في module مستقل تماماً** — يمكن تطويره/نشره/إصلاحه بدون لمس الأقسام الأخرى.
 
-### Session Feb 2026 - Image-Element Extraction Workflow (الحل الحقيقي!)
-**المشكلة الجذرية**: العميل يحب صور AI لكن يريد قطعاً منها (حقل القمح فقط، سلاح معين، إلخ)، ويريد تلك القطعات تظهر حرفياً في اللعبة بدون إعادة رسم.
+### Modules Status
+- ✅ **Websites**: `/backend/modules/websites/` + `/frontend/src/pages/websites/` — **LIVE**
+- 🔒 **Games**: قريباً (محرر + game engine موجودان في VisualDesigner.js كنواة)
+- 🔒 **Videos**: قريباً
+- 🔒 **Images**: قريباً
 
-**Workflow المُنَفَّذ**:
-1. AI يولّد صورة تصميم في الشات
-2. العميل يضغط **"✂️ حفظ للمحرر"** على الصورة → تُحفَظ في مكتبته
-3. في المحرر يضغط **"استخراج من صورة"** → نافذة cropping:
-   - يختار صورة من مكتبته
-   - يسحب الماوس لرسم مستطيل حول العنصر (حقل القمح، بيت، سلاح)
-   - يسمّيه + يختار فئة (مباني/حقول/أسلحة/...) → "استخراج"
-4. العنصر المستخرج يظهر في sidebar المحرر (thumbnail حقيقي بقَصّ CSS)
-5. العميل يخلط عناصر من **صور مختلفة** في canvas واحد
-6. "عرض اللايف" → Backend يُنتج HTML **يستخدم نفس الصور الأصلية** مع `background-position/size` لعرض القطعة الصحيحة بالضبط
+## ✅ Websites Module (مكتمل)
+**Backend** (`/backend/modules/websites/` — 5 ملفات مستقلة):
+- `__init__.py` — exports `register_routes`
+- `models.py` — Pydantic (WebsiteProject, WebsiteSection, ChatMessageIn, AIGenerateIn)
+- `templates.py` — 6 قوالب جاهزة (متجر / مطعم / شركة / بورتفوليو / SaaS / فارغ)
+- `renderer.py` — يحوّل JSON → HTML responsive بـ 13 نوع قسم
+- `ai_service.py` — مستشار AI عبر litellm + Emergent LLM Key
+- `routes.py` — 11 endpoint تحت `/api/websites/*`
 
-### المكونات التقنية
-**Backend** (`server.py` + `ai_chat_service.py`):
-- `user_images` collection: صور الشات المحفوظة
-- `user_elements` collection: القطعات المستخرجة `{name, source_image_url, crop:{x,y,w,h}, natural_width, natural_height, category}`
-- 7 endpoints: POST/GET/DELETE for user-images + POST/GET/PATCH/DELETE for user-elements
-- `render_design_to_html` يدعم `type="user_element"` برندر CSS `background-position` دقيق
+**Frontend** (`/frontend/src/pages/websites/WebsiteStudio.js`):
+- 3 tabs في sidebar: Chat / Sections / Theme
+- Templates picker مع live preview iframe
+- Section list: reorder / duplicate / delete / visibility / add من 13 نوع
+- Properties panel: تعديل كل حقل في القسم المحدد
+- Theme editor: 5 ألوان + خط + تدوير
+- Live preview iframe: يتحدّث فوراً
+- Auto-save كل 1.5 ث
+- Library modal: فتح/حذف مواقع محفوظة
+- Export HTML كملف
+- Empty state احترافي
 
-**Frontend**:
-- `VisualDesigner.js`: محرر Konva-based كامل
-- `designer/CropModal.js`: نافذة cropping احترافية بسحب الماوس + overlay مرئي
-- `designer/elementLibrary.js`: مكتبة العناصر المدمجة (17 نوع SVG)
-- `UserElementThumb`: thumbnail يعرض القطعة المستخرجة بـ CSS cropping
-- `CanvasElement`: يدعم user_element عبر Konva `crop` property (pixel-perfect)
-- زر "✂️ حفظ للمحرر" على كل صورة في الشات
+### Section Types (13)
+hero, features, about, products, menu, gallery, testimonials, team, pricing, faq, contact, cta, footer
 
-### الميزات الكاملة في المحرر
-- 17 عنصر جاهز (قلعة/بيوت/حقول/أشجار/جنود/إلخ)
-- **عناصر مستخرجة غير محدودة** من صور AI
-- Drag/resize/rotate/delete/duplicate/layers
-- Undo/Redo 50 خطوة (Ctrl+Z/Y)
-- Auto-save كل 6 ثوان
-- مكتبة تصاميم متعددة (open/duplicate/delete)
-- Preview modal + Export HTML
-- Zoom/Pan/Grid
+### Database Collections
+- `website_projects` — مشاريع المستخدمين
+- (العناصر القديمة لا تزال: `users`, `chat_sessions`, `designs`, `user_images`, `user_elements`)
 
-### Previous Sessions
-- Bulletproof game engine fallback (v2.0)
-- Image-backed preview mode
-- iframe URL patcher (HTML + CSS)
-- BACKEND_URL في .env
+### API Endpoints (all under `/api/websites/*`)
+- `GET /templates` - list 6 templates (public)
+- `GET /templates/{id}/preview-html` - HTML preview (public)
+- `GET /projects` - user's projects
+- `GET /projects/{id}` - single project
+- `POST /projects` - create (auto-fill from template)
+- `PATCH /projects/{id}` - update (auto-save)
+- `DELETE /projects/{id}`
+- `POST /projects/{id}/duplicate`
+- `POST /projects/{id}/build` - render to HTML
+- `POST /projects/{id}/chat` - AI consultative chat (auto-builds on approval)
+- `POST /ai/instant-build` - one-shot build from brief
+
+## Landing Page
+- "إنشاء المواقع" — ✨ **مفتوح** → `/websites`
+- "تصميم الألعاب" / "إنشاء الفيديو" / "توليد الصور" — 🔒 **قريباً** (grayscale + غير قابل للنقر)
+- زر "ابدأ مجاناً" يوجّه للمسجلين إلى `/websites`
 
 ## Credentials
 - Email: owner@zitex.com | Password: owner123
 
 ## Key Files (للنشر على Railway)
-1. `backend/services/ai_chat_service.py` - render_design_to_html مع user_element
-2. `backend/server.py` - Designer + user-images + user-elements APIs
-3. `frontend/src/pages/VisualDesigner.js` - محرر
-4. `frontend/src/pages/designer/elementLibrary.js` - عناصر مدمجة
-5. `frontend/src/pages/designer/CropModal.js` - نافذة استخراج
-6. `frontend/src/pages/AIChat.js` - زر "حفظ للمحرر"
-7. `frontend/package.json` - konva, react-konva, use-image
-8. **Railway ENV: `BACKEND_URL=https://your-app.railway.app`**
+1. `backend/modules/websites/` - كامل المجلد (5 ملفات)
+2. `backend/server.py` - 7 أسطر لتسجيل الـ module فقط
+3. `frontend/src/pages/websites/WebsiteStudio.js` - استوديو المواقع
+4. `frontend/src/pages/LandingPage.js` - البطاقات المحدّثة
+5. `frontend/src/App.js` - route `/websites`
 
-## API Endpoints الجديدة
-- `POST /api/user-images` - حفظ صورة من الشات
-- `GET /api/user-images` - قائمة
-- `DELETE /api/user-images/{id}`
-- `POST /api/user-elements` - إنشاء عنصر بقَصّ
-- `GET /api/user-elements` - قائمة
-- `PATCH /api/user-elements/{id}`
-- `DELETE /api/user-elements/{id}`
+## Next Modules (مرحلة مرحلة)
+- 🔒 **Games Module**: استخدام البنية نفسها في `backend/modules/games/`
+- 🔒 **Videos Module**: `backend/modules/videos/`
+- 🔒 **Images Module**: `backend/modules/images/`
+- 🔒 **Chat Module**: مستشار عام (إن رُغب)
+- 🔒 **Admin Module**: لوحة تحكم موسّعة
 
-## Next Steps
-- **P1**: AI يقرأ التصميم ويقترح عناصر من صور أخرى
-- **P1**: AI auto-detect bounding boxes (ضغطة زر "كشف العناصر")
-- **P2**: دعم cropping لـ websites/mobile apps
-- **P2**: Magic wand / freeform selection (حالياً مستطيل فقط)
-- **P2**: Shared library بين المستخدمين (marketplace)
+## Old Code (يبقى كما هو)
+- `/chat` (AIChat.js) — الشات العام القديم
+- `/designer` (VisualDesigner.js) — محرر الألعاب (سينتقل لـ games module لاحقاً)
+- `backend/services/ai_chat_service.py` — المنطق القديم (غير مُستخدم في websites module)

@@ -2892,6 +2892,14 @@ set_ws_ai_assistant(ai_assistant)
 deployment_service = DeploymentService(db=db)
 set_deployment_service(deployment_service)
 
+# ============== WEBSITES MODULE (self-contained) ==============
+try:
+    from modules.websites import register_routes as register_websites_routes
+    register_websites_routes(app, db, get_current_user)
+    logging.getLogger(__name__).info("Websites module registered")
+except Exception as _we:
+    logging.getLogger(__name__).error(f"Failed to register websites module: {_we}", exc_info=True)
+
 # ============== VISUAL DESIGNER APIS ==============
 class DesignElement(BaseModel):
     id: str
