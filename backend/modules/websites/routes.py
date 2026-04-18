@@ -1,19 +1,46 @@
 """FastAPI routes for the Websites module — fully isolated."""
 import uuid
+import logging
 from datetime import datetime, timezone
+from typing import Any, Dict, Optional, List
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from .models import WebsiteProject, ChatMessageIn, AIGenerateIn
 from .templates import list_templates, get_template
 from .renderer import render_website_to_html
-from .ai_service import chat_with_assistant, extract_build_payload, clean_display_text, build_sections_from_payload
-from .variants import list_variants_for_template, get_variant_project
+from .ai_service import (
+    chat_with_consultant, extract_wizard_action, clean_display_text,
+    extract_build_payload, build_sections_from_payload,
+)
+from .variants import list_variants_for_template, list_style_variants, get_variant_project
+from .wizard import (
+    STEPS, default_wizard_state, get_step, get_question_for_step,
+    get_chips_for_step, next_step_id, apply_answer, steps_metadata,
+    COLOR_VARIANT_MAP, RADIUS_MAP,
+)
+
+logger = logging.getLogger(__name__)
+
+
+class WizardStepIn(BaseModel):
+    step: str
+    value: Any   # string | list | dict
+
+
+class WizardChatIn(BaseModel):
+    message: str
+
+
+def _iso_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def register_routes(app, database, auth_dep):
     """Mount all /api/websites/* routes onto `app` with bound db + auth."""
     r = APIRouter(prefix="/api/websites", tags=["websites"])
 
+    # ---------------- Templates & Variants (public) ----------------
     @r.get("/templates")
     async def _t_list():
         return {"templates": list_templates()}
@@ -24,88 +51,214 @@ def register_routes(app, database, auth_dep):
         project = {"name": tpl["name"], "theme": tpl["theme"], "sections": tpl["sections"], "meta": {"title": tpl["name"]}}
         return {"html": render_website_to_html(project)}
 
+    @r.get("/variants")
+    async def _v_list():
+        return {"variants": list_style_variants()}
+
+    @r.get("/templates/{template_id}/variants")
+    async def _t_variants(template_id: str):
+        return {"variants": list_variants_for_template(template_id)}
+
+    @r.get("/templates/{template_id}/variants/{variant_id}/preview-html")
+    async def _v_preview(template_id: str, variant_id: str):
+        project = get_variant_project(template_id, variant_id)
+        return {"html": render_website_to_html(project)}
+
+    # ---------------- Wizard meta (public) ----------------
+    @r.get("/wizard/steps")
+    async def _w_steps():
+        return {"steps": steps_metadata()}
+
+    # ---------------- Projects ----------------
     @r.get("/projects")
     async def _p_list(current_user: dict = Depends(auth_dep)):
-        items = await database.website_projects.find({"user_id": current_user["user_id"]}, {"_id": 0}).sort("updated_at", -1).to_list(200)
+        items = await database.website_projects.find(
+            {"user_id": current_user["user_id"]}, {"_id": 0}
+        ).sort("updated_at", -1).to_list(200)
         return {"projects": items}
 
     @r.get("/projects/{project_id}")
     async def _p_get(project_id: str, current_user: dict = Depends(auth_dep)):
-        p = await database.website_projects.find_one({"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0})
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
         if not p:
             raise HTTPException(404, "Project not found")
         return p
 
     @r.post("/projects")
     async def _p_create(project: WebsiteProject, current_user: dict = Depends(auth_dep)):
-        now = datetime.now(timezone.utc).isoformat()
+        now = _iso_now()
         d = project.model_dump()
         d["id"] = str(uuid.uuid4())
         d["user_id"] = current_user["user_id"]
         d["created_at"] = now
         d["updated_at"] = now
+        tpl = get_template(d.get("template") or "blank")
         if not d.get("sections"):
-            tpl = get_template(d.get("template") or "blank")
             d["sections"] = [s.copy() for s in tpl["sections"]]
             d["theme"] = {**tpl["theme"], **(d.get("theme") or {})}
         for s in d["sections"]:
             if not s.get("id"):
                 s["id"] = f"sec-{uuid.uuid4().hex[:8]}"
+        # Init wizard state + greet message
+        d["wizard"] = default_wizard_state()
+        first_q = get_question_for_step(d["wizard"]["step"])
+        if not d.get("chat"):
+            d["chat"] = [{"role": "assistant", "content": first_q}]
         await database.website_projects.insert_one(d)
         d.pop("_id", None)
         return d
 
     @r.patch("/projects/{project_id}")
     async def _p_update(project_id: str, project: WebsiteProject, current_user: dict = Depends(auth_dep)):
-        existing = await database.website_projects.find_one({"id": project_id, "user_id": current_user["user_id"]})
+        existing = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}
+        )
         if not existing:
             raise HTTPException(404, "Project not found")
         update = project.model_dump(exclude={"id", "user_id", "created_at"})
-        update["updated_at"] = datetime.now(timezone.utc).isoformat()
+        # Preserve wizard state unless sent explicitly
+        if "wizard" not in update or update["wizard"] is None:
+            update.pop("wizard", None)
+        update["updated_at"] = _iso_now()
         await database.website_projects.update_one({"id": project_id}, {"$set": update})
-        updated = await database.website_projects.find_one({"id": project_id}, {"_id": 0})
-        return updated
+        return await database.website_projects.find_one({"id": project_id}, {"_id": 0})
 
     @r.delete("/projects/{project_id}")
     async def _p_delete(project_id: str, current_user: dict = Depends(auth_dep)):
-        res = await database.website_projects.delete_one({"id": project_id, "user_id": current_user["user_id"]})
+        res = await database.website_projects.delete_one(
+            {"id": project_id, "user_id": current_user["user_id"]}
+        )
         if res.deleted_count == 0:
             raise HTTPException(404, "Project not found")
         return {"ok": True}
 
     @r.post("/projects/{project_id}/duplicate")
     async def _p_duplicate(project_id: str, current_user: dict = Depends(auth_dep)):
-        p = await database.website_projects.find_one({"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0})
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
         if not p:
             raise HTTPException(404, "Project not found")
         p["id"] = str(uuid.uuid4())
         p["name"] = f"{p.get('name','موقع')} (نسخة)"
-        now = datetime.now(timezone.utc).isoformat()
-        p["created_at"] = now
-        p["updated_at"] = now
+        p["created_at"] = _iso_now()
+        p["updated_at"] = _iso_now()
         await database.website_projects.insert_one(p)
         p.pop("_id", None)
         return p
 
     @r.post("/projects/{project_id}/build")
     async def _p_build(project_id: str, current_user: dict = Depends(auth_dep)):
-        p = await database.website_projects.find_one({"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0})
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
         if not p:
             raise HTTPException(404, "Project not found")
         return {"html": render_website_to_html(p), "project_id": project_id}
 
-    @r.post("/projects/{project_id}/chat")
-    async def _p_chat(project_id: str, body: ChatMessageIn, current_user: dict = Depends(auth_dep)):
-        p = await database.website_projects.find_one({"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0})
+    # ---------------- Variant apply ----------------
+    class ApplyVariantIn(BaseModel):
+        template_id: str
+        variant_id: str
+        replace_sections: bool = False   # if False → keep current sections, only apply theme
+
+    @r.post("/projects/{project_id}/apply-variant")
+    async def _p_apply_variant(project_id: str, body: ApplyVariantIn, current_user: dict = Depends(auth_dep)):
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
         if not p:
             raise HTTPException(404, "Project not found")
-        history = p.get("chat", [])
+        vp = get_variant_project(body.template_id, body.variant_id)
+        update = {"theme": vp["theme"], "template": body.template_id, "updated_at": _iso_now()}
+        if body.replace_sections:
+            sections = [{**s, "id": f"sec-{uuid.uuid4().hex[:8]}"} for s in vp["sections"]]
+            update["sections"] = sections
+            update["business_type"] = vp["business_type"]
+        await database.website_projects.update_one({"id": project_id}, {"$set": update})
+        return await database.website_projects.find_one({"id": project_id}, {"_id": 0})
+
+    # ---------------- Wizard: deterministic step answer (chip click) ----------------
+    @r.post("/projects/{project_id}/wizard/answer")
+    async def _w_answer(project_id: str, body: WizardStepIn, current_user: dict = Depends(auth_dep)):
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "Project not found")
+        if not p.get("wizard"):
+            p["wizard"] = default_wizard_state()
+        # Apply
+        p = apply_answer(p, body.step, body.value)
+        # Append a system-style acknowledgement + next question
+        chat = p.get("chat", [])
+        human_label = _chip_label(body.step, body.value)
+        chat.append({"role": "user", "content": human_label})
+        nxt_step = p["wizard"].get("step")
+        if nxt_step and nxt_step != "done":
+            chat.append({"role": "assistant", "content": get_question_for_step(nxt_step)})
+        else:
+            chat.append({"role": "assistant", "content": "🎉 تمّت كل الأسئلة! راجع المعاينة — لو كل شيء تمام، اضغط 'اعتماد' من القائمة."})
+        p["chat"] = chat
+        update = {
+            "theme": p["theme"], "sections": p.get("sections", []),
+            "wizard": p["wizard"], "chat": chat,
+            "name": p.get("name"),
+            "updated_at": _iso_now(),
+        }
+        await database.website_projects.update_one({"id": project_id}, {"$set": update})
+        return await database.website_projects.find_one({"id": project_id}, {"_id": 0})
+
+    # ---------------- Wizard: free-text chat (priority aware) ----------------
+    @r.post("/projects/{project_id}/wizard/chat")
+    async def _w_chat(project_id: str, body: WizardChatIn, current_user: dict = Depends(auth_dep)):
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "Project not found")
+        if not p.get("wizard"):
+            p["wizard"] = default_wizard_state()
+        history = list(p.get("chat", []))
         history.append({"role": "user", "content": body.message})
-        ai_text = await chat_with_assistant(history)
+        summary = {"name": p.get("name"), "template": p.get("template"), "business_type": p.get("business_type")}
+        ai_text = await chat_with_consultant(history, wizard=p.get("wizard"), project_summary=summary)
         display = clean_display_text(ai_text)
+        action = extract_wizard_action(ai_text)
+        history.append({"role": "assistant", "content": display})
+        p["chat"] = history
+        # Apply AI action (if any)
+        p = _apply_ai_action(p, action)
+        await database.website_projects.update_one(
+            {"id": project_id},
+            {"$set": {
+                "chat": p["chat"], "theme": p.get("theme"), "sections": p.get("sections"),
+                "wizard": p.get("wizard"), "name": p.get("name"),
+                "updated_at": _iso_now(),
+            }}
+        )
+        updated = await database.website_projects.find_one({"id": project_id}, {"_id": 0})
+        return {"project": updated, "action": action, "response": display}
+
+    # ---------------- Legacy /chat — keep for back-compat ----------------
+    @r.post("/projects/{project_id}/chat")
+    async def _p_chat(project_id: str, body: ChatMessageIn, current_user: dict = Depends(auth_dep)):
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "Project not found")
+        history = list(p.get("chat", []))
+        history.append({"role": "user", "content": body.message})
+        ai_text = await chat_with_consultant(history, wizard=p.get("wizard"),
+                                             project_summary={"name": p.get("name"), "template": p.get("template"), "business_type": p.get("business_type")})
+        display = clean_display_text(ai_text)
+        action = extract_wizard_action(ai_text)
         payload = extract_build_payload(ai_text)
         history.append({"role": "assistant", "content": display})
-        update = {"chat": history, "updated_at": datetime.now(timezone.utc).isoformat()}
+        update: Dict[str, Any] = {"chat": history, "updated_at": _iso_now()}
         built = False
         if payload:
             try:
@@ -122,28 +275,110 @@ def register_routes(app, database, auth_dep):
                 built = True
             except Exception:
                 pass
+        if action:
+            p["chat"] = history
+            p = _apply_ai_action(p, action)
+            update["theme"] = p.get("theme")
+            update["sections"] = p.get("sections")
+            update["wizard"] = p.get("wizard")
+            update["name"] = p.get("name")
         await database.website_projects.update_one({"id": project_id}, {"$set": update})
         updated = await database.website_projects.find_one({"id": project_id}, {"_id": 0})
-        return {"response": display, "built": built, "project": updated}
+        return {"response": display, "built": built, "project": updated, "action": action}
 
     @r.post("/ai/instant-build")
     async def _p_instant(body: AIGenerateIn, current_user: dict = Depends(auth_dep)):
         valid = ("store", "restaurant", "company", "portfolio", "saas")
         tpl_key = body.business_type if body.business_type in valid else "blank"
         tpl = get_template(tpl_key)
-        now = datetime.now(timezone.utc).isoformat()
+        now = _iso_now()
         d = {
             "id": str(uuid.uuid4()), "user_id": current_user["user_id"],
             "name": body.name or tpl["name"], "business_type": body.business_type, "template": tpl_key,
             "lang": "ar", "direction": "rtl", "theme": tpl["theme"],
             "sections": [{**s, "id": f"sec-{uuid.uuid4().hex[:8]}"} for s in tpl["sections"]],
             "meta": {"title": body.name or tpl["name"], "description": body.brief},
-            "chat": [{"role": "user", "content": body.brief}, {"role": "assistant", "content": f"تم إنشاء موقعك بقالب {tpl['name']}. عدّل أي قسم من المحرر المرئي."}],
+            "chat": [
+                {"role": "user", "content": body.brief},
+                {"role": "assistant", "content": f"تم إنشاء موقعك بقالب {tpl['name']}. عدّل أي قسم من المحرر المرئي."},
+            ],
+            "wizard": default_wizard_state(),
             "created_at": now, "updated_at": now,
         }
         await database.website_projects.insert_one(d)
         d.pop("_id", None)
         return d
 
+    # ---------------- Independence placeholder (returns guide only, no code) ----------------
+    @r.post("/projects/{project_id}/independence/request")
+    async def _independence(project_id: str, current_user: dict = Depends(auth_dep)):
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "Project not found")
+        return {
+            "ok": True,
+            "message": "طلب الاستقلالية مسجّل. سيتم التواصل لاستكمال خطوات النشر.",
+            "status": "pending_payment",
+            "guides": [
+                {"id": "vercel", "name": "Vercel", "summary": "الأفضل للمواقع الحديثة — مجاني، نطاق مخصّص، CI/CD تلقائي."},
+                {"id": "netlify", "name": "Netlify", "summary": "بديل ممتاز لـ Vercel — نفس السهولة."},
+                {"id": "github", "name": "GitHub Pages", "summary": "مجاني تماماً للمواقع الثابتة (بدون Backend)."},
+            ],
+        }
+
     app.include_router(r)
     return r
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+def _chip_label(step_id: str, value: Any) -> str:
+    step = get_step(step_id)
+    chips = (step or {}).get("chips", [])
+    if isinstance(value, list):
+        labels = []
+        for v in value:
+            c = next((c for c in chips if c.get("id") == v or c.get("value") == v), None)
+            labels.append((c or {}).get("label", str(v)))
+        return "، ".join(labels)
+    c = next((c for c in chips if c.get("id") == value or c.get("value") == value), None)
+    return (c or {}).get("label", str(value))
+
+
+def _apply_ai_action(project: Dict[str, Any], action: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Mutate project based on a directive returned by the AI."""
+    if not action or not isinstance(action, dict):
+        return project
+    a = action.get("action")
+    v = action.get("value")
+    try:
+        if a == "advance":
+            return apply_answer(project, action.get("step") or project.get("wizard", {}).get("step"), v)
+        if a == "apply_theme" and isinstance(v, dict):
+            project["theme"] = {**(project.get("theme") or {}), **v}
+        if a == "apply_button":
+            project["theme"] = {**(project.get("theme") or {}), "radius": RADIUS_MAP.get(str(v), "medium")}
+        if a == "apply_font":
+            project["theme"] = {**(project.get("theme") or {}), "font": str(v) or "Tajawal"}
+        if a == "add_section" and isinstance(v, dict):
+            sections = list(project.get("sections") or [])
+            sections.append({
+                "id": f"sec-{uuid.uuid4().hex[:8]}", "type": v.get("type", "hero"),
+                "order": len(sections), "visible": True, "data": v.get("data") or {},
+            })
+            project["sections"] = sections
+        if a == "custom_feature" and isinstance(v, dict):
+            # Store as a feature hint and add a CTA section showcasing it
+            wizard = project.get("wizard") or default_wizard_state()
+            ans = dict(wizard.get("answers") or {})
+            cf = list(ans.get("custom_features") or [])
+            cf.append({"title": v.get("title"), "description": v.get("description"), "section_type": v.get("section_type")})
+            ans["custom_features"] = cf
+            wizard["answers"] = ans
+            project["wizard"] = wizard
+    except Exception as e:
+        logger.warning(f"apply_ai_action error: {e}")
+    return project

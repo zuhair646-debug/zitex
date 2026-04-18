@@ -34,6 +34,7 @@ class WebsiteProject(BaseModel):
     sections: List[WebsiteSection] = Field(default_factory=list)
     meta: Dict[str, Any] = Field(default_factory=dict)   # site title, description, og image
     chat: List[Dict[str, Any]] = Field(default_factory=list)   # conversational history
+    wizard: Optional[Dict[str, Any]] = None   # consultative wizard state
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 

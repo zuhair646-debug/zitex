@@ -131,7 +131,7 @@ def _base_css(theme: Dict[str, Any]) -> str:
     bg = theme.get("background", "#0b0f1f")
     tx = theme.get("text", "#ffffff")
     font = theme.get("font", "Tajawal")
-    radius_map = {"none": "0", "small": "6px", "medium": "12px", "large": "20px"}
+    radius_map = {"none": "0", "small": "6px", "medium": "12px", "large": "20px", "full": "999px"}
     r = radius_map.get(theme.get("radius", "medium"), "12px")
     return f"""
 *{{margin:0;padding:0;box-sizing:border-box;font-family:{font},-apple-system,BlinkMacSystemFont,sans-serif}}
