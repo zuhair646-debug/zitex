@@ -2892,6 +2892,112 @@ set_ws_ai_assistant(ai_assistant)
 deployment_service = DeploymentService(db=db)
 set_deployment_service(deployment_service)
 
+# ============== VISUAL DESIGNER APIS ==============
+class DesignElement(BaseModel):
+    id: str
+    type: str
+    x: float
+    y: float
+    width: float = 100
+    height: float = 100
+    rotation: float = 0
+    scale_x: float = 1
+    scale_y: float = 1
+    z_index: int = 0
+    props: dict = Field(default_factory=dict)
+
+
+class Design(BaseModel):
+    id: Optional[str] = None
+    user_id: Optional[str] = None
+    name: str
+    category: str = "game"
+    genre: str = "strategy"
+    canvas: dict = Field(default_factory=lambda: {"width": 1280, "height": 720, "background_image_url": None, "background_color": "#87CEEB"})
+    elements: List[DesignElement] = Field(default_factory=list)
+    meta: dict = Field(default_factory=dict)
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+@api_router.get("/designs")
+async def list_designs(current_user: dict = Depends(get_current_user)):
+    items = await db.designs.find(
+        {"user_id": current_user["user_id"]},
+        {"_id": 0}
+    ).sort("updated_at", -1).to_list(200)
+    return {"designs": items}
+
+
+@api_router.get("/designs/{design_id}")
+async def get_design(design_id: str, current_user: dict = Depends(get_current_user)):
+    d = await db.designs.find_one({"id": design_id, "user_id": current_user["user_id"]}, {"_id": 0})
+    if not d:
+        raise HTTPException(status_code=404, detail="Design not found")
+    return d
+
+
+@api_router.post("/designs")
+async def create_design(design: Design, current_user: dict = Depends(get_current_user)):
+    now = datetime.now(timezone.utc).isoformat()
+    d = design.model_dump()
+    d["id"] = str(uuid.uuid4())
+    d["user_id"] = current_user["user_id"]
+    d["created_at"] = now
+    d["updated_at"] = now
+    await db.designs.insert_one(d)
+    d.pop("_id", None)
+    return d
+
+
+@api_router.patch("/designs/{design_id}")
+async def update_design(design_id: str, design: Design, current_user: dict = Depends(get_current_user)):
+    existing = await db.designs.find_one({"id": design_id, "user_id": current_user["user_id"]})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Design not found")
+    update = design.model_dump(exclude={"id", "user_id", "created_at"})
+    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.designs.update_one({"id": design_id}, {"$set": update})
+    updated = await db.designs.find_one({"id": design_id}, {"_id": 0})
+    return updated
+
+
+@api_router.delete("/designs/{design_id}")
+async def delete_design(design_id: str, current_user: dict = Depends(get_current_user)):
+    r = await db.designs.delete_one({"id": design_id, "user_id": current_user["user_id"]})
+    if r.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Design not found")
+    return {"ok": True}
+
+
+@api_router.post("/designs/{design_id}/duplicate")
+async def duplicate_design(design_id: str, current_user: dict = Depends(get_current_user)):
+    d = await db.designs.find_one({"id": design_id, "user_id": current_user["user_id"]}, {"_id": 0})
+    if not d:
+        raise HTTPException(status_code=404, detail="Design not found")
+    d["id"] = str(uuid.uuid4())
+    d["name"] = f"{d.get('name','تصميم')} (نسخة)"
+    now = datetime.now(timezone.utc).isoformat()
+    d["created_at"] = now
+    d["updated_at"] = now
+    await db.designs.insert_one(d)
+    d.pop("_id", None)
+    return d
+
+
+@api_router.post("/designs/{design_id}/build")
+async def build_from_design(design_id: str, current_user: dict = Depends(get_current_user)):
+    """Convert a user-crafted design JSON into a live, playable game HTML.
+    The HTML uses the exact element positions the user chose — zero AI drift."""
+    d = await db.designs.find_one({"id": design_id, "user_id": current_user["user_id"]}, {"_id": 0})
+    if not d:
+        raise HTTPException(status_code=404, detail="Design not found")
+    from services.ai_chat_service import render_design_to_html
+    html = render_design_to_html(d)
+    return {"html": html, "design_id": design_id}
+# ============== END VISUAL DESIGNER APIS ==============
+
+
 # Health check endpoint - MUST be before other routers
 @app.get("/api/health")
 async def health_check():
@@ -2944,6 +3050,26 @@ async def serve_image_backed_test():
 async def serve_final_preview():
     import os
     p = os.path.join(os.path.dirname(__file__), "static", "final-preview.html")
+    if os.path.exists(p):
+        with open(p, 'r') as f:
+            content = f.read()
+        return Response(content=content, media_type="text/html")
+
+
+@app.get("/api/designer-preview-test")
+async def serve_designer_preview_test():
+    import os
+    p = os.path.join(os.path.dirname(__file__), "static", "designer-preview-test.html")
+    if os.path.exists(p):
+        with open(p, 'r') as f:
+            content = f.read()
+        return Response(content=content, media_type="text/html")
+
+
+@app.get("/api/user-designed-preview")
+async def serve_user_designed_preview():
+    import os
+    p = os.path.join(os.path.dirname(__file__), "static", "user-designed-preview.html")
     if os.path.exists(p):
         with open(p, 'r') as f:
             content = f.read()

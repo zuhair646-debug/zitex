@@ -1630,7 +1630,16 @@ const AIChat = ({ user }) => {
       
       <div className="flex-1 flex mt-16 overflow-hidden">
         {/* Sessions Dropdown Button - Always visible */}
-        <div className="fixed top-20 right-4 z-30">
+        <div className="fixed top-20 right-4 z-30 flex items-center gap-2">
+          <button
+            onClick={() => (window.location.href = '/designer')}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl shadow-lg border border-yellow-500/40 bg-gradient-to-r from-yellow-600/30 to-orange-600/30 text-yellow-300 hover:from-yellow-600/50 hover:to-orange-600/50 transition-all"
+            data-testid="open-designer-btn"
+            title="المحرر المرئي"
+          >
+            <span className="text-base">🎨</span>
+            <span className="text-sm font-medium">المحرر المرئي</span>
+          </button>
           <button 
             onClick={() => setSidebarOpen(!sidebarOpen)} 
             className={`flex items-center gap-2 px-4 py-2 rounded-xl shadow-lg border transition-all ${sidebarOpen ? 'bg-amber-600 border-amber-500 text-white' : 'bg-slate-800 border-slate-700 text-white hover:bg-slate-700'}`}

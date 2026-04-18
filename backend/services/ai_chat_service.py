@@ -1099,6 +1099,199 @@ def _build_image_backed_game(genre: str, title: str, hint: str, image_url: str) 
 </html>"""
 
 
+def render_design_to_html(design: dict) -> str:
+    """Render a user-crafted design (JSON of elements with exact coords) into a
+    fully playable HTML game. Each element renders via SVG at the EXACT position
+    the user placed it — guaranteed 1:1 match between editor and live preview."""
+    canvas = design.get("canvas") or {}
+    w = int(canvas.get("width") or 1280)
+    h = int(canvas.get("height") or 720)
+    bg_img = canvas.get("background_image_url") or ""
+    bg_color = canvas.get("background_color") or "#87CEEB"
+    name = (design.get("name") or "لعبة Zitex").replace('"', "'")[:80]
+    genre = design.get("genre") or "strategy"
+    elements = design.get("elements") or []
+
+    # Build element HTML
+    parts = []
+    for el in sorted(elements, key=lambda e: e.get("z_index", 0)):
+        etype = el.get("type") or "rect"
+        x = float(el.get("x", 0))
+        y = float(el.get("y", 0))
+        ew = float(el.get("width", 100))
+        eh = float(el.get("height", 100))
+        rot = float(el.get("rotation", 0))
+        sx = float(el.get("scale_x", 1))
+        sy = float(el.get("scale_y", 1))
+        props = el.get("props") or {}
+        label = (props.get("label") or "").replace('"', "'")[:60]
+        eid = (el.get("id") or "").replace('"', "'")[:40]
+
+        svg_inner = _element_svg(etype, props)
+        transform = f"translate({x}px,{y}px) rotate({rot}deg) scale({sx},{sy})"
+        tip = f'<div class="tt">{label}</div>' if label else ''
+        parts.append(
+            f'<div class="el" data-id="{eid}" data-type="{etype}" '
+            f'style="width:{ew}px;height:{eh}px;transform:{transform};z-index:{el.get("z_index",0)}">'
+            f'{tip}{svg_inner}</div>'
+        )
+
+    bg_layer = (
+        f'<div class="bg-img" style="background-image:url(\'{bg_img}\')"></div>' if bg_img else ''
+    )
+
+    return f"""<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>{name}</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  *{{margin:0;padding:0;box-sizing:border-box;font-family:Tajawal,sans-serif}}
+  html,body{{width:100%;height:100%;overflow:hidden;background:#0b1020}}
+  .stage{{position:fixed;inset:50px 0 60px 0;display:flex;align-items:center;justify-content:center}}
+  .frame{{position:relative;width:{w}px;height:{h}px;background:{bg_color};border-radius:12px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5);max-width:96%;max-height:96%}}
+  .bg-img{{position:absolute;inset:0;background-size:cover;background-position:center;background-repeat:no-repeat}}
+  .bg-img::after{{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.2),transparent 30%,transparent 70%,rgba(0,0,0,.3));pointer-events:none}}
+  .el{{position:absolute;top:0;left:0;cursor:pointer;transition:transform .2s,filter .2s;transform-origin:top left;filter:drop-shadow(2px 4px 6px rgba(0,0,0,.4))}}
+  .el:hover{{filter:drop-shadow(2px 4px 14px rgba(255,215,0,.6)) brightness(1.1);z-index:999 !important}}
+  .el svg{{width:100%;height:100%;display:block;pointer-events:none}}
+  .tt{{display:none;position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.92);color:#fff;padding:6px 12px;border-radius:8px;white-space:nowrap;font-size:12px;border:1px solid rgba(255,215,0,.3);z-index:99}}
+  .el:hover .tt{{display:block}}
+  .zg-hud{{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;justify-content:space-between;padding:10px 16px;background:linear-gradient(180deg,rgba(0,0,0,.78),rgba(0,0,0,.2));backdrop-filter:blur(10px);color:#fff;font-weight:700}}
+  .zg-hud .g{{display:flex;gap:10px;flex-wrap:wrap;align-items:center}}
+  .zg-chip{{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.1);padding:6px 12px;border-radius:20px;font-size:13px;border:1px solid rgba(255,215,0,.25)}}
+  .zg-foot{{position:fixed;bottom:0;left:0;right:0;z-index:100;display:flex;justify-content:center;gap:8px;padding:10px;background:rgba(0,0,0,.6);backdrop-filter:blur(10px)}}
+  .zg-btn{{padding:9px 18px;border:2px solid rgba(255,215,0,.5);border-radius:12px;background:rgba(255,215,0,.12);color:#FFD700;font-weight:700;cursor:pointer;transition:all .25s;font-size:13px;font-family:inherit}}
+  .zg-btn:hover{{background:rgba(255,215,0,.3);transform:translateY(-2px)}}
+  .badge{{position:fixed;bottom:62px;right:10px;z-index:90;font-size:10px;color:rgba(255,255,255,.45);background:rgba(0,0,0,.4);padding:3px 8px;border-radius:10px}}
+</style>
+</head>
+<body>
+<div class="zg-hud">
+  <div class="g">
+    <div class="zg-chip">💰 <span id="r_gold">500</span></div>
+    <div class="zg-chip">🪵 <span id="r_wood">300</span></div>
+    <div class="zg-chip">🌾 <span id="r_food">400</span></div>
+    <div class="zg-chip">🪨 <span id="r_stone">150</span></div>
+    <div class="zg-chip">⚔️ <span id="r_sold">4</span></div>
+  </div>
+  <div class="g"><div class="zg-chip">🎮 {name}</div></div>
+</div>
+<div class="stage">
+  <div class="frame">
+    {bg_layer}
+    {''.join(parts)}
+  </div>
+</div>
+<div class="zg-foot">
+  <button class="zg-btn" onclick="ZD.act('build')">🏠 بناء</button>
+  <button class="zg-btn" onclick="ZD.act('train')">⚔️ تدريب</button>
+  <button class="zg-btn" onclick="ZD.act('upgrade')">⭐ ترقية</button>
+  <button class="zg-btn" onclick="ZD.act('attack')">🔥 هجوم</button>
+</div>
+<div class="badge">Zitex · من تصميم العميل</div>
+<script>
+(function(){{
+  const state = {{gold:500,wood:300,food:400,stone:150,sold:4}};
+  const upd = () => Object.entries(state).forEach(([k,v])=>{{ const el=document.getElementById('r_'+k); if(el) el.textContent=v; }});
+  const alert2 = (t,m) => {{
+    const o = document.createElement('div');
+    o.style.cssText='position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.75);z-index:500;backdrop-filter:blur(6px)';
+    o.innerHTML = '<div style="background:linear-gradient(135deg,#1a1f3a,#2a2f5a);padding:26px 36px;border-radius:16px;color:#fff;text-align:center;border:2px solid rgba(255,215,0,.4);box-shadow:0 20px 60px rgba(0,0,0,.5);min-width:280px"><h3 style="color:#FFD700;margin-bottom:8px;font-size:22px">'+t+'</h3><p style="margin-bottom:14px;opacity:.9">'+m+'</p><button class="zg-btn">موافق</button></div>';
+    document.body.appendChild(o);
+    o.querySelector('button').onclick = () => o.remove();
+  }};
+  // Per-element behaviour by type
+  document.querySelectorAll('.el').forEach(el => {{
+    const t = el.dataset.type;
+    el.addEventListener('click', () => {{
+      if (t === 'wheat_field')  {{ state.food += 15; upd(); alert2('🌾 حقل قمح','+15 طعام'); }}
+      else if (t === 'clay_field')  {{ state.stone += 10; state.gold += 3; upd(); alert2('🏺 حقل طين','+10 حجر ، +3 ذهب'); }}
+      else if (t === 'house')    {{ state.gold += 10; state.wood += 5; upd(); alert2('🏠 بيت','+10 ذهب ، +5 خشب'); }}
+      else if (t === 'castle')   {{ alert2('🏰 القلعة','قاعدة الحكم - المستوى 5'); }}
+      else if (t === 'mine')     {{ state.stone += 12; upd(); alert2('⛏️ منجم','+12 حجر'); }}
+      else if (t === 'soldier')  {{ alert2('⚔️ جندي','قوة الهجوم: 20'); }}
+      else if (t === 'tree')     {{ state.wood += 8; upd(); alert2('🌲 شجرة','+8 خشب'); }}
+      else if (t === 'farm')     {{ state.food += 10; upd(); alert2('🚜 مزرعة','+10 طعام'); }}
+      else {{ alert2('عنصر','تفاعل قيد التطوير'); }}
+    }});
+  }});
+  window.ZD = {{
+    state, upd, alert2,
+    act(kind){{
+      if (kind==='build'){{ if(state.wood>=50 && state.stone>=30){{ state.wood-=50; state.stone-=30; upd(); alert2('🏠 بناء','جاهز لوضع المبنى'); }} else alert2('موارد ناقصة','تحتاج 50 خشب و 30 حجر'); }}
+      else if (kind==='train'){{ if(state.food>=30 && state.gold>=20){{ state.food-=30; state.gold-=20; state.sold++; upd(); alert2('⚔️ جندي جديد','انضم جندي جديد'); }} else alert2('موارد ناقصة','تحتاج 30 طعام و 20 ذهب'); }}
+      else if (kind==='upgrade'){{ if(state.gold>=100){{ state.gold-=100; upd(); alert2('✨ ترقية','ترقية ناجحة'); }} else alert2('ذهب ناقص','تحتاج 100 ذهب'); }}
+      else if (kind==='attack'){{ alert2('⚔️ هجوم','جيشك يتقدم'); }}
+    }}
+  }};
+  setInterval(()=>{{ state.gold+=5; state.wood+=3; state.food+=4; state.stone+=2; upd(); }}, 3000);
+  upd();
+}})();
+</script>
+</body>
+</html>"""
+
+
+# ============== ELEMENT SVG LIBRARY (for designer + renderer) ==============
+def _element_svg(etype: str, props: Optional[dict] = None) -> str:
+    """Return the raw SVG markup for a given element type.
+    Stays in sync with the Designer UI on the frontend."""
+    props = props or {}
+    v = props.get("variant", 0)
+    color = props.get("color")
+
+    if etype == "castle":
+        return """<svg viewBox="0 0 120 110"><defs><linearGradient id="cgR" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#A08060"/><stop offset="100%" stop-color="#7A6040"/></linearGradient></defs><rect x="25" y="45" width="70" height="55" fill="url(#cgR)" rx="3"/><rect x="10" y="28" width="18" height="72" fill="#8B7355"/><rect x="92" y="28" width="18" height="72" fill="#8B7355"/><rect x="48" y="22" width="24" height="78" fill="#9B8465"/><polygon points="10,28 19,10 28,28" fill="#C41E3A"/><polygon points="92,28 101,10 110,28" fill="#C41E3A"/><polygon points="48,22 60,5 72,22" fill="#C41E3A"/><rect x="50" y="62" width="20" height="38" fill="#4A3322" rx="10 10 0 0"/><rect x="30" y="52" width="12" height="12" fill="#87CEEB" rx="2"/><rect x="78" y="52" width="12" height="12" fill="#87CEEB" rx="2"/><polygon points="54,8 63,0 72,8" fill="#FFD700"/></svg>"""
+    if etype == "house":
+        colors = [('#D4A574','#8B4513'), ('#C49464','#7A3A12'), ('#B88454','#6B3010'), ('#DDB584','#9B5523')]
+        c, r = colors[v % 4]
+        return f"""<svg viewBox="0 0 80 70"><rect x="10" y="35" width="60" height="35" fill="{c}" rx="2"/><polygon points="5,35 40,12 75,35" fill="{r}"/><rect x="30" y="45" width="14" height="25" fill="#4A3322" rx="5 5 0 0"/><rect x="13" y="40" width="11" height="10" fill="#87CEEB" rx="1"/><rect x="56" y="40" width="11" height="10" fill="#87CEEB" rx="1"/><rect x="62" y="16" width="6" height="19" fill="#8B7355"/></svg>"""
+    if etype == "tree":
+        greens = ['#2D8B2D', '#1E7A1E', '#3AA63A', '#228B22']
+        g1 = color or greens[v % 4]
+        g2 = greens[(v + 1) % 4]
+        return f"""<svg viewBox="0 0 60 80"><rect x="25" y="52" width="10" height="23" fill="#6B4226" rx="3"/><ellipse cx="30" cy="35" rx="24" ry="26" fill="{g1}"/><ellipse cx="22" cy="30" rx="14" ry="16" fill="{g2}" opacity="0.9"/><ellipse cx="38" cy="32" rx="13" ry="15" fill="{g1}" opacity="0.85"/></svg>"""
+    if etype == "wheat_field":
+        return """<svg viewBox="0 0 90 60"><rect x="5" y="15" width="80" height="40" fill="#8B6914" rx="4"/><line x1="5" y1="25" x2="85" y2="25" stroke="#6B4F12" stroke-width="1"/><line x1="5" y1="35" x2="85" y2="35" stroke="#6B4F12" stroke-width="1"/><line x1="5" y1="45" x2="85" y2="45" stroke="#6B4F12" stroke-width="1"/><rect x="12" y="18" width="3" height="12" fill="#228B22"/><rect x="22" y="18" width="3" height="14" fill="#228B22"/><rect x="32" y="18" width="3" height="11" fill="#228B22"/><rect x="42" y="18" width="3" height="13" fill="#228B22"/><rect x="52" y="18" width="3" height="12" fill="#228B22"/><rect x="62" y="18" width="3" height="14" fill="#228B22"/><rect x="72" y="18" width="3" height="11" fill="#228B22"/><circle cx="22" cy="16" r="4" fill="#FFD700"/><circle cx="42" cy="16" r="4" fill="#FFD700"/><circle cx="62" cy="16" r="4" fill="#FFD700"/></svg>"""
+    if etype == "clay_field":
+        return """<svg viewBox="0 0 90 60"><rect x="5" y="15" width="80" height="40" fill="#C08060" rx="4"/><ellipse cx="20" cy="35" rx="10" ry="6" fill="#A56040" opacity=".6"/><ellipse cx="55" cy="40" rx="12" ry="7" fill="#9F5030" opacity=".55"/><ellipse cx="72" cy="28" rx="8" ry="5" fill="#B87858" opacity=".5"/><circle cx="30" cy="28" r="3" fill="#6D4025"/><circle cx="62" cy="50" r="3" fill="#6D4025"/><circle cx="15" cy="48" r="2.5" fill="#6D4025"/></svg>"""
+    if etype == "farm":
+        return _element_svg("wheat_field")
+    if etype == "soldier":
+        return """<svg viewBox="0 0 40 60"><circle cx="20" cy="12" r="8" fill="#FDBCB4"/><rect x="12" y="20" width="16" height="20" fill="#C41E3A" rx="3"/><rect x="7" y="22" width="7" height="14" fill="#A01030" rx="2"/><rect x="26" y="22" width="7" height="14" fill="#A01030" rx="2"/><rect x="14" y="40" width="5" height="14" fill="#4A3728" rx="2"/><rect x="21" y="40" width="5" height="14" fill="#4A3728" rx="2"/><ellipse cx="20" cy="5" rx="10" ry="4" fill="#808080"/><circle cx="16" cy="10" r="1.5" fill="#333"/><circle cx="24" cy="10" r="1.5" fill="#333"/></svg>"""
+    if etype == "mine":
+        return """<svg viewBox="0 0 80 60"><polygon points="20,55 40,15 60,55" fill="#696969"/><polygon points="10,55 25,25 40,55" fill="#808080"/><polygon points="45,55 60,20 75,55" fill="#A9A9A9"/><rect x="35" y="30" width="5" height="20" fill="#6B4226"/><polygon points="32,30 40,18 48,30" fill="#555"/><circle cx="28" cy="42" r="4" fill="#FFD700"/><circle cx="55" cy="48" r="3" fill="#FFD700"/></svg>"""
+    if etype == "rock":
+        return """<svg viewBox="0 0 40 30"><polygon points="8,28 20,8 35,28" fill="#808080"/><polygon points="2,28 12,15 22,28" fill="#696969"/></svg>"""
+    if etype == "flower":
+        cols = ['#FF6B6B', '#FFD700', '#FF69B4', '#9370DB', '#FF8C00']
+        cl = color or cols[v % 5]
+        return f"""<svg viewBox="0 0 20 25"><rect x="9" y="12" width="2" height="13" fill="#228B22"/><circle cx="10" cy="9" r="5" fill="{cl}"/><circle cx="10" cy="9" r="2.5" fill="#FFD700"/></svg>"""
+    if etype == "bush":
+        return """<svg viewBox="0 0 40 25"><ellipse cx="20" cy="15" rx="18" ry="10" fill="#2D8B2D"/><ellipse cx="12" cy="13" rx="10" ry="8" fill="#3AA63A"/><ellipse cx="28" cy="14" rx="9" ry="7" fill="#248F24"/></svg>"""
+    if etype == "cloud":
+        return """<svg viewBox="0 0 120 45"><ellipse cx="60" cy="28" rx="50" ry="16" fill="white" opacity=".9"/><ellipse cx="35" cy="22" rx="30" ry="14" fill="white" opacity=".92"/><ellipse cx="85" cy="24" rx="28" ry="12" fill="white" opacity=".88"/></svg>"""
+    if etype == "pond":
+        return """<svg viewBox="0 0 80 50"><ellipse cx="40" cy="25" rx="38" ry="22" fill="#4DA6FF"/><ellipse cx="40" cy="22" rx="32" ry="17" fill="#87CEEB" opacity=".6"/><circle cx="25" cy="18" r="2" fill="white" opacity=".8"/><circle cx="52" cy="30" r="1.5" fill="white" opacity=".7"/></svg>"""
+    if etype == "circle":
+        cl = color or "#FFD700"
+        return f"""<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="48" fill="{cl}"/></svg>"""
+    if etype == "rect":
+        cl = color or "#4a3aff"
+        return f"""<svg viewBox="0 0 100 100"><rect x="0" y="0" width="100" height="100" fill="{cl}" rx="8"/></svg>"""
+    if etype == "text":
+        txt = (props.get("text") or "نص").replace('<', '&lt;').replace('>', '&gt;')[:40]
+        cl = color or "#FFD700"
+        size = int(props.get("font_size") or 24)
+        return f"""<svg viewBox="0 0 200 40"><text x="100" y="26" text-anchor="middle" font-family="Tajawal,sans-serif" font-size="{size}" fill="{cl}" font-weight="900">{txt}</text></svg>"""
+    if etype == "star":
+        return """<svg viewBox="0 0 50 50"><polygon points="25,3 31,18 48,19 35,30 39,47 25,38 11,47 15,30 2,19 19,18" fill="#FFD700" stroke="#B8860B" stroke-width="1.5"/></svg>"""
+    return """<svg viewBox="0 0 100 100"><rect x="5" y="5" width="90" height="90" fill="#888" stroke="#333" stroke-width="2" rx="8"/></svg>"""
+
+
 def should_override_game_code(code: Optional[str], has_design_image: bool = False) -> bool:
     """Decide if GPT's game output should be replaced by the engine template.
 
@@ -1107,7 +1300,6 @@ def should_override_game_code(code: Optional[str], has_design_image: bool = Fals
     and any GPT-generated SVG/Canvas scene will inevitably drift from the image.
     Without a design image, fall back to a quality heuristic.
     """
-    # Highest-priority rule: if we have a design image, the image-backed preview
     # guarantees match-to-design, so we always prefer it.
     if has_design_image:
         # Respect GPT only if it explicitly wired in our engine

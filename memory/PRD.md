@@ -1,57 +1,92 @@
 # Zitex AI Platform - PRD
 
 ## Original Problem Statement
-منصة ذكاء اصطناعي باسم "Zitex" تعمل كمستشار عبر محادثة، تولّد مواقع/ألعاب/تطبيقات/صور/فيديو. يتم نشر الكود يدوياً إلى GitHub → Railway بواسطة المستخدم.
+منصة ذكاء اصطناعي باسم "Zitex" تعمل كمستشار عبر محادثة، تولّد مواقع/ألعاب/تطبيقات/صور/فيديو. نشر يدوي إلى Railway عبر GitHub.
 
 ## User Language: Arabic (العربية)
 
-## ✅ تم إنجازه (محدّث - 18 فبراير 2026)
+## ✅ تم إنجازه
 
-### Session Feb 2026 - Image-Match Game Preview (الحل النهائي)
-**المشكلة الجذرية** (التي كانت مخفية):
-- `BACKEND_URL` غير موجود في `/app/backend/.env` → كل روابط الصور كانت `None/api/storage/...` (مكسورة)
-- iframe patcher يُصلح `src=/href=` فقط، ليس CSS `url(...)`
-- Heuristic override كان يحترم SVG الثابت لـ GPT حتى لو لدينا صورة تصميم
-- بيانات اختبار قديمة (URL صورة ظباء) بقيت في DB
+### Session Feb 2026 - Visual Designer Studio (احترافي)
+**طلب المستخدم**: محرر مرئي احترافي يسمح للعميل بالبناء بنفسه (سحب، حذف، تبديل، إضافة)، مع حفظ تصاميم متعددة و AI يبني على نفس ترتيب العميل.
 
-**الإصلاحات**:
-1. ✅ أُضيف `BACKEND_URL` إلى `.env` (preview URL الكامل)
-2. ✅ iframe patcher في `AIChat.js` الآن يُصلح `url(/api/...)` CSS + `src=/href=` HTML
-3. ✅ `should_override_game_code(code, has_design_image)` — إذا لدينا صورة تصميم، نستخدم image-backed دائماً (تطابق 1:1)
-4. ✅ تم تنظيف بيانات الاختبار السيئة من DB
-5. ✅ `_process_ai_commands` يحفظ `last_design_image` في `project_data` عند توليد DESIGN_IMAGE
+**المُنَفَّذ** (مكتمل وَمختبر):
+1. **محرر مرئي Konva-based** في `/app/frontend/src/pages/VisualDesigner.js` (route: `/designer`)
+   - Canvas 1280×720 مع zoom/pan/grid
+   - Drag & drop، resize، rotate، delete، duplicate
+   - Undo/Redo (50 خطوة، Ctrl+Z / Ctrl+Y)
+   - Keyboard shortcuts (Delete, Ctrl+D)
+   - Auto-save كل 6 ثوان
+   - مكتبة التصاميم المتعددة (open/duplicate/delete)
+   - Preview modal بـ iframe (live play)
+   - Export HTML كملف
+2. **17 نوع عنصر** في `elementLibrary.js` + `_element_svg()` backend متزامن:
+   - مباني: قلعة، بيت (4 أنماط)، مزرعة، منجم
+   - حقول: حقل قمح، حقل طين، بحيرة
+   - طبيعة: شجرة (4 ألوان)، شجيرة، زهرة (5 ألوان)، صخرة، غيمة
+   - وحدات: جندي
+   - أشكال: دائرة، مربع، نجمة، نص (قابل للتحرير)
+3. **Backend APIs** في `server.py`:
+   - `GET/POST/PATCH/DELETE /api/designs`
+   - `POST /api/designs/{id}/duplicate`
+   - `POST /api/designs/{id}/build` → HTML قابل للعب
+   - حماية per-user
+4. **`render_design_to_html()`** في `ai_chat_service.py`:
+   - يقرأ JSON التصميم ويُنتج HTML كامل بنفس إحداثيات العميل (zero AI drift)
+   - HUD + أزرار تفاعل + سلوك لكل نوع (قمح يعطي طعام، طين يعطي حجر، إلخ)
+5. **زر "المحرر المرئي"** بارز في AIChat page للوصول السريع
 
-**كيف يعمل التدفق الآن**:
-- المستخدم يطلب لعبة → GPT يولّد `[DESIGN_IMAGE]` → نحفظ URL كامل في session
-- المستخدم يوافق → backend يُبني HTML image-backed: الصورة المُولَّدة = خلفية كاملة + HUD شفاف + 12 hotspot + أزرار تحكم
-- iframe يُصلح أي مسارات `/api/*` قبل الكتابة → الصور تُحمَّل في about:blank بنجاح
-- **النتيجة**: Live Preview = الصورة المعتمدة 100% + تفاعلية
+### Flow التكامل
+- المستخدم يطلب لعبة في الشات → يفتح المحرر بضغطة زر
+- يسحب العناصر، يرتب قريته، يسميها، يحفظها
+- يضغط "عرض اللايف" → backend يُنتج HTML من JSON → iframe يعرض اللعبة قابلة للعب
+- يقدر يبني 5+ قرى مختلفة ويفتحها من المكتبة
 
-### Zitex Game Engine v2.0 (Generic mode - بدون صورة)
-`/app/backend/static/game-engine.js` — محرك متعدد الأنواع كـ fallback عند عدم وجود صورة:
-Strategy / Platformer / Racing / Snake / Shooter / Match-3 / Memory / Breakout / Flappy
-
-### Sessions السابقة
-- نظام تدريب AI + جلب من GitHub + تعلم ذاتي
-- Vision Auto-Attach + إصلاح توليد الصور/الفيديو
-- Dockerfile لـ Railway
+### Previous Sessions
+- Bulletproof game engine fallback (v2.0)
+- Image-backed preview mode
+- DESIGN_IMAGE auto-save to session
+- iframe URL patcher (HTML + CSS)
+- `BACKEND_URL` في .env لإصلاح روابط الصور
+- نظام تدريب AI + Vision Auto-Attach
 
 ## Credentials
 - Email: owner@zitex.com | Password: owner123
 
-## Key Files (يجب نسخها إلى GitHub للنشر على Railway)
-1. `backend/services/ai_chat_service.py` — LLM + game override + image-backed builder
-2. `backend/static/game-engine.js` — محرك الألعاب (fallback)
-3. `backend/server.py` — APIs + `/api/game-engine.js`
-4. `backend/.env` — **يجب إضافة `BACKEND_URL=https://zitex-xxx.railway.app` في Railway ENV vars**
-5. `frontend/src/pages/AIChat.js` — iframe URL patching (HTML + CSS)
+## Key Files (للنشر على Railway)
+1. `backend/services/ai_chat_service.py` - AI + `render_design_to_html` + `_element_svg`
+2. `backend/server.py` - APIs + Designer endpoints
+3. `backend/static/game-engine.js` - fallback engine
+4. `backend/.env` - **يجب إضافة `BACKEND_URL=...` في Railway ENV**
+5. `frontend/src/pages/VisualDesigner.js` - المحرر الاحترافي
+6. `frontend/src/pages/designer/elementLibrary.js` - مكتبة العناصر
+7. `frontend/src/pages/AIChat.js` - زر "المحرر المرئي"
+8. `frontend/src/App.js` - route `/designer`
+9. `frontend/package.json` - `konva`, `react-konva`, `use-image`
 
-## Next Steps
-- **P1**: لوحة تحكم المالك للتسعير الديناميكي
-- **P2**: GPT-4o Vision لتحليل الصورة واستخراج bounding boxes تلقائياً (hotspots فوق المباني الفعلية)
-- **P2**: i18n + Mobile App compilation (APK/IPA)
+## Next Steps (P1/P2)
+- **P1**: AI يفهم رغبات العميل من التصميم (reads JSON → يقترح تحسينات)
+- **P1**: معرض تصاميم عام (shareable) لزيادة الفيروسية
+- **P2**: دعم Websites + Mobile في المحرر بعناصر خاصة
+- **P2**: Multi-scene (قرى متعددة مرتبطة)
+- **P2**: Version history per design
 
-## Backlog
-- دعم Image-Backed لأنواع غير الاستراتيجية بطرق مخصصة
-- السماح بسحب hotspots يدوياً
-- AdminTraining لتحسين hotspots تلقائياً
+## Data Model
+```
+designs: {
+  id, user_id, name, category, genre,
+  canvas: {width, height, background_color, background_image_url},
+  elements: [{id, type, x, y, width, height, rotation, scale_x, scale_y, z_index, props: {variant, color, label, text}}],
+  meta: {},
+  created_at, updated_at
+}
+```
+
+## Backend API Endpoints
+- `GET /api/designs` - list
+- `GET /api/designs/:id` - fetch
+- `POST /api/designs` - create
+- `PATCH /api/designs/:id` - update (used by auto-save)
+- `DELETE /api/designs/:id` - delete
+- `POST /api/designs/:id/duplicate` - clone
+- `POST /api/designs/:id/build` - generate HTML
