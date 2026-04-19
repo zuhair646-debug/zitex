@@ -923,7 +923,27 @@ export default function WebsiteStudio({ user }) {
         body: JSON.stringify({ message }),
       });
       const d = await r.json();
-      if (d.project) setProject(d.project);
+      if (d.project) {
+        setProject(d.project);
+        // Immediate refresh (bypass the 400ms debounce so the user SEES the change now)
+        refreshPreview(d.project);
+      }
+      if (d.action && d.action.action) {
+        const a = d.action.action;
+        const msgs = {
+          add_section: '✨ تمت إضافة قسم جديد في المعاينة',
+          fill_section: '📝 تم تحديث محتوى القسم',
+          patch_section: '✏️ تم تعديل القسم',
+          remove_section: '🗑️ تم حذف القسم',
+          apply_theme: '🎨 تم تطبيق الألوان',
+          apply_button: '🔘 تم تغيير الأزرار',
+          apply_font: '🔤 تم تغيير الخط',
+          inject_css: '💫 تم تطبيق التأثير',
+          scaffold: '🏗️ تم إعادة بناء الموقع',
+          generate_logo: '🖼️ جاري توليد اللوقو...',
+        };
+        if (msgs[a]) toast.success(msgs[a]);
+      }
     } catch (_) { toast.error('فشل الاتصال'); }
     finally { setChatLoading(false); }
   };

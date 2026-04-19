@@ -51,15 +51,51 @@ Actions:
   - "inject_css" → ⭐ **أضف CSS مخصّصة إبداعية** (يظهر فوراً في المعاينة). مثال:
      value: ".btn-primary::before{content:'🐾 ';font-size:14px} .btn-primary{letter-spacing:2px}"
      استخدمها لإضافة أيقونات/إطارات/تأثيرات تعكس طابع النشاط.
-  - "add_section" → قسم جديد: {"type":"hero|features|...", "data":{...}}
+  - "add_section" → ⭐ قسم جديد يظهر **فوراً** في اللايف: {"type":"<one of supported>", "data":{...}}
   - "fill_section" → ملء محتوى قسم موجود: {"section_type":"hero|about|...", "data":{...}}
+  - "patch_section" → تعديل قسم موجود: {"section_type":"<type>", "data":{...}, "set":{"visible":true}}
+  - "remove_section" → حذف قسم: {"section_type":"<type>"}
   - "scaffold" → ⭐ **بناء موقع كامل من وصف حرّ** (للقالب الفارغ أو طلب خاص):
-     value: {"name":"اسم", "sections":[{"type":"hero","data":{...}}, {"type":"features","data":{...}}, ...], "theme_hints":{"primary":"#..."}, "custom_css":"..."}
-     يُستخدم عندما يذكر المستخدم فكرة نشاط ونحن في blank template أو عندما يطلب تعديلاً جذرياً.
+     value: {"name":"اسم", "sections":[{"type":"hero","data":{...}}, ...], "theme_hints":{"primary":"#..."}, "custom_css":"..."}
   - "custom_feature" → حفظ ميزة مخصّصة: {"title":"...", "section_type":"..."}
   - "generate_logo" → ⭐ توليد لوقو احترافي: value = {"prompt":"وصف كامل للوقو", "style":"minimal/elegant/playful"}
-     يُستخدم عندما يطلب المستخدم صنع شعار/لوقو.
   - "no_action" → مجرد حديث
+
+📦 **أنواع الأقسام المدعومة (يجب استخدام واحد منها فقط في `type`):**
+hero, features, about, products, menu, gallery, testimonials, team,
+pricing, faq, contact, cta, footer, dashboard, story_timeline, process_steps,
+reservation, quote, video, newsletter, stats_band,
+**stories** (حالات مثل واتساب/سناب — دائرية قابلة للتمرير),
+**banner** (بنر إعلاني كامل العرض),
+**announce_bar_section** (شريط إعلاني علوي),
+**custom** (قسم عام مرن لأي فكرة — استخدمه عندما لا يناسبك أي نوع آخر).
+
+⚡ **قاعدة ذهبية — "كل ما يُطلب يظهر في اللايف":**
+- لو العميل قال "أضف حالات" أو "قصص" أو "ستوري" → استخدم `add_section` بـ `type: "stories"` مع items بها {title, image} (6 عناصر على الأقل).
+- لو قال "أضف بنر" أو "banner" أو "إعلان" → استخدم `type: "banner"` مع {title, subtitle, cta_text, image}.
+- لو قال "شريط إعلان علوي" → `type: "announce_bar_section"` مع {text, cta_text}.
+- لو طلب أي شيء آخر (مثلاً "قسم عروض"، "قسم مقالات"، "وصفات"، "أحداث") → استخدم `type: "custom"` مع {title, subtitle, layout: "grid|list|row", items: [{icon, title, text, image, cta}]}.
+- **ممنوع أن تقول "تمت الإضافة" دون إرسال `add_section` فعلياً** — لأن كل رد يجب أن يترجم إلى تغيير مرئي فوري في المعاينة.
+- عند تعديل محتوى قسم موجود استخدم `patch_section` أو `fill_section`.
+
+✨ **مثال طلب "أضف حالات" في موقع كافي:**
+ردّك:
+"تمام 🎬 أضفت صف 'حالات' في الأعلى — حلقات قابلة للتمرير بستة قصص (جديدنا، قهوة اليوم، خلف الكواليس، عروض، عملاؤنا، فعاليات). تقدر تبدّل الصور بعد قليل من لوحة التحكم.
+[WIZARD_ACTION]
+{"action":"add_section","value":{"type":"stories","data":{"title":"حالاتنا","subtitle":"اضغط لمشاهدة القصص","items":[
+  {"title":"قهوة اليوم","image":"https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=400"},
+  {"title":"خلف الكواليس","image":"https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=400"},
+  {"title":"عروض","image":"https://images.unsplash.com/photo-1556740738-b6a63e27c4df?w=400"},
+  {"title":"فعالياتنا","image":"https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=400"},
+  {"title":"عملاؤنا","image":"https://images.unsplash.com/photo-1511367461989-f85a21fda167?w=400"},
+  {"title":"جديدنا","image":"https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400"}
+]}}}
+[/WIZARD_ACTION]"
+
+✨ **مثال طلب "أضف بنر":**
+[WIZARD_ACTION]
+{"action":"add_section","value":{"type":"banner","data":{"title":"افتتاح الفرع الجديد","subtitle":"قهوة مجانية لأول 100 زائر","cta_text":"احضر الآن","image":"https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=1600"}}}
+[/WIZARD_ACTION]
 
 ✨ **مثال على الإبداع:**
 المستخدم: "أبي موقع لمتجر قطط"
@@ -146,6 +182,111 @@ def extract_wizard_action(response_text: str) -> Optional[Dict[str, Any]]:
             return data
     except Exception as e:
         logger.warning(f"WIZARD_ACTION parse failed: {e}")
+    return None
+
+
+# ---------- Safety net: derive an action from the user's Arabic message ----------
+# Ensures that even if the AI forgets the directive, any explicit request to add
+# a section still results in a VISIBLE change in the live preview.
+_INTENT_PATTERNS = [
+    # IMPORTANT: order matters — more specific patterns MUST come first.
+    # (regex_on_user_message, section_type, default_data)
+    (r"شريط\s+إعلان(?:\s+علوي)?|announce\s*bar|إعلان\s+علوي|بار\s+إعلان",
+     "announce_bar_section",
+     {"text": "🎉 عرض محدود — خصم 20% على أول طلب", "cta_text": "اطلب الآن"}),
+    (r"(?:حال(?:ة|ات)|ستور[يى]|قصص|stories|story)",
+     "stories",
+     {"title": "حالاتنا", "subtitle": "اضغط على أي حالة لمشاهدتها", "items": [
+        {"title": "جديدنا", "image": "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=400"},
+        {"title": "عروض", "image": "https://images.unsplash.com/photo-1556740738-b6a63e27c4df?w=400"},
+        {"title": "خلف الكواليس", "image": "https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=400"},
+        {"title": "قصص العملاء", "image": "https://images.unsplash.com/photo-1511367461989-f85a21fda167?w=400"},
+        {"title": "فعاليات", "image": "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=400"},
+        {"title": "وصفات", "image": "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400"},
+     ]}),
+    (r"\bبنر\b|\bbanner\b|شريط\s+ترويج|عرض\s+ترويجي|لوحة\s+إعلانية",
+     "banner",
+     {"title": "عرض خاص — لا تفوّته", "subtitle": "استفد من العرض قبل انتهائه",
+      "cta_text": "اعرف المزيد",
+      "image": "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=1600"}),
+    (r"قسم\s+(?:فيديو|فيديوهات)|(?:أ?ضف|ضيف|سو|اعمل)\s+فيديو|video\s*section",
+     "video",
+     {"title": "شاهد قصتنا", "url": "https://www.youtube.com/embed/dQw4w9WgXcQ"}),
+    (r"قسم\s+معرض|معرض\s+صور|\bgallery\b|ألبوم\s+صور",
+     "gallery",
+     {"title": "معرض الصور", "images": [
+        "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800",
+        "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=800",
+        "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=800",
+     ]}),
+    (r"آراء|تقييمات|testimonials|تجارب\s+العملاء",
+     "testimonials",
+     {"title": "آراء عملائنا", "items": [
+        {"name": "أحمد", "text": "تجربة رائعة جداً!", "rating": 5},
+        {"name": "سارة", "text": "جودة ممتازة وخدمة سريعة.", "rating": 5},
+        {"name": "خالد", "text": "أنصح الجميع بالتجربة.", "rating": 5},
+     ]}),
+    (r"(?:الأسعار|أسعار|باقات|خطط\s+الأسعار|pricing)",
+     "pricing",
+     {"title": "خطط الأسعار", "plans": [
+        {"name": "أساسي", "price": "99", "features": ["ميزة 1", "ميزة 2"]},
+        {"name": "احترافي", "price": "199", "features": ["كل ما سبق", "ميزة 3", "ميزة 4"], "highlighted": True},
+        {"name": "مؤسسات", "price": "499", "features": ["كل ما سبق", "دعم مخصّص"]},
+     ]}),
+    (r"(?:أسئل[ةه]|faq|الأسئلة\s+الشائعة)",
+     "faq",
+     {"title": "أسئلة شائعة", "items": [
+        {"q": "كيف أطلب؟", "a": "اختر المنتج واضغط 'أطلب الآن'."},
+        {"q": "ما مدة التوصيل؟", "a": "من 1 إلى 3 أيام عمل."},
+     ]}),
+    (r"(?:فريق(?:نا)?|team|أعضاء\s+الفريق)",
+     "team",
+     {"title": "فريقنا", "members": [
+        {"name": "محمد", "role": "المؤسس"},
+        {"name": "أحمد", "role": "المدير التقني"},
+        {"name": "فاطمة", "role": "مديرة التسويق"},
+     ]}),
+    (r"إحصا(?:ء|ئي)ات|أرقامنا|أرقام\s+نفتخر|stats",
+     "stats_band",
+     {"title": "أرقام نفتخر بها", "items": [
+        {"label": "عميل سعيد", "value": "5,000+"},
+        {"label": "طلب منفّذ", "value": "12,400"},
+        {"label": "سنوات خبرة", "value": "10"},
+        {"label": "تقييم", "value": "4.9★"},
+     ]}),
+    (r"نشرة\s+بريدية|newsletter|اشتراك\s+بالبريد",
+     "newsletter",
+     {"title": "اشترك في نشرتنا", "subtitle": "أحدث العروض والأخبار أولاً"}),
+    (r"تواصل|اتصل\s+بنا|contact",
+     "contact",
+     {"title": "تواصل معنا", "email": "info@example.com", "phone": "+966 50 000 0000"}),
+    (r"من\s+نحن|about\s*us|عن(?:\s+نا)?",
+     "about",
+     {"title": "من نحن", "text": "نبذة عن نشاطنا وقيمنا."}),
+]
+
+# Verbs/expressions that clearly indicate the user wants to ADD something.
+_ADD_VERB_PAT = re.compile(
+    r"\b(?:أ?ضف|ضيف(?:لي)?|أريد|أبي|أبغ[ىي]|بغيت|ودي|حط(?:لي)?|ركّ?ب|زود|سو(?:ي|ّي)?|اعمل|اعملي|صمم|صمّم|أدخل|ابغ[ىي]|أنشئ|إنشاء|add|include)\b",
+    re.IGNORECASE,
+)
+
+
+def detect_section_intent(user_message: str) -> Optional[Dict[str, Any]]:
+    """If the user explicitly asks to add a section that maps to a known type,
+    return a structured add_section directive. This is a SAFETY NET — used only
+    when the AI didn't already emit a stronger directive."""
+    if not user_message:
+        return None
+    txt = user_message.strip()
+    word_count = len(txt.split())
+    has_add_verb = bool(_ADD_VERB_PAT.search(txt))
+    has_section_word = bool(re.search(r"(?:قسم|صف\s|جزء|شريط|بلوك|section|صفحة)", txt, flags=re.IGNORECASE))
+    is_short_request = word_count <= 5   # terse messages like "ستوري مثل السناب"
+    for pattern, stype, default_data in _INTENT_PATTERNS:
+        if re.search(pattern, txt, flags=re.IGNORECASE):
+            if has_add_verb or has_section_word or is_short_request:
+                return {"action": "add_section", "value": {"type": stype, "data": dict(default_data)}}
     return None
 
 

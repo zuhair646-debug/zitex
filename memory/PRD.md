@@ -14,6 +14,22 @@
 - 🔒 **Videos**: قريباً
 - 🔒 **Images**: قريباً
 
+
+### 🆕 Feb 19, 2026 — LIVE CHAT ADDITIONS (Bug Fix)
+**Problem reported**: User asked "اعمل لي حالات مثل الواتساب" on a cafe site. AI replied "تم الإضافة" but nothing appeared in Live Preview.
+
+**Root cause**: `RENDERERS` dict in `renderer.py` had no `stories`/`banner` types — unknown types were silently dropped.
+
+**Fix (3-layer)**:
+1. Added renderers: `stories` (WhatsApp/Snapchat circular rings), `banner` (full-width promo), `announce_bar_section`, **`custom`** (generic fallback for ANY unknown type).
+2. Unknown section types now fall back to `_section_custom` instead of being skipped — **guarantees visibility**.
+3. Added **Safety Net** in `ai_service.detect_section_intent()` — parses Arabic keywords (حالات، ستوري، بنر، شريط إعلان، فيديو، معرض، آراء، أسعار، faq، فريق، إحصائيات، تواصل، من نحن) so even if AI forgets to emit `add_section` directive, the backend still adds the section.
+4. AI system prompt updated with explicit examples for stories/banner/announce_bar.
+5. Frontend `sendChat` now calls `refreshPreview` immediately (bypassing 400ms debounce) + shows toast on action.
+
+**Tested**: ✅ "اعمل لي حالات مثل الواتساب" → stories section with 6 circular rings appears instantly in live preview.
+
+
 ---
 
 ## ✅ Websites Module (مكتمل + محدّث Feb 2026)

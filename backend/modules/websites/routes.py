@@ -13,7 +13,7 @@ from .templates import list_templates, get_template
 from .renderer import render_website_to_html
 from .ai_service import (
     chat_with_consultant, extract_wizard_action, clean_display_text,
-    extract_build_payload, build_sections_from_payload,
+    extract_build_payload, build_sections_from_payload, detect_section_intent,
 )
 from .variants import list_variants_for_template, list_style_variants, get_variant_project
 from .catalog import list_categories, list_layouts, get_layout
@@ -393,6 +393,20 @@ def register_routes(app, database, auth_dep):
         ai_text = await chat_with_consultant(history, wizard=p.get("wizard"), project_summary=summary)
         display = clean_display_text(ai_text)
         action = extract_wizard_action(ai_text)
+        # 🛡️ Safety net: if AI didn't emit a structural directive but the user
+        # explicitly asked to add a known section type, inject the directive now.
+        STRUCTURAL_ACTIONS = {"add_section", "scaffold", "fill_section", "patch_section", "remove_section"}
+        if not action or action.get("action") not in STRUCTURAL_ACTIONS:
+            fallback = detect_section_intent(body.message)
+            if fallback:
+                action = fallback
+                # Make the visible message reflect what just happened
+                stype = fallback["value"]["type"]
+                from .renderer import _humanize_type
+                label = _humanize_type(stype)
+                added_note = f"\n\n✨ تمّت إضافة قسم \"{label}\" في موقعك — شاهده في المعاينة فوراً."
+                if added_note.strip() not in display:
+                    display = (display or "تمام! ").rstrip() + added_note
         history.append({"role": "assistant", "content": display})
         p["chat"] = history
         # Apply AI action (if any)

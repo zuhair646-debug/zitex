@@ -8,6 +8,26 @@ def _esc(s: Any) -> str:
     return _html.escape(str(s or ""), quote=True)
 
 
+_TYPE_LABELS = {
+    "stories": "حالاتنا", "story_reel": "حالاتنا", "highlights": "أبرز المحطات",
+    "banner": "عرض خاص", "promo_banner": "عرض خاص",
+    "announce_bar_section": "إعلان",
+    "events": "فعاليات قادمة", "blog": "مقالات", "news": "آخر الأخبار",
+    "clients": "عملاؤنا", "partners": "شركاؤنا", "brands": "علامات تجارية",
+    "awards": "جوائز وإنجازات", "timeline": "خط الزمن", "map": "موقعنا",
+    "offers": "العروض", "services": "خدماتنا", "portfolio": "أعمالنا",
+    "achievements": "إنجازاتنا", "stats": "إحصائيات", "instagram": "إنستقرام",
+}
+
+def _humanize_type(t: str) -> str:
+    """Guess a user-friendly Arabic title for an unknown section type."""
+    if not t:
+        return "قسم مخصّص"
+    if t in _TYPE_LABELS:
+        return _TYPE_LABELS[t]
+    return t.replace("_", " ").replace("-", " ").strip().title() or "قسم مخصّص"
+
+
 def _section_hero(d: Dict[str, Any], theme: Dict[str, Any]) -> str:
     img = _esc(d.get("image", ""))
     layout = d.get("layout", "split")
@@ -393,6 +413,88 @@ def _section_stats_band(d, theme) -> str:
     return f"""<section class="stats-band" id="stats_band" data-hl="stats_band"><div class="container"><h2>{_esc(d.get('title',''))}</h2><div class="sb-grid">{cards}</div></div></section>"""
 
 
+def _section_stories(d, theme) -> str:
+    """Stories row like WhatsApp/Snapchat — circular clickable rings with optional video/image."""
+    p = theme.get("primary", "#FFD700")
+    a = theme.get("accent", "#FF6B35")
+    items = d.get("items") or []
+    if not items:
+        # Smart defaults so empty "stories" still looks alive
+        items = [
+            {"title": "جديدنا", "image": "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=300"},
+            {"title": "عروض", "image": "https://images.unsplash.com/photo-1556740738-b6a63e27c4df?w=300"},
+            {"title": "خلف الكواليس", "image": "https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=300"},
+            {"title": "قصص العملاء", "image": "https://images.unsplash.com/photo-1511367461989-f85a21fda167?w=300"},
+            {"title": "فعاليات", "image": "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=300"},
+            {"title": "وصفات", "image": "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=300"},
+        ]
+    chips = []
+    for it in items:
+        img = _esc(it.get("image") or it.get("thumbnail") or it.get("cover") or "")
+        vid = _esc(it.get("video") or it.get("url") or "")
+        title = _esc(it.get("title") or "حالة")
+        icon = _esc(it.get("icon") or "")
+        style_bg = f"background-image:url('{img}')" if img else f"background:linear-gradient(135deg,{p},{a})"
+        play_dot = '<span class="zx-st-play">▶</span>' if vid else ''
+        ico_html = f'<span class="zx-st-ico">{icon}</span>' if (icon and not img) else ''
+        chips.append(f'<div class="zx-st-item" data-video="{vid}"><div class="zx-st-ring"><div class="zx-st-thumb" style="{style_bg}">{ico_html}{play_dot}</div></div><div class="zx-st-lbl">{title}</div></div>')
+    title_h = _esc(d.get("title") or "حالاتنا")
+    subtitle = _esc(d.get("subtitle") or "اضغط على أي حالة لمشاهدتها")
+    return f"""<section class="zx-stories" id="stories" data-hl="stories"><div class="container"><div class="zx-st-head"><h2>{title_h}</h2><p>{subtitle}</p></div><div class="zx-st-row">{''.join(chips)}</div></div></section>"""
+
+
+def _section_banner(d, theme) -> str:
+    """Full-width promo banner with CTA."""
+    p = theme.get("primary", "#FFD700")
+    a = theme.get("accent", "#FF6B35")
+    title = _esc(d.get("title") or "عرض خاص — لا تفوّته")
+    subtitle = _esc(d.get("subtitle") or d.get("text") or "استفد من العرض قبل انتهائه")
+    cta = _esc(d.get("cta_text") or d.get("cta") or "اعرف المزيد")
+    image = _esc(d.get("image") or "")
+    bg_style = f"background-image:linear-gradient(90deg,rgba(0,0,0,.55),rgba(0,0,0,.25)),url('{image}');background-size:cover;background-position:center" if image else f"background:linear-gradient(135deg,{p},{a})"
+    return f"""<section class="zx-banner" id="banner" data-hl="banner" style="{bg_style}"><div class="container zx-bn-inner"><div class="zx-bn-copy"><h2>{title}</h2><p>{subtitle}</p></div><a href="#" class="btn btn-primary zx-bn-cta">{cta}</a></div></section>"""
+
+
+def _section_announce_bar(d, theme) -> str:
+    """A dedicated announce bar as a section (sticky to top)."""
+    txt = _esc(d.get("text") or d.get("title") or "🎉 عرض محدود — خصم حصري الآن")
+    cta = _esc(d.get("cta_text") or "")
+    cta_html = f' · <a href="#">{cta} ↗</a>' if cta else ""
+    return f'<section class="zx-announce zx-announce-sec" id="announce_bar" data-hl="announce_bar">{txt}{cta_html}</section>'
+
+
+def _section_custom(d, theme) -> str:
+    """🌐 Generic visible fallback for ANY AI-invented section type.
+    Accepts flexible shape: {title, subtitle, layout (grid|list|row|card), items: [{icon, title, text, image, cta}], html}
+    Guarantees the user SEES what was added, even if type is unknown.
+    """
+    # Raw HTML passthrough (trusted from AI directive — AI is the creator here)
+    raw = d.get("html")
+    if isinstance(raw, str) and raw.strip().startswith("<"):
+        return f'<section class="zx-custom-raw" data-hl="custom">{raw}</section>'
+    title = _esc(d.get("title") or d.get("name") or "قسم مخصّص")
+    subtitle = _esc(d.get("subtitle") or d.get("description") or "")
+    layout = str(d.get("layout") or "grid")
+    items = d.get("items") or d.get("cards") or []
+    if not items:
+        # Show a visible placeholder so user knows section landed
+        items = [{"icon": "✨", "title": title, "text": subtitle or "تمت إضافة هذا القسم — عدّل محتواه من لوحة التحكم."}]
+    cards_html = []
+    for it in items:
+        if isinstance(it, str):
+            it = {"title": it}
+        icon = _esc(it.get("icon") or "")
+        t = _esc(it.get("title") or "")
+        txt = _esc(it.get("text") or it.get("description") or "")
+        img = _esc(it.get("image") or "")
+        cta = _esc(it.get("cta") or it.get("cta_text") or "")
+        img_html = f'<div class="zx-cc-img" style="background-image:url(\'{img}\')"></div>' if img else ''
+        ico_html = f'<div class="zx-cc-ico">{icon}</div>' if icon and not img else ''
+        cta_html = f'<a class="zx-cc-cta" href="#">{cta} →</a>' if cta else ''
+        cards_html.append(f'<div class="zx-cc-card">{img_html}{ico_html}<div class="zx-cc-body"><h3>{t}</h3><p>{txt}</p>{cta_html}</div></div>')
+    return f'<section class="zx-custom zx-custom-{layout}" id="custom-{_esc(d.get("id","sec"))}" data-hl="custom"><div class="container"><div class="zx-cc-head"><h2>{title}</h2>{("<p>"+subtitle+"</p>") if subtitle else ""}</div><div class="zx-cc-grid zx-cc-{layout}">{"".join(cards_html)}</div></div></section>'
+
+
 def _floating_widgets(theme: Dict[str, Any]) -> str:
     extras = theme.get("extras", []) or []
     html = ""
@@ -430,6 +532,14 @@ RENDERERS = {
     "video": _section_video,
     "newsletter": _section_newsletter,
     "stats_band": _section_stats_band,
+    # 🆕 Live custom sections
+    "stories": _section_stories,
+    "story_reel": _section_stories,
+    "highlights": _section_stories,
+    "banner": _section_banner,
+    "promo_banner": _section_banner,
+    "announce_bar_section": _section_announce_bar,
+    "custom": _section_custom,
 }
 
 
@@ -570,6 +680,51 @@ img{{max-width:100%;display:block;border-radius:{r}}}
 .sb-item{{padding:20px;background:rgba(255,255,255,.04);border-radius:{r};border:1px solid rgba(255,255,255,.08)}}
 .sb-val{{font-size:36px;font-weight:900;color:{p}}}
 .sb-lbl{{font-size:13px;opacity:.75;margin-top:4px}}
+
+/* 🆕 STORIES (WhatsApp/Snapchat-style) */
+.zx-stories{{padding:36px 0 24px;background:linear-gradient(180deg,rgba(255,255,255,.02),transparent)}}
+.zx-st-head{{margin-bottom:16px}}
+.zx-st-head h2{{font-size:22px;margin:0}}
+.zx-st-head p{{font-size:12px;opacity:.65;margin:4px 0 0}}
+.zx-st-row{{display:flex;gap:14px;overflow-x:auto;padding:8px 2px 16px;scroll-snap-type:x mandatory}}
+.zx-st-row::-webkit-scrollbar{{height:4px}}
+.zx-st-row::-webkit-scrollbar-thumb{{background:{p}66;border-radius:99px}}
+.zx-st-item{{flex:0 0 auto;text-align:center;scroll-snap-align:start;cursor:pointer;transition:.2s}}
+.zx-st-item:hover{{transform:translateY(-3px)}}
+.zx-st-ring{{width:74px;height:74px;border-radius:50%;padding:3px;background:conic-gradient(from 180deg,{p},{a},{p});box-shadow:0 6px 16px rgba(0,0,0,.3)}}
+.zx-st-thumb{{width:100%;height:100%;border-radius:50%;background-size:cover;background-position:center;border:2.5px solid {bg};display:flex;align-items:center;justify-content:center;font-size:26px;position:relative}}
+.zx-st-ico{{filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}}
+.zx-st-play{{position:absolute;bottom:2px;right:2px;width:22px;height:22px;border-radius:50%;background:{p};color:{s};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;border:2px solid {bg}}}
+.zx-st-lbl{{margin-top:6px;font-size:11px;font-weight:700;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+
+/* 🆕 BANNER */
+.zx-banner{{padding:54px 0;margin:0;background-color:{p}22;position:relative;overflow:hidden}}
+.zx-bn-inner{{display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap}}
+.zx-bn-copy h2{{font-size:28px;margin:0 0 6px;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.4)}}
+.zx-bn-copy p{{margin:0;opacity:.92;color:#fff;max-width:620px}}
+.zx-bn-cta{{white-space:nowrap;box-shadow:0 10px 24px rgba(0,0,0,.35)}}
+.zx-announce-sec{{position:relative;display:block;text-align:center;padding:12px 16px;background:linear-gradient(90deg,{p},{a});color:{s};font-weight:700;font-size:14px}}
+.zx-announce-sec a{{color:inherit;text-decoration:underline;margin-right:8px;font-weight:900}}
+
+/* 🆕 CUSTOM (generic fallback — guarantees visibility) */
+.zx-custom{{padding:64px 0}}
+.zx-cc-head{{text-align:center;margin-bottom:28px}}
+.zx-cc-head h2{{font-size:30px;margin:0 0 6px;background:linear-gradient(90deg,{p},{a});-webkit-background-clip:text;background-clip:text;color:transparent}}
+.zx-cc-head p{{opacity:.72;margin:0;font-size:14px}}
+.zx-cc-grid.zx-cc-grid,.zx-cc-grid{{display:grid;gap:18px}}
+.zx-cc-grid.zx-cc-grid{{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}}
+.zx-cc-grid.zx-cc-list{{grid-template-columns:1fr;max-width:760px;margin:0 auto}}
+.zx-cc-grid.zx-cc-row{{display:flex;overflow-x:auto;gap:14px;padding-bottom:10px}}
+.zx-cc-grid.zx-cc-row .zx-cc-card{{flex:0 0 260px}}
+.zx-cc-card{{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:{r};overflow:hidden;transition:.25s;padding:0}}
+.zx-cc-card:hover{{transform:translateY(-4px);border-color:{p}66;box-shadow:0 18px 40px rgba(0,0,0,.35)}}
+.zx-cc-img{{aspect-ratio:16/10;background-size:cover;background-position:center;background-color:{p}22}}
+.zx-cc-ico{{font-size:32px;padding:18px 18px 0}}
+.zx-cc-body{{padding:16px 18px 18px}}
+.zx-cc-body h3{{margin:0 0 6px;font-size:17px;color:{p}}}
+.zx-cc-body p{{margin:0 0 10px;font-size:13.5px;opacity:.82;line-height:1.7}}
+.zx-cc-cta{{display:inline-block;font-size:12.5px;font-weight:900;color:{p};text-decoration:none;margin-top:4px}}
+.zx-custom-raw{{display:block}}
 
 /* FLOATING WIDGETS */
 .zx-announce{{position:sticky;top:0;left:0;right:0;background:linear-gradient(90deg,{p},{a});color:{s};padding:10px 16px;text-align:center;font-size:13px;font-weight:700;z-index:100}}
@@ -805,11 +960,14 @@ def render_website_to_html(project: Dict[str, Any]) -> str:
         if not sec.get("visible", True):
             continue
         stype = sec.get("type", "")
-        renderer = RENDERERS.get(stype)
-        if not renderer:
-            continue
+        # 🌐 Unknown types fall back to the generic `custom` renderer so they're ALWAYS visible
+        renderer = RENDERERS.get(stype) or _section_custom
         try:
-            body_parts.append(renderer(sec.get("data", {}) or {}, theme))
+            data = sec.get("data", {}) or {}
+            # Ensure custom fallback knows the original type so it has a usable title
+            if renderer is _section_custom and stype and "title" not in data:
+                data = {**data, "title": data.get("title") or _humanize_type(stype)}
+            body_parts.append(renderer(data, theme))
         except Exception:
             continue
 
