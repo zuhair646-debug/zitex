@@ -463,6 +463,27 @@ def _section_announce_bar(d, theme) -> str:
     return f'<section class="zx-announce zx-announce-sec" id="announce_bar" data-hl="announce_bar">{txt}{cta_html}</section>'
 
 
+def _section_map_embed(d, theme) -> str:
+    """Interactive map embed using OpenStreetMap (no API key needed)."""
+    title = _esc(d.get("title") or "موقعنا")
+    address = _esc(d.get("address") or "")
+    lat = float(d.get("lat") or 24.7136)
+    lng = float(d.get("lng") or 46.6753)
+    # OSM embed with marker
+    bbox = f"{lng-0.01}%2C{lat-0.01}%2C{lng+0.01}%2C{lat+0.01}"
+    osm_url = f"https://www.openstreetmap.org/export/embed.html?bbox={bbox}&layer=mapnik&marker={lat}%2C{lng}"
+    return f"""<section class="zx-map" id="map_embed" data-hl="map"><div class="container"><div class="zx-map-head"><h2>{title}</h2>{("<p>"+address+"</p>") if address else ""}</div><div class="zx-map-frame"><iframe src="{osm_url}" loading="lazy" style="border:0" title="map"></iframe></div></div></section>"""
+
+
+def _section_delivery_banner(d, theme) -> str:
+    """Delivery-focused banner — shows the delivery promise prominently."""
+    title = _esc(d.get("title") or "🛵 توصيل سريع")
+    subtitle = _esc(d.get("subtitle") or "توصيل مجاني للطلبات فوق 100 ريال")
+    cta = _esc(d.get("cta_text") or "اطلب الآن")
+    return f"""<section class="zx-delivery" id="delivery_banner" data-hl="delivery"><div class="container zx-dl-inner"><div class="zx-dl-ico">🛵</div><div class="zx-dl-copy"><h3>{title}</h3><p>{subtitle}</p></div><a href="#" class="btn btn-primary zx-dl-cta">{cta}</a></div></section>"""
+
+
+
 def _section_custom(d, theme) -> str:
     """🌐 Generic visible fallback for ANY AI-invented section type.
     Accepts flexible shape: {title, subtitle, layout (grid|list|row|card), items: [{icon, title, text, image, cta}], html}
@@ -516,6 +537,10 @@ def _floating_widgets(theme: Dict[str, Any]) -> str:
         html += '<div class="zx-trust" data-hl="extra-trust"><span>🔒 دفع آمن</span><span>✅ ضمان جودة</span><span>🚚 توصيل سريع</span><span>💳 فيزا/مدى</span></div>'
     if "live_chat" in extras:
         html += '<div class="zx-chat" data-hl="extra-chat"><div class="zx-chat-head">💬 محادثة فورية</div><div class="zx-chat-body">أهلاً! كيف يمكننا مساعدتك؟</div></div>'
+    if "cart_float" in extras:
+        html += '<button class="zx-cart-float" data-hl="extra-cart" title="عربة التسوق">🛒<span class="zx-cart-count">3</span></button>'
+    if "book_float" in extras:
+        html += '<button class="zx-book-float" data-hl="extra-book" title="احجز موعد">📅 احجز موعد</button>'
     return html
 
 
@@ -539,6 +564,9 @@ RENDERERS = {
     "banner": _section_banner,
     "promo_banner": _section_banner,
     "announce_bar_section": _section_announce_bar,
+    "map_embed": _section_map_embed,
+    "map": _section_map_embed,
+    "delivery_banner": _section_delivery_banner,
     "custom": _section_custom,
 }
 
@@ -744,6 +772,24 @@ img{{max-width:100%;display:block;border-radius:{r}}}
 .zx-chat{{position:fixed;bottom:20px;right:20px;width:280px;background:rgba(14,20,40,.95);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.15);border-radius:{r};z-index:95;overflow:hidden;animation:zxPop .4s}}
 .zx-chat-head{{background:{p};color:{s};padding:10px 14px;font-weight:900;font-size:13px}}
 .zx-chat-body{{padding:14px;font-size:13px}}
+
+/* 🆕 MAP / DELIVERY / CART FLOAT / BOOK FLOAT */
+.zx-map{{padding:60px 0}}
+.zx-map-head{{text-align:center;margin-bottom:18px}}
+.zx-map-head h2{{margin:0 0 4px;font-size:26px}}
+.zx-map-head p{{margin:0;opacity:.7;font-size:13px}}
+.zx-map-frame{{max-width:1040px;margin:0 auto;aspect-ratio:16/9;border-radius:{r};overflow:hidden;box-shadow:0 30px 70px rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.08)}}
+.zx-map-frame iframe{{width:100%;height:100%;filter:contrast(.95) brightness(.9)}}
+.zx-delivery{{padding:28px 0;background:linear-gradient(90deg,{p}22,{a}22);border-top:1px solid rgba(255,255,255,.05);border-bottom:1px solid rgba(255,255,255,.05)}}
+.zx-dl-inner{{display:flex;align-items:center;gap:16px;flex-wrap:wrap;justify-content:center}}
+.zx-dl-ico{{font-size:46px;line-height:1}}
+.zx-dl-copy{{flex:1;min-width:220px}}
+.zx-dl-copy h3{{margin:0 0 2px;font-size:20px;color:{p}}}
+.zx-dl-copy p{{margin:0;opacity:.85;font-size:13.5px}}
+.zx-dl-cta{{white-space:nowrap}}
+.zx-cart-float{{position:fixed;bottom:20px;left:86px;width:54px;height:54px;border-radius:50%;background:{p};color:{s};border:none;cursor:pointer;font-size:22px;box-shadow:0 10px 28px rgba(0,0,0,.4);z-index:90;animation:zxPop .4s;display:flex;align-items:center;justify-content:center}}
+.zx-cart-count{{position:absolute;top:-4px;right:-4px;background:#EF4444;color:#fff;font-size:11px;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;border:2px solid {bg}}}
+.zx-book-float{{position:fixed;top:80px;left:20px;background:{p};color:{s};padding:10px 18px;border-radius:99px;font-weight:900;font-size:13px;cursor:pointer;border:none;box-shadow:0 10px 28px rgba(0,0,0,.35);z-index:85;animation:zxPop .4s}}
 @keyframes zxPop{{from{{opacity:0;transform:scale(.8)}}to{{opacity:1;transform:scale(1)}}}}
 @media (max-width:768px){{
   .nl-inner{{grid-template-columns:1fr}}

@@ -339,6 +339,49 @@ function InlineStepRenderer({ step, variants, loading, onAnswer, selected, setSe
 }
 
 /* ================================================================
+   QUICK ADD BAR — smart one-click chips under the chat input
+   ================================================================ */
+const QUICK_ADD_CHIPS = [
+  { id: 'stories',       icon: '🎬', label: 'حالات',        msg: 'أضف قسم حالات' },
+  { id: 'banner',        icon: '📢', label: 'بنر',          msg: 'أضف بنر ترويجي' },
+  { id: 'video',         icon: '🎥', label: 'فيديو',         msg: 'أضف قسم فيديو' },
+  { id: 'gallery',       icon: '🖼️', label: 'معرض',          msg: 'أضف قسم معرض صور' },
+  { id: 'testimonials',  icon: '💬', label: 'آراء',           msg: 'أضف قسم آراء العملاء' },
+  { id: 'pricing',       icon: '💰', label: 'أسعار',          msg: 'أضف قسم خطط الأسعار' },
+  { id: 'faq',           icon: '❓', label: 'أسئلة شائعة',    msg: 'أضف قسم الأسئلة الشائعة' },
+  { id: 'team',          icon: '👥', label: 'الفريق',         msg: 'أضف قسم الفريق' },
+  { id: 'stats_band',    icon: '📊', label: 'إحصائيات',      msg: 'أضف شريط إحصائيات' },
+  { id: 'newsletter',    icon: '📧', label: 'نشرة بريدية',   msg: 'أضف نشرة بريدية' },
+  { id: 'announce',      icon: '🔔', label: 'شريط إعلان',    msg: 'أضف شريط إعلان علوي' },
+  { id: 'contact',       icon: '📞', label: 'تواصل',          msg: 'أضف قسم تواصل معنا' },
+];
+
+function QuickAddBar({ onPick, loading }) {
+  return (
+    <div className="px-3 py-2 border-t border-white/10 bg-gradient-to-b from-[#0a0e1c] to-[#0e1128]" data-testid="quick-add-bar">
+      <div className="flex items-center gap-1.5 mb-1.5">
+        <span className="text-[10px] font-bold opacity-60 uppercase tracking-wide">⚡ اقتراحات ذكية — ضغطة لإضافة قسم</span>
+      </div>
+      <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'thin' }}>
+        {QUICK_ADD_CHIPS.map((c) => (
+          <button
+            key={c.id}
+            onClick={() => onPick(c.msg)}
+            disabled={loading}
+            className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 bg-white/5 hover:bg-yellow-500/20 border border-white/10 hover:border-yellow-500/50 rounded-full text-[11px] font-bold transition-all disabled:opacity-40 whitespace-nowrap"
+            data-testid={`quick-chip-${c.id}`}
+            title={c.msg}
+          >
+            <span>{c.icon}</span>
+            <span>{c.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
    CHAT COLUMN — messages + inline rich step + free input
    ================================================================ */
 function ChatColumn({ project, stepMeta, variants, loading, onSendText, onAnswerStep, onRequestCode, pending, onConfirm, onCancel }) {
@@ -447,6 +490,9 @@ function ChatColumn({ project, stepMeta, variants, loading, onSendText, onAnswer
           />
         </div>
       )}
+
+      {/* 🆕 Quick Add Bar — always visible, one-click section add */}
+      <QuickAddBar onPick={onSendText} loading={loading} />
 
       {/* Free text input */}
       <div className="p-2.5 border-t border-white/10 flex gap-2 items-center bg-[#0a0e1c]">
@@ -632,6 +678,220 @@ function LibraryModal({ projects, onOpen, onDelete, onDuplicate, onApprove, onCl
 }
 
 /* ================================================================
+   LOGO STUDIO — multi-step, button-based: style → generate 3 → pick → color → apply
+   ================================================================ */
+const LOGO_STYLES = [
+  { id: 'elegant',     label: 'أنيق',       hint: 'elegant, refined, thin strokes, serif accents' },
+  { id: 'playful',     label: 'مرح',        hint: 'playful, rounded, friendly, vibrant accents' },
+  { id: 'minimal',     label: 'بسيط',       hint: 'minimal, negative space, geometric, essential' },
+  { id: 'luxury',      label: 'فاخر',       hint: 'luxury, gold-accent, premium, sophisticated' },
+  { id: 'modern',      label: 'حديث',       hint: 'modern, clean grotesque typography, sharp' },
+  { id: 'classic',     label: 'كلاسيكي',    hint: 'classic, traditional emblem, timeless' },
+  { id: 'bold',        label: 'جريء',       hint: 'bold, high-contrast, solid, confident' },
+  { id: 'tech',        label: 'تقني',       hint: 'tech, futuristic, digital, subtle gradients' },
+];
+
+const LOGO_COLORS = [
+  { id: 'default',  label: 'تلقائي',  hint: '' },
+  { id: 'gold',     label: 'ذهبي',    hint: 'gold (#D4AF37) and cream accents' },
+  { id: 'black',    label: 'أسود',    hint: 'pure black (#000000) monochrome' },
+  { id: 'white',    label: 'أبيض',    hint: 'white on dark background' },
+  { id: 'blue',     label: 'أزرق',    hint: 'royal blue (#1D4ED8) and navy' },
+  { id: 'red',      label: 'أحمر',    hint: 'crimson red (#DC2626) with dark accents' },
+  { id: 'green',    label: 'أخضر',    hint: 'emerald green (#10B981)' },
+  { id: 'orange',   label: 'برتقالي', hint: 'warm orange (#F97316)' },
+  { id: 'purple',   label: 'بنفسجي',  hint: 'deep purple (#7C3AED)' },
+  { id: 'multi',    label: 'ملوّن',    hint: 'multi-color vibrant palette' },
+];
+
+function LogoStudioModal({ project, onClose, onApplied }) {
+  const [stage, setStage] = useState('brand'); // brand | style | generating | pick | applied
+  const [brand, setBrand] = useState(project?.name || '');
+  const [hint, setHint]   = useState('');
+  const [style, setStyle] = useState(null);
+  const [color, setColor] = useState(null);
+  const [logos, setLogos] = useState([]);
+  const [busy, setBusy]   = useState(false);
+
+  const generate = async (selectedStyle, selectedColor) => {
+    if (!project?.id) return;
+    setBusy(true);
+    setStage('generating');
+    toast.info('🎨 جاري توليد 3 لوقوهات — 20-40 ثانية');
+    const fullPrompt = `لوقو لـ "${brand || project?.name || 'نشاطي'}". ${hint}`.trim();
+    try {
+      const r = await fetch(`${API}/api/websites/projects/${project.id}/generate-logo-variants`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authH() },
+        body: JSON.stringify({
+          prompt: fullPrompt,
+          style_hint: selectedStyle?.hint || '',
+          color_hint: selectedColor?.hint || '',
+          count: 3,
+        }),
+      });
+      if (!r.ok) throw new Error('failed');
+      const d = await r.json();
+      setLogos(d.logos || []);
+      setStage('pick');
+    } catch (_) {
+      toast.error('فشل التوليد — حاول بوصف أوضح');
+      setStage('style');
+    } finally { setBusy(false); }
+  };
+
+  const applyLogo = async (logoUrl) => {
+    if (!project?.id || !logoUrl) return;
+    setBusy(true);
+    try {
+      await fetch(`${API}/api/websites/projects/${project.id}/apply-logo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authH() },
+        body: JSON.stringify({ logo_url: logoUrl }),
+      });
+      onApplied(logoUrl);
+      setStage('applied');
+      toast.success('✨ تم تثبيت اللوقو في الموقع!');
+      setTimeout(onClose, 900);
+    } catch (_) { toast.error('فشل التطبيق'); }
+    finally { setBusy(false); }
+  };
+
+  const regenerateWithColor = (c) => {
+    setColor(c);
+    generate(style, c);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/85 z-[60] flex items-center justify-center p-4" onClick={onClose} dir="rtl" data-testid="logo-studio-modal">
+      <div className="bg-[#0e1128] rounded-2xl max-w-3xl w-full border border-yellow-500/30 p-5 md:p-6 max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between mb-4 gap-3">
+          <div>
+            <h2 className="text-lg md:text-xl font-bold mb-1 flex items-center gap-2"><Sparkles className="w-5 h-5 text-yellow-400" /> استوديو اللوقو</h2>
+            <p className="text-xs md:text-sm opacity-70">
+              {stage === 'brand' && 'الخطوة 1 من 3 — اسم العلامة التجارية'}
+              {stage === 'style' && 'الخطوة 2 من 3 — اختر الأسلوب (بضغطة واحدة)'}
+              {stage === 'generating' && 'جاري توليد 3 تصاميم...'}
+              {stage === 'pick' && 'الخطوة 3 من 3 — اختر اللوقو المفضّل + بدّل اللون'}
+              {stage === 'applied' && '✨ تم تثبيت اللوقو!'}
+            </p>
+          </div>
+          <button onClick={onClose} className="p-1 hover:bg-white/10 rounded shrink-0"><X className="w-5 h-5" /></button>
+        </div>
+
+        {stage === 'brand' && (
+          <div className="space-y-3" data-testid="logo-stage-brand">
+            <div>
+              <label className="text-xs opacity-70 block mb-1">اسم العلامة التجارية</label>
+              <input
+                value={brand}
+                onChange={(e) => setBrand(e.target.value)}
+                placeholder="مثال: كوفي دافئ"
+                className="w-full px-3 py-2.5 bg-white/10 border border-white/15 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm"
+                data-testid="logo-brand-input"
+              />
+            </div>
+            <div>
+              <label className="text-xs opacity-70 block mb-1">تفاصيل إضافية (اختياري)</label>
+              <input
+                value={hint}
+                onChange={(e) => setHint(e.target.value)}
+                placeholder="مثال: فنجان قهوة بلمسة دفء وحبوب بن"
+                className="w-full px-3 py-2.5 bg-white/10 border border-white/15 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm"
+                data-testid="logo-hint-input"
+              />
+            </div>
+            <button
+              onClick={() => brand.trim() && setStage('style')}
+              disabled={!brand.trim()}
+              className="w-full px-4 py-2.5 bg-gradient-to-r from-yellow-500 to-orange-500 text-black rounded-xl font-bold disabled:opacity-50"
+              data-testid="logo-next-style-btn"
+            >التالي ← اختر الأسلوب</button>
+          </div>
+        )}
+
+        {stage === 'style' && (
+          <div className="space-y-3" data-testid="logo-stage-style">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {LOGO_STYLES.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => { setStyle(s); generate(s, color); }}
+                  disabled={busy}
+                  className="p-3 rounded-xl bg-white/5 hover:bg-yellow-500/15 border border-white/10 hover:border-yellow-500/50 transition-all disabled:opacity-50 font-bold text-sm"
+                  data-testid={`logo-style-${s.id}`}
+                >{s.label}</button>
+              ))}
+            </div>
+            <button onClick={() => setStage('brand')} className="text-xs opacity-70 hover:opacity-100 w-full text-center mt-2">← رجوع</button>
+          </div>
+        )}
+
+        {stage === 'generating' && (
+          <div className="py-10 text-center" data-testid="logo-stage-generating">
+            <RefreshCw className="w-12 h-12 mx-auto mb-3 text-yellow-400 animate-spin" />
+            <div className="text-sm font-bold">جاري توليد 3 لوقوهات بأسلوب "{style?.label}"</div>
+            <div className="text-xs opacity-60 mt-1">قد يستغرق 20-40 ثانية...</div>
+          </div>
+        )}
+
+        {stage === 'pick' && (
+          <div className="space-y-4" data-testid="logo-stage-pick">
+            <div>
+              <div className="text-xs opacity-70 mb-2">اختر لوقو (ضغطة لتثبيته)</div>
+              <div className="grid grid-cols-3 gap-2">
+                {logos.map((url, i) => (
+                  <button
+                    key={i}
+                    onClick={() => applyLogo(url)}
+                    disabled={busy}
+                    className="group relative aspect-square rounded-xl bg-white border-2 border-white/10 hover:border-yellow-500 transition-all overflow-hidden disabled:opacity-50"
+                    data-testid={`logo-pick-${i}`}
+                  >
+                    <img src={url} alt={`logo ${i+1}`} className="w-full h-full object-contain p-2" />
+                    <div className="absolute inset-0 bg-yellow-500/0 group-hover:bg-yellow-500/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                      <Check className="w-10 h-10 text-black bg-yellow-400 rounded-full p-2 shadow-xl" />
+                    </div>
+                  </button>
+                ))}
+                {logos.length === 0 && (
+                  <div className="col-span-3 text-center py-8 text-white/50 text-sm">لم يتم توليد أي لوقو — جرّب وصفاً آخر</div>
+                )}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs opacity-70 mb-2">💡 غيّر اللون وأعد التوليد (اختياري)</div>
+              <div className="flex flex-wrap gap-1.5">
+                {LOGO_COLORS.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => regenerateWithColor(c)}
+                    disabled={busy}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all disabled:opacity-50 ${color?.id === c.id ? 'bg-yellow-500 border-yellow-500 text-black' : 'bg-white/5 border-white/15 hover:bg-yellow-500/20 hover:border-yellow-500/50'}`}
+                    data-testid={`logo-color-${c.id}`}
+                  >{c.label}</button>
+                ))}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setStage('style')} className="flex-1 px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-bold">← غيّر الأسلوب</button>
+              <button onClick={() => generate(style, color)} disabled={busy} className="flex-1 px-3 py-2 bg-gradient-to-r from-purple-500/40 to-pink-500/40 hover:from-purple-500/60 hover:to-pink-500/60 border border-purple-400/40 rounded-lg text-xs font-bold disabled:opacity-50 flex items-center justify-center gap-1.5"><RefreshCw className={`w-3.5 h-3.5 ${busy ? 'animate-spin' : ''}`} />جرّب 3 تصاميم أخرى</button>
+            </div>
+          </div>
+        )}
+
+        {stage === 'applied' && (
+          <div className="py-10 text-center" data-testid="logo-stage-applied">
+            <Check className="w-16 h-16 mx-auto mb-3 text-green-400 bg-green-500/20 rounded-full p-3" />
+            <div className="text-base font-bold">✨ اللوقو معتمد في موقعك!</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
    OVERRIDE BUILDER — compute theme/section override for live preview
    ================================================================ */
 const VARIANT_MAP = {
@@ -682,6 +942,45 @@ function buildOverrides(step, value, project) {
     // For sections step, we show a preview with only selected + footer
     const wanted = Array.isArray(value) ? value : [value];
     const kept = sections.filter((s) => wanted.includes(s.type) || s.type === 'footer');
+    sections_override = kept.map((s, i) => ({ ...s, order: i }));
+  } else if (step === 'features') {
+    // 🆕 Each feature must materialize in the live preview immediately.
+    const wanted = Array.isArray(value) ? value : [value];
+    const FEATURE_EXTRAS = { whatsapp: 'whatsapp_float', cart: 'cart_float', booking: 'book_float', reviews: 'rating_widget' };
+    const FEATURE_SECTION = {
+      reservation:  { type: 'reservation', data: { title: 'احجز طاولتك', subtitle: 'اضمن مكانك قبل الزحام', cta_text: 'احجز الآن' } },
+      map:          { type: 'map_embed', data: { title: 'موقعنا على الخريطة', address: 'الرياض، المملكة العربية السعودية', lat: 24.7136, lng: 46.6753 } },
+      newsletter:   { type: 'newsletter', data: { title: 'اشترك في نشرتنا', subtitle: 'عروض حصرية وأخبار أولاً' } },
+      delivery:     { type: 'delivery_banner', data: { title: '🛵 توصيل سريع', subtitle: 'توصيل مجاني للطلبات فوق 100 ريال', cta_text: 'اطلب الآن' } },
+    };
+    const featureExtrasIds = new Set(Object.values(FEATURE_EXTRAS));
+    const featureSectionTypes = new Set(Object.values(FEATURE_SECTION).map((x) => x.type));
+    // Merge into theme.extras (remove previously-added feature extras first)
+    const existingExtras = (project?.theme?.extras || []).filter((e) => !featureExtrasIds.has(e));
+    const newExtras = [...existingExtras];
+    wanted.forEach((f) => { if (FEATURE_EXTRAS[f] && !newExtras.includes(FEATURE_EXTRAS[f])) newExtras.push(FEATURE_EXTRAS[f]); });
+    theme_override.extras = newExtras;
+    // Build sections override (remove previously-added feature sections, re-add wanted)
+    const wantedSectionTypes = new Set();
+    const wantedSectionsMap = {};
+    wanted.forEach((f) => {
+      if (FEATURE_SECTION[f]) {
+        wantedSectionTypes.add(FEATURE_SECTION[f].type);
+        wantedSectionsMap[FEATURE_SECTION[f].type] = FEATURE_SECTION[f];
+      }
+    });
+    const kept = sections.filter((s) => !featureSectionTypes.has(s.type) || wantedSectionTypes.has(s.type));
+    const existingTypes = new Set(kept.map((s) => s.type));
+    const footerIdx = kept.findIndex((s) => s.type === 'footer');
+    const insertAt = footerIdx >= 0 ? footerIdx : kept.length;
+    const toInsert = [];
+    wantedSectionTypes.forEach((stype) => {
+      if (!existingTypes.has(stype)) {
+        const m = wantedSectionsMap[stype];
+        toInsert.push({ id: `preview-${stype}`, type: stype, order: 0, visible: true, data: m.data });
+      }
+    });
+    kept.splice(insertAt, 0, ...toInsert);
     sections_override = kept.map((s, i) => ({ ...s, order: i }));
   } else if (step === 'extras') {
     // Apply extras to theme (floating widgets)
@@ -852,6 +1151,20 @@ export default function WebsiteStudio({ user }) {
         if (step === 'dashboard_items' && Array.isArray(value) && value.length > 0) {
           const last = value[value.length - 1];
           target = doc.getElementById(`panel-${last}`);
+        } else if (step === 'features' && Array.isArray(value) && value.length > 0) {
+          const last = value[value.length - 1];
+          const featureMap = {
+            whatsapp:    '[data-hl="extra-whatsapp"]',
+            cart:        '[data-hl="extra-cart"]',
+            booking:     '[data-hl="extra-book"]',
+            reviews:     '[data-hl="extra-rating"]',
+            reservation: '[data-hl="reservation"]',
+            map:         '[data-hl="map"]',
+            newsletter:  '[data-hl="newsletter"]',
+            delivery:    '[data-hl="delivery"]',
+          };
+          const sel = featureMap[last];
+          if (sel) target = doc.querySelector(sel);
         } else if (step === 'extras' && Array.isArray(value) && value.length > 0) {
           const last = value[value.length - 1];
           const extraMap = {
@@ -1014,26 +1327,14 @@ export default function WebsiteStudio({ user }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id, currentStep]);
 
-  // Logo generation
-  const [logoGenerating, setLogoGenerating] = useState(false);
-  const generateLogoPrompt = async () => {
-    if (!project?.id) return;
-    const prompt = window.prompt('صف اللوقو الذي تريده (مثال: لوقو لمتجر قطط اسمه "مملكة القطط" — خطوات قطط وألوان دافئة)');
-    if (!prompt) return;
-    setLogoGenerating(true);
-    toast.info('🎨 جاري توليد اللوقو... قد يستغرق 15-30 ثانية');
-    try {
-      const r = await fetch(`${API}/api/websites/projects/${project.id}/generate-logo`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authH() },
-        body: JSON.stringify({ prompt, style_hint: '' }),
-      });
-      if (!r.ok) throw new Error('failed');
-      const d = await r.json();
-      setProject({ ...project, theme: { ...(project.theme || {}), logo_url: d.logo_url } });
-      toast.success('✨ تم توليد اللوقو وتثبيته في الموقع!');
-    } catch (_) { toast.error('فشل التوليد — حاول بوصف أوضح'); }
-    finally { setLogoGenerating(false); }
+  // Logo generation — now opens a proper multi-step studio (no more window.prompt)
+  const [logoStudioOpen, setLogoStudioOpen] = useState(false);
+  const openLogoStudio = () => {
+    if (!project?.id) { toast.info('ابدأ بإنشاء مشروع أولاً'); return; }
+    setLogoStudioOpen(true);
+  };
+  const onLogoApplied = (url) => {
+    setProject((prev) => prev ? ({ ...prev, theme: { ...(prev.theme || {}), logo_url: url } }) : prev);
   };
 
   const removeLogo = async () => {
@@ -1090,9 +1391,9 @@ export default function WebsiteStudio({ user }) {
             <button onClick={() => { loadProjects(); setShowLibrary(true); }} className="p-2 md:px-3 md:py-2 bg-white/10 hover:bg-white/20 rounded-lg flex items-center gap-1.5" data-testid="library-btn">
               <FolderOpen className="w-4 h-4" /><span className="hidden md:inline text-xs">مواقعي ({projects.length})</span>
             </button>
-            <button onClick={generateLogoPrompt} disabled={!project || logoGenerating} className="p-2 md:px-3 md:py-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 hover:from-purple-500/30 hover:to-pink-500/30 border border-purple-400/30 rounded-lg flex items-center gap-1.5 disabled:opacity-40" data-testid="gen-logo-btn" title="توليد لوقو بالذكاء الاصطناعي">
-              {logoGenerating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-purple-300" />}
-              <span className="hidden md:inline text-xs">{logoGenerating ? 'جاري...' : 'اعمل لوقو'}</span>
+            <button onClick={openLogoStudio} disabled={!project} className="p-2 md:px-3 md:py-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 hover:from-purple-500/30 hover:to-pink-500/30 border border-purple-400/30 rounded-lg flex items-center gap-1.5 disabled:opacity-40" data-testid="gen-logo-btn" title="استوديو توليد اللوقو بالذكاء الاصطناعي">
+              <Sparkles className="w-4 h-4 text-purple-300" />
+              <span className="hidden md:inline text-xs">اعمل لوقو</span>
             </button>
             {project && project.status !== 'approved' && (
               <button onClick={() => approveProject(project.id)} className="p-2 md:px-3 md:py-2 bg-gradient-to-r from-green-500/30 to-emerald-500/30 hover:from-green-500/50 hover:to-emerald-500/50 border border-green-400/40 rounded-lg flex items-center gap-1.5" data-testid="approve-btn" title="اعتماد نهائي">
@@ -1180,6 +1481,7 @@ export default function WebsiteStudio({ user }) {
 
       {showLibrary && <LibraryModal projects={projects} onOpen={openProject} onDelete={deleteProject} onDuplicate={duplicateProject} onApprove={approveProject} onClose={() => setShowLibrary(false)} />}
       {showIndependence && <IndependenceModal onClose={() => setShowIndependence(false)} />}
+      {logoStudioOpen && <LogoStudioModal project={project} onClose={() => setLogoStudioOpen(false)} onApplied={onLogoApplied} />}
     </div>
   );
 }

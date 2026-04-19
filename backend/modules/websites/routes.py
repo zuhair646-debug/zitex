@@ -17,7 +17,7 @@ from .ai_service import (
 )
 from .variants import list_variants_for_template, list_style_variants, get_variant_project
 from .catalog import list_categories, list_layouts, get_layout
-from .logo_service import generate_logo, generate_hero_image
+from .logo_service import generate_logo, generate_logo_variants, generate_hero_image
 from .wizard import (
     STEPS, default_wizard_state, get_step, get_question_for_step,
     get_chips_for_step, next_step_id, apply_answer, steps_metadata,
@@ -39,6 +39,17 @@ class WizardChatIn(BaseModel):
 class LogoGenerateIn(BaseModel):
     prompt: str
     style_hint: Optional[str] = ""
+
+
+class LogoVariantsIn(BaseModel):
+    prompt: str
+    style_hint: Optional[str] = ""
+    color_hint: Optional[str] = ""
+    count: int = 3
+
+
+class LogoApplyIn(BaseModel):
+    logo_url: str
 
 
 class HeroImageIn(BaseModel):
@@ -290,6 +301,34 @@ def register_routes(app, database, auth_dep):
             {"$set": {"theme": theme, "updated_at": _iso_now()}},
         )
         return {"ok": True, "logo_url": data_url}
+
+    @r.post("/projects/{project_id}/generate-logo-variants")
+    async def _p_generate_logo_variants(project_id: str, body: LogoVariantsIn, current_user: dict = Depends(auth_dep)):
+        """Generate N logo variants in parallel so the user can pick one by click."""
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "Project not found")
+        urls = await generate_logo_variants(body.prompt, body.style_hint or "", body.count or 3, body.color_hint or "")
+        if not urls:
+            raise HTTPException(500, "فشل توليد اللوقوهات — حاول بوصف أوضح")
+        return {"ok": True, "logos": urls, "count": len(urls)}
+
+    @r.post("/projects/{project_id}/apply-logo")
+    async def _p_apply_logo(project_id: str, body: LogoApplyIn, current_user: dict = Depends(auth_dep)):
+        """Persist a chosen logo URL onto the project's theme."""
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "Project not found")
+        theme = {**(p.get("theme") or {}), "logo_url": body.logo_url}
+        await database.website_projects.update_one(
+            {"id": project_id},
+            {"$set": {"theme": theme, "updated_at": _iso_now()}},
+        )
+        return {"ok": True, "logo_url": body.logo_url}
 
     @r.post("/projects/{project_id}/generate-hero-image")
     async def _p_generate_hero(project_id: str, body: HeroImageIn, current_user: dict = Depends(auth_dep)):

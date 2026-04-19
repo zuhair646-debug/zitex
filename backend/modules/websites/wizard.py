@@ -339,6 +339,9 @@ def apply_answer(project: Dict[str, Any], step_id: str, value: Any) -> Dict[str,
         ans["typography"] = value
     elif step_id == "features":
         ans["features"] = value if isinstance(value, list) else [value]
+        project = _apply_features(project, ans["features"])
+        # _apply_features mutates project["theme"] — sync local `theme` back
+        theme = dict(project.get("theme") or {})
     elif step_id == "dashboard":
         ans["dashboard"] = value
         project = _apply_dashboard_layout(project, value, ans)
@@ -356,6 +359,7 @@ def apply_answer(project: Dict[str, Any], step_id: str, value: Any) -> Dict[str,
     elif step_id == "extras":
         ans["extras"] = value if isinstance(value, list) else [value]
         project = _apply_extras(project, ans["extras"])
+        theme = dict(project.get("theme") or {})  # sync back after mutation
     elif step_id == "final_confirm":
         ans["final_confirm"] = value
         if value == "approve":
@@ -515,5 +519,63 @@ def _apply_extras(project: Dict[str, Any], extras: List[str]) -> Dict[str, Any]:
                 sections.insert(footer_idx, {"id": f"sec-{_uuid.uuid4().hex[:8]}", "type": stype,
                                               "order": footer_idx, "visible": True, "data": sdata})
                 footer_idx += 1
+    project["sections"] = [{**s, "order": i} for i, s in enumerate(sections)]
+    return project
+
+
+# ---------------------------------------------------------------------------
+# Features → visible elements (extras + sections)
+# Each selected feature must IMMEDIATELY materialize in the live preview.
+# ---------------------------------------------------------------------------
+FEATURE_TO_EXTRAS = {
+    "whatsapp":    "whatsapp_float",
+    "cart":        "cart_float",
+    "booking":     "book_float",
+    "reviews":     "rating_widget",
+}
+
+FEATURE_TO_SECTION = {
+    "reservation": ("reservation", {"title": "احجز طاولتك", "subtitle": "اضمن مكانك قبل الزحام", "cta_text": "احجز الآن"}),
+    "map":         ("map_embed", {"title": "موقعنا على الخريطة", "address": "الرياض، المملكة العربية السعودية", "lat": 24.7136, "lng": 46.6753}),
+    "newsletter":  ("newsletter", {"title": "اشترك في نشرتنا", "subtitle": "عروض حصرية وأخبار أولاً"}),
+    "delivery":    ("delivery_banner", {"title": "🛵 توصيل سريع", "subtitle": "توصيل مجاني للطلبات فوق 100 ريال", "cta_text": "اطلب الآن"}),
+}
+
+_FEATURE_SECTION_TYPES = {v[0] for v in FEATURE_TO_SECTION.values()}
+_FEATURE_EXTRA_IDS = set(FEATURE_TO_EXTRAS.values())
+
+
+def _apply_features(project: Dict[str, Any], features: List[str]) -> Dict[str, Any]:
+    """Translate selected features into VISIBLE extras + sections in the live preview."""
+    import uuid as _uuid
+    theme = dict(project.get("theme") or {})
+    existing_extras = list(theme.get("extras") or [])
+    kept_extras = [e for e in existing_extras if e not in _FEATURE_EXTRA_IDS]
+    for f in features:
+        ex = FEATURE_TO_EXTRAS.get(f)
+        if ex and ex not in kept_extras:
+            kept_extras.append(ex)
+    theme["extras"] = kept_extras
+    project["theme"] = theme
+
+    wanted_section_types = set()
+    wanted_section_data = {}
+    for f in features:
+        if f in FEATURE_TO_SECTION:
+            stype, sdata = FEATURE_TO_SECTION[f]
+            wanted_section_types.add(stype)
+            wanted_section_data[stype] = sdata
+
+    sections = list(project.get("sections") or [])
+    sections = [s for s in sections if s.get("type") not in _FEATURE_SECTION_TYPES or s.get("type") in wanted_section_types]
+    existing_types = {s.get("type") for s in sections}
+    footer_idx = next((i for i, s in enumerate(sections) if s.get("type") == "footer"), len(sections))
+    for stype in wanted_section_types:
+        if stype not in existing_types:
+            sections.insert(footer_idx, {
+                "id": f"sec-{_uuid.uuid4().hex[:8]}", "type": stype,
+                "order": footer_idx, "visible": True, "data": wanted_section_data[stype],
+            })
+            footer_idx += 1
     project["sections"] = [{**s, "order": i} for i, s in enumerate(sections)]
     return project

@@ -15,6 +15,41 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Feb 19, 2026 — LIVE FEATURES + LOGO STUDIO + QUICK ADD BAR (3 Fixes)
+
+**Problem reported by user**: Selecting features (whatsapp/delivery/cart) showed NO change in live preview. Logo step used text-prompt instead of buttons. User wanted quick-add chips under chat.
+
+**Fix 1 — Features → Live Preview (P0)**:
+- New `_apply_features()` in `wizard.py` translates each feature into visible extras + sections:
+  - `whatsapp` → floating WhatsApp button  - `cart` → floating cart icon with badge
+  - `booking` → floating "احجز موعد" button
+  - `reviews` → rating widget
+  - `reservation` → full reservation section
+  - `map` → interactive OpenStreetMap embed (no API key)
+  - `delivery` → delivery banner section
+  - `newsletter` → newsletter signup section
+- Added `_section_map_embed` + `_section_delivery_banner` renderers + CSS.
+- Added `cart_float` + `book_float` floating widgets.
+- Frontend `buildOverrides` now has a `features` case for INSTANT live preview on each toggle (before confirming).
+- Scroll map auto-jumps to the newly-toggled feature element.
+
+**Fix 2 — Logo Studio (button-based) (P0)**:
+- New `LogoStudioModal` with 3 stages:
+  1. **Brand** — name + optional details
+  2. **Style** — 8 one-click buttons (أنيق/مرح/بسيط/فاخر/حديث/كلاسيكي/جريء/تقني)
+  3. **Pick + Color** — generates **3 logo variants in parallel** (new `generate_logo_variants` service using asyncio.gather), user clicks to apply, 10 color chips to re-generate with different palette.
+- New endpoints: `POST /api/websites/projects/{id}/generate-logo-variants`, `POST /api/websites/projects/{id}/apply-logo`.
+- Replaced `window.prompt` entirely.
+
+**Fix 3 — Quick Add Bar (P1)**:
+- New `QuickAddBar` component under chat input with 12 smart chips:
+  🎬 حالات، 📢 بنر، 🎥 فيديو، 🖼️ معرض، 💬 آراء، 💰 أسعار، ❓ أسئلة، 👥 فريق، 📊 إحصائيات، 📧 نشرة، 🔔 إعلان، 📞 تواصل
+- One click sends message → safety net detects intent → section appears instantly.
+
+**Tested end-to-end**: ✅ features persist in DB (extras: whatsapp_float, cart_float, book_float, rating_widget), ✅ HTML contains zx-whatsapp/zx-cart-float/zx-map/zx-delivery, ✅ logo-variants endpoint returns 200 with 3 URLs, ✅ logo studio 3-stage modal flow works.
+
+
+
 ### 🆕 Feb 19, 2026 — LIVE CHAT ADDITIONS (Bug Fix)
 **Problem reported**: User asked "اعمل لي حالات مثل الواتساب" on a cafe site. AI replied "تم الإضافة" but nothing appeared in Live Preview.
 

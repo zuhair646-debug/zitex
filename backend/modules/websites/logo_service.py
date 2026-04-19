@@ -51,6 +51,32 @@ async def generate_logo(prompt: str, style_hint: str = "") -> Optional[Tuple[str
     return data_url, "logo"
 
 
+async def generate_logo_variants(prompt: str, style_hint: str = "", count: int = 3, color_hint: str = "") -> list:
+    """Generate N distinct logo variants in PARALLEL. Returns a list of data URLs (may be shorter than N on failures)."""
+    import asyncio
+    # Slight prompt perturbations so each variant looks different
+    perturbations = [
+        "variation: symmetric icon-forward layout",
+        "variation: wordmark-focused, clean typography",
+        "variation: emblem / badge style with subtle flourish",
+        "variation: geometric abstract mark",
+        "variation: monogram-based mark",
+    ]
+    color_clause = f" Use color palette: {color_hint}." if color_hint else ""
+    base_system = (
+        "Create a PROFESSIONAL MODERN LOGO. Clean, minimal, flat design, memorable icon, "
+        "high contrast, symmetric composition, balanced typography, suitable for a website header."
+        + color_clause
+        + f" Style preference: {style_hint or 'modern minimalist'}."
+    )
+    tasks = []
+    for i in range(max(1, min(count, 4))):
+        sys_hint = f"{base_system}\n{perturbations[i % len(perturbations)]}"
+        tasks.append(_generate(prompt, sys_hint))
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    return [r for r in results if isinstance(r, str) and r]
+
+
 async def generate_hero_image(prompt: str) -> Optional[str]:
     system_hint = (
         "Cinematic wide hero image for a website banner, 16:9 orientation, "
