@@ -106,19 +106,20 @@ STEPS: List[Dict[str, Any]] = [
     {
         "id": "dashboard",
         "title": "لوحة تحكم",
-        "question": "هل تحتاج لوحة تحكم (Dashboard) لإدارة موقعك؟",
+        "question": "هل تحتاج لوحة تحكم؟ اختر الشكل المفضّل — سيظهر مباشرة في المعاينة:",
         "chips": [
-            {"id": "admin",    "label": "✅ نعم — لوحة للمالك/الإدارة", "value": "admin"},
-            {"id": "customer", "label": "👤 نعم — لوحة للعملاء",        "value": "customer"},
-            {"id": "both",     "label": "⚡ الاثنتين معاً",               "value": "both"},
-            {"id": "none",     "label": "❌ لا، مو محتاجها حالياً",      "value": "none"},
+            {"id": "cards",   "label": "📇 بطاقات"},
+            {"id": "sidebar", "label": "📋 شريط جانبي"},
+            {"id": "tabs",    "label": "🗂️ تبويبات"},
+            {"id": "none",    "label": "❌ لا أحتاجها"},
         ],
-        "applies": "dashboard_type",
+        "render": "chips",
+        "applies": "dashboard_layout",
     },
     {
         "id": "dashboard_items",
         "title": "محتويات لوحة التحكم",
-        "question": "ممتاز! ما الذي تريده في لوحة التحكم؟",
+        "question": "ممتاز! اختر العناصر التي تريدها — كل خيار يظهر فوراً في اللوحة:",
         "chips": [
             {"id": "orders",    "label": "📦 الطلبات"},
             {"id": "customers", "label": "👥 العملاء"},
@@ -128,8 +129,13 @@ STEPS: List[Dict[str, Any]] = [
             {"id": "reports",   "label": "📈 التقارير"},
             {"id": "users",     "label": "🔐 المستخدمون والأدوار"},
             {"id": "settings",  "label": "⚙️ الإعدادات"},
+            {"id": "calendar",  "label": "📅 التقويم"},
+            {"id": "inventory", "label": "📋 المخزون"},
+            {"id": "payments",  "label": "💳 المدفوعات"},
+            {"id": "reviews",   "label": "⭐ التقييمات"},
         ],
         "multi": True,
+        "render": "chips",
         "condition": lambda ans: ans.get("dashboard") and ans.get("dashboard") != "none",
         "applies": "dashboard_items",
     },
@@ -300,8 +306,10 @@ def apply_answer(project: Dict[str, Any], step_id: str, value: Any) -> Dict[str,
         ans["features"] = value if isinstance(value, list) else [value]
     elif step_id == "dashboard":
         ans["dashboard"] = value
+        project = _apply_dashboard_layout(project, value, ans)
     elif step_id == "dashboard_items":
         ans["dashboard_items"] = value if isinstance(value, list) else [value]
+        project = _apply_dashboard_items(project, ans["dashboard_items"])
     elif step_id == "sections":
         ans["sections_wanted"] = value if isinstance(value, list) else [value]
         project = _apply_sections_selection(project, ans["sections_wanted"])
@@ -380,5 +388,52 @@ def _apply_branding(project: Dict[str, Any], text: str) -> Dict[str, Any]:
             s["data"] = {**(s.get("data") or {}), "title": text[:60]}
         if s.get("type") == "footer":
             s["data"] = {**(s.get("data") or {}), "brand": text[:40]}
+    project["sections"] = sections
+    return project
+
+
+def _find_dashboard_section(sections: List[Dict[str, Any]]) -> int:
+    for i, s in enumerate(sections):
+        if s.get("type") == "dashboard":
+            return i
+    return -1
+
+
+def _apply_dashboard_layout(project: Dict[str, Any], layout: str, ans: Dict[str, Any]) -> Dict[str, Any]:
+    """Ensure dashboard section exists with selected layout. Remove if 'none'."""
+    import uuid as _uuid
+    sections = list(project.get("sections") or [])
+    idx = _find_dashboard_section(sections)
+    if layout == "none":
+        if idx >= 0:
+            sections.pop(idx)
+            project["sections"] = [{**s, "order": i} for i, s in enumerate(sections)]
+        return project
+    items = ans.get("dashboard_items") or []
+    dash_data = {"layout": layout, "title": "لوحة التحكم", "items": items, "contact": {}}
+    if idx >= 0:
+        sections[idx] = {**sections[idx], "data": {**(sections[idx].get("data") or {}), **dash_data}}
+    else:
+        # Insert before footer
+        insert_at = len(sections)
+        for i, s in enumerate(sections):
+            if s.get("type") == "footer":
+                insert_at = i
+                break
+        sections.insert(insert_at, {
+            "id": f"sec-{_uuid.uuid4().hex[:8]}", "type": "dashboard",
+            "order": insert_at, "visible": True, "data": dash_data,
+        })
+    project["sections"] = [{**s, "order": i} for i, s in enumerate(sections)]
+    return project
+
+
+def _apply_dashboard_items(project: Dict[str, Any], items: List[str]) -> Dict[str, Any]:
+    sections = list(project.get("sections") or [])
+    idx = _find_dashboard_section(sections)
+    if idx < 0:
+        # Create default cards dashboard
+        return _apply_dashboard_layout(project, "cards", {"dashboard_items": items})
+    sections[idx] = {**sections[idx], "data": {**(sections[idx].get("data") or {}), "items": items}}
     project["sections"] = sections
     return project

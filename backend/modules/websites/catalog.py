@@ -490,13 +490,48 @@ def list_categories() -> List[Dict[str, Any]]:
 
 
 def list_layouts(category_id: str) -> List[Dict[str, Any]]:
-    """Return all layouts for a category (base template + extras)."""
-    layouts: List[Dict[str, Any]] = []
+    """Return all layouts for a category — procedural multiplication to reach 20+ per category."""
+    from .variants import STYLE_VARIANTS
+
+    base_layouts: List[Dict[str, Any]] = []
     if category_id in BASE_TEMPLATES:
-        layouts.append(_base_as_layout(category_id))
+        base_layouts.append(_base_as_layout(category_id))
     for layout in EXTRA_LAYOUTS.get(category_id, []):
-        layouts.append(layout)
-    return layouts
+        base_layouts.append(layout)
+
+    out: List[Dict[str, Any]] = list(base_layouts)
+    # Each base × each style variant (10) × each hero layout (2) — skip duplicates
+    hero_variants = [("split", ""), ("full", " — بانر كامل")]
+    for base in base_layouts:
+        for style in STYLE_VARIANTS:
+            for hero_id, hero_suffix in hero_variants:
+                merged_theme = {**base.get("theme", {}), **style["theme_override"]}
+                # Mutate the hero section to use the new layout
+                mutated_sections = []
+                for s in base.get("sections", []):
+                    if s.get("type") == "hero":
+                        new_data = {**(s.get("data") or {}), "layout": hero_id}
+                        mutated_sections.append({**s, "data": new_data})
+                    else:
+                        mutated_sections.append(s)
+                out.append({
+                    "id": f"{base['id']}__{style['id']}__{hero_id}",
+                    "name": f"{base['name']} — {style['name']}{hero_suffix}",
+                    "icon": base.get("icon", ""),
+                    "description": base.get("description", ""),
+                    "theme": merged_theme,
+                    "sections": mutated_sections,
+                    "custom_css": base.get("custom_css", ""),
+                })
+    # Deduplicate by id
+    seen = set()
+    unique = []
+    for L in out:
+        if L["id"] in seen:
+            continue
+        seen.add(L["id"])
+        unique.append(L)
+    return unique
 
 
 def get_layout(category_id: str, layout_id: str) -> Dict[str, Any]:

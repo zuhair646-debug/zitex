@@ -245,18 +245,16 @@ function FontPicker({ onPick, loading }) {
 
 function ChipGroup({ chips, multi, onSingle, onMulti, loading, selected, setSelected }) {
   if (!chips?.length) return null;
+  const toggleMulti = (id) => {
+    const next = selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id];
+    setSelected(next);
+    // Auto-preview on every toggle
+    onMulti(next);
+  };
   return (
     <div>
       {multi && selected.length > 0 && (
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[11px] opacity-70">المحدّد: {selected.length}</span>
-          <button
-            onClick={() => onMulti(selected)}
-            disabled={loading}
-            className="flex items-center gap-1 px-2.5 py-1 bg-gradient-to-r from-green-500 to-emerald-500 text-black rounded-lg text-xs font-bold disabled:opacity-50"
-            data-testid="inline-submit-multi"
-          ><Check className="w-3 h-3" />تأكيد</button>
-        </div>
+        <div className="mb-1.5 text-[11px] opacity-70">المحدّد: {selected.length} — المعاينة تتحدّث فوراً</div>
       )}
       <div className="flex flex-wrap gap-1.5">
         {chips.map((c) => {
@@ -266,7 +264,7 @@ function ChipGroup({ chips, multi, onSingle, onMulti, loading, selected, setSele
             <button
               key={id}
               onClick={() => multi
-                ? setSelected((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id])
+                ? toggleMulti(id)
                 : onSingle(c.value !== undefined ? c.value : id)}
               disabled={loading}
               className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all disabled:opacity-50 ${
@@ -318,7 +316,7 @@ function InlineStepRenderer({ step, variants, loading, onAnswer, selected, setSe
 /* ================================================================
    CHAT COLUMN — messages + inline rich step + free input
    ================================================================ */
-function ChatColumn({ project, stepMeta, variants, loading, onSendText, onAnswerStep, onRequestCode }) {
+function ChatColumn({ project, stepMeta, variants, loading, onSendText, onAnswerStep, onRequestCode, pending, onConfirm, onCancel }) {
   const [msg, setMsg] = useState('');
   const [selected, setSelected] = useState([]);
   const endRef = useRef(null);
@@ -383,6 +381,30 @@ function ChatColumn({ project, stepMeta, variants, loading, onSendText, onAnswer
         )}
         <div ref={endRef} />
       </div>
+
+      {/* Pending preview confirm bar */}
+      {pending && (
+        <div className="px-3 py-2.5 bg-gradient-to-r from-green-500/20 to-emerald-500/10 border-t border-green-500/40" data-testid="pending-confirm-bar">
+          <div className="flex items-center gap-2 mb-1.5">
+            <Check className="w-4 h-4 text-green-400" />
+            <span className="text-xs font-bold text-green-300">معاينة فقط — هل أنت متأكد؟</span>
+          </div>
+          <div className="flex gap-1.5">
+            <button
+              onClick={onConfirm}
+              disabled={loading}
+              className="flex-1 px-3 py-2 bg-gradient-to-r from-green-500 to-emerald-500 rounded-lg text-black text-xs font-bold disabled:opacity-50 flex items-center justify-center gap-1"
+              data-testid="confirm-pending-btn"
+            ><Check className="w-3.5 h-3.5" />اعتمد</button>
+            <button
+              onClick={onCancel}
+              disabled={loading}
+              className="px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-bold disabled:opacity-50"
+              data-testid="cancel-pending-btn"
+            >جرّب غيره</button>
+          </div>
+        </div>
+      )}
 
       {/* Inline Step Picker */}
       {stepMeta && stepId !== 'done' && (
@@ -535,6 +557,76 @@ function LibraryModal({ projects, onOpen, onDelete, onClose }) {
 }
 
 /* ================================================================
+   OVERRIDE BUILDER — compute theme/section override for live preview
+   ================================================================ */
+const VARIANT_MAP = {
+  classic:  { primary: '#D4AF37', secondary: '#1a1f3a', accent: '#8B0000' },
+  modern:   { primary: '#3B82F6', secondary: '#0f172a', accent: '#22D3EE' },
+  warm:     { primary: '#F59E0B', secondary: '#18181b', accent: '#EF4444' },
+  luxury:   { primary: '#D4AF37', secondary: '#0a0a0a', accent: '#B8860B', background: '#0a0a0a' },
+  dark_pro: { primary: '#06B6D4', secondary: '#020617', accent: '#F59E0B', background: '#020617' },
+  nature:   { primary: '#10B981', secondary: '#064e3b', accent: '#F59E0B' },
+  pastel:   { primary: '#A78BFA', secondary: '#FDF2F8', accent: '#F472B6', background: '#FDF2F8', text: '#581c87' },
+  bold:     { primary: '#DC2626', secondary: '#18181b', accent: '#FBBF24' },
+};
+
+const DASH_ICONS = { orders: '📦', customers: '👥', products: '🏷️', analytics: '📊', messages: '💬', reports: '📈', users: '🔐', settings: '⚙️', phone: '📞', email: '📧', calendar: '📅', inventory: '📋', payments: '💳', reviews: '⭐' };
+const DASH_LABELS = { orders: 'الطلبات', customers: 'العملاء', products: 'المنتجات', analytics: 'الإحصائيات', messages: 'الرسائل', reports: 'التقارير', users: 'المستخدمون', settings: 'الإعدادات', phone: 'رقم الجوال', email: 'البريد', calendar: 'التقويم', inventory: 'المخزون', payments: 'المدفوعات', reviews: 'التقييمات' };
+
+function buildOverrides(step, value, project) {
+  const theme_override = {};
+  let sections_override = null;
+  const sections = project?.sections || [];
+
+  if (step === 'variant') {
+    const vmap = { classic: VARIANT_MAP.classic, modern: VARIANT_MAP.modern, warm: VARIANT_MAP.warm, luxury: VARIANT_MAP.luxury, dark_pro: VARIANT_MAP.dark_pro, nature: VARIANT_MAP.nature, pastel: VARIANT_MAP.pastel, bold: VARIANT_MAP.bold };
+    Object.assign(theme_override, vmap[value] || {});
+  } else if (step === 'buttons') {
+    theme_override.radius = value;
+  } else if (step === 'colors') {
+    Object.assign(theme_override, VARIANT_MAP[value] || {});
+  } else if (step === 'typography') {
+    theme_override.font = value;
+  } else if (step === 'dashboard') {
+    // Add or update a dashboard section
+    const existing = sections.find((s) => s.type === 'dashboard');
+    if (value === 'none') {
+      sections_override = sections.filter((s) => s.type !== 'dashboard').map((s, i) => ({ ...s, order: i }));
+    } else {
+      const dashData = { layout: value, title: 'لوحة التحكم', items: existing?.data?.items || [], contact: existing?.data?.contact || {} };
+      if (existing) {
+        sections_override = sections.map((s) => s.type === 'dashboard' ? { ...s, data: { ...s.data, ...dashData } } : s);
+      } else {
+        const before_footer = sections.findIndex((s) => s.type === 'footer');
+        const insert_at = before_footer >= 0 ? before_footer : sections.length;
+        sections_override = [...sections];
+        sections_override.splice(insert_at, 0, { id: `preview-dash`, type: 'dashboard', order: insert_at, visible: true, data: dashData });
+        sections_override = sections_override.map((s, i) => ({ ...s, order: i }));
+      }
+    }
+  } else if (step === 'dashboard_items') {
+    const items = Array.isArray(value) ? value : [value];
+    const existing = sections.find((s) => s.type === 'dashboard');
+    if (existing) {
+      sections_override = sections.map((s) => s.type === 'dashboard' ? { ...s, data: { ...s.data, items } } : s);
+    } else {
+      // Create a cards dashboard
+      const before_footer = sections.findIndex((s) => s.type === 'footer');
+      const insert_at = before_footer >= 0 ? before_footer : sections.length;
+      sections_override = [...sections];
+      sections_override.splice(insert_at, 0, { id: 'preview-dash', type: 'dashboard', order: insert_at, visible: true, data: { layout: 'cards', title: 'لوحة التحكم', items } });
+      sections_override = sections_override.map((s, i) => ({ ...s, order: i }));
+    }
+  } else if (step === 'sections') {
+    // For sections step, we show a preview with only selected + footer
+    const wanted = Array.isArray(value) ? value : [value];
+    const kept = sections.filter((s) => wanted.includes(s.type) || s.type === 'footer');
+    sections_override = kept.map((s, i) => ({ ...s, order: i }));
+  }
+  return { theme_override, sections_override };
+}
+
+/* ================================================================
    MAIN STUDIO
    ================================================================ */
 export default function WebsiteStudio({ user }) {
@@ -553,6 +645,7 @@ export default function WebsiteStudio({ user }) {
   const [chatLoading, setChatLoading] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [mobileView, setMobileView] = useState('preview');
+  const [pending, setPending] = useState(null); // { step, value, html }
   const buildTimer = useRef(null);
 
   useEffect(() => {
@@ -644,8 +737,37 @@ export default function WebsiteStudio({ user }) {
       });
       const d = await r.json();
       setProject(d);
+      setPending(null);
     } catch (_) { toast.error('فشل الرد'); }
     finally { setChatLoading(false); }
+  };
+
+  // Live-preview: applies theme/section overrides WITHOUT persisting
+  const previewAnswer = async (step, value) => {
+    if (!project?.id) return;
+    // Build the override based on step
+    const overrides = buildOverrides(step, value, project);
+    try {
+      const r = await fetch(`${API}/api/websites/projects/${project.id}/build-preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authH() },
+        body: JSON.stringify(overrides),
+      });
+      const d = await r.json();
+      setPreviewHtml(d.html || '');
+      setPending({ step, value });
+    } catch (_) { /* ignore */ }
+  };
+
+  const confirmPending = async () => {
+    if (!pending) return;
+    await answerWizard(pending.value);
+  };
+
+  const cancelPending = async () => {
+    setPending(null);
+    // Refresh preview to the saved state
+    if (project) refreshPreview(project);
   };
 
   const sendChat = async (message) => {
@@ -783,8 +905,11 @@ export default function WebsiteStudio({ user }) {
                   variants={variants}
                   loading={chatLoading}
                   onSendText={sendChat}
-                  onAnswerStep={answerWizard}
+                  onAnswerStep={(v) => previewAnswer(project?.wizard?.step, v)}
                   onRequestCode={() => setShowIndependence(true)}
+                  pending={pending}
+                  onConfirm={confirmPending}
+                  onCancel={cancelPending}
                 />
               </div>
             )}

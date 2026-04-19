@@ -116,11 +116,62 @@ def _section_footer(d, theme) -> str:
     return f"""<footer class="site-footer"><div class="container"><div class="footer-brand">{_esc(d.get('brand',''))}</div><div class="footer-meta"><span>© 2026 — جميع الحقوق محفوظة</span><span>مدعوم من Zitex</span></div></div></footer>"""
 
 
+# ---- Dashboard (admin / customer panel) ----
+_DASH_ICONS = {
+    "orders": "📦", "customers": "👥", "products": "🏷️", "analytics": "📊",
+    "messages": "💬", "reports": "📈", "users": "🔐", "settings": "⚙️",
+    "phone": "📞", "email": "📧", "notifications": "🔔", "calendar": "📅",
+    "inventory": "📋", "payments": "💳", "reviews": "⭐",
+}
+_DASH_LABELS = {
+    "orders": "الطلبات", "customers": "العملاء", "products": "المنتجات", "analytics": "الإحصائيات",
+    "messages": "الرسائل", "reports": "التقارير", "users": "المستخدمون", "settings": "الإعدادات",
+    "phone": "رقم الجوال", "email": "البريد الإلكتروني", "notifications": "الإشعارات", "calendar": "التقويم",
+    "inventory": "المخزون", "payments": "المدفوعات", "reviews": "التقييمات",
+}
+
+
+def _section_dashboard(d, theme) -> str:
+    layout = d.get("layout", "cards")
+    items = d.get("items", []) or []
+    title = _esc(d.get("title", "لوحة التحكم"))
+    contact = d.get("contact", {}) or {}
+    phone_block = f'<div class="dash-contact">📞 {_esc(contact.get("phone",""))}</div>' if contact.get("phone") else ""
+    email_block = f'<div class="dash-contact">📧 {_esc(contact.get("email",""))}</div>' if contact.get("email") else ""
+
+    def _card(i):
+        icon = _DASH_ICONS.get(i, "🔷")
+        label = _DASH_LABELS.get(i, i)
+        # Random-ish but deterministic value using len of icon
+        value = len(i) * 17 + 23
+        return f'<div class="dash-card"><div class="dash-ico">{icon}</div><div class="dash-val">{value}</div><div class="dash-lbl">{_esc(label)}</div></div>'
+
+    if layout == "sidebar":
+        side = "".join(f'<div class="dash-nav-item">{_DASH_ICONS.get(i,"🔷")} <span>{_esc(_DASH_LABELS.get(i,i))}</span></div>' for i in items)
+        return f"""<section class="dashboard dash-sidebar"><div class="container"><h2>{title}</h2>
+<div class="dash-layout"><aside class="dash-side">{side or '<div class="dash-empty">لا عناصر بعد — أضفها من الشات</div>'}</aside>
+<main class="dash-main"><div class="dash-welcome"><h3>مرحباً بك 👋</h3>{phone_block}{email_block}</div>
+<div class="dash-grid">{''.join(_card(i) for i in items)}</div></main></div></div></section>"""
+
+    if layout == "tabs":
+        tabs = "".join(f'<div class="dash-tab {"active" if idx==0 else ""}">{_DASH_ICONS.get(i,"🔷")} {_esc(_DASH_LABELS.get(i,i))}</div>' for idx, i in enumerate(items))
+        return f"""<section class="dashboard dash-tabs"><div class="container"><h2>{title}</h2>
+<div class="dash-tabsbar">{tabs or '<div class="dash-empty">لا عناصر بعد</div>'}</div>
+{phone_block}{email_block}
+<div class="dash-grid">{''.join(_card(i) for i in items)}</div></div></section>"""
+
+    # Default: cards layout
+    return f"""<section class="dashboard dash-cards"><div class="container"><h2>{title}</h2>
+{phone_block}{email_block}
+<div class="dash-grid">{''.join(_card(i) for i in items) or '<div class="dash-empty">اختر ما تريده في لوحة التحكم من الشات</div>'}</div></div></section>"""
+
+
 RENDERERS = {
     "hero": _section_hero, "features": _section_features, "about": _section_about,
     "products": _section_products, "menu": _section_menu, "gallery": _section_gallery,
     "testimonials": _section_testimonials, "team": _section_team, "pricing": _section_pricing,
     "faq": _section_faq, "contact": _section_contact, "cta": _section_cta, "footer": _section_footer,
+    "dashboard": _section_dashboard,
 }
 
 
@@ -239,6 +290,28 @@ img{{max-width:100%;display:block;border-radius:{r}}}
 .site-footer .container{{display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px}}
 .footer-brand{{font-weight:900;color:{p}}}
 .footer-meta{{display:flex;gap:20px;opacity:.6;font-size:13px}}
+
+/* DASHBOARD */
+.dashboard{{background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,.05));border-top:1px solid rgba(255,255,255,.08);border-bottom:1px solid rgba(255,255,255,.08)}}
+.dash-contact{{background:rgba(255,255,255,.06);padding:10px 16px;border-radius:{r};display:inline-block;margin:4px 6px;font-weight:700}}
+.dash-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-top:20px}}
+.dash-card{{background:rgba(255,255,255,.04);padding:20px;border-radius:{r};border:1px solid rgba(255,255,255,.08);text-align:center;transition:.2s}}
+.dash-card:hover{{transform:translateY(-3px);border-color:{p}}}
+.dash-ico{{font-size:32px;margin-bottom:8px}}
+.dash-val{{font-size:26px;font-weight:900;color:{p}}}
+.dash-lbl{{font-size:13px;opacity:.7;margin-top:4px}}
+.dash-empty{{opacity:.5;text-align:center;padding:40px 10px;grid-column:1/-1}}
+/* Sidebar layout */
+.dash-layout{{display:grid;grid-template-columns:220px 1fr;gap:18px;margin-top:20px}}
+.dash-side{{background:rgba(0,0,0,.25);padding:14px;border-radius:{r};border:1px solid rgba(255,255,255,.08)}}
+.dash-nav-item{{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;margin-bottom:4px;transition:.2s}}
+.dash-nav-item:hover{{background:rgba(255,255,255,.06)}}
+.dash-welcome{{background:linear-gradient(135deg,{p}22,{a}22);padding:20px;border-radius:{r};margin-bottom:14px}}
+/* Tabs layout */
+.dash-tabsbar{{display:flex;gap:6px;overflow-x:auto;padding:6px 0;margin-bottom:16px;border-bottom:1px solid rgba(255,255,255,.1)}}
+.dash-tab{{padding:10px 18px;border-radius:{r};background:rgba(255,255,255,.05);cursor:pointer;font-weight:700;white-space:nowrap;transition:.2s}}
+.dash-tab.active{{background:{p};color:{s}}}
+@media (max-width:768px){{.dash-layout{{grid-template-columns:1fr}}}}
 
 @media (max-width:768px){{
   .hero-split .container,.about-layout{{grid-template-columns:1fr}}

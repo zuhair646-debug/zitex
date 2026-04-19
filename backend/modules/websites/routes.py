@@ -33,6 +33,11 @@ class WizardChatIn(BaseModel):
     message: str
 
 
+class BuildPreviewIn(BaseModel):
+    theme_override: Optional[Dict[str, Any]] = None
+    sections_override: Optional[List[Dict[str, Any]]] = None
+
+
 def _iso_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -203,6 +208,18 @@ def register_routes(app, database, auth_dep):
         if not p:
             raise HTTPException(404, "Project not found")
         return {"html": render_website_to_html(p), "project_id": project_id}
+
+    # Preview with un-persisted theme / section overrides (used for live-before-confirm)
+    @r.post("/projects/{project_id}/build-preview")
+    async def _p_build_preview(project_id: str, body: BuildPreviewIn, current_user: dict = Depends(auth_dep)):
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "Project not found")
+        theme = {**(p.get("theme") or {}), **(body.theme_override or {})}
+        sections = body.sections_override if body.sections_override is not None else p.get("sections")
+        return {"html": render_website_to_html({**p, "theme": theme, "sections": sections})}
 
     # ---------------- Variant apply ----------------
     class ApplyVariantIn(BaseModel):

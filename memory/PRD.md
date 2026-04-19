@@ -29,16 +29,17 @@
 - `ai_service.py` — consultant priority-aware + directives: advance/apply_theme/apply_button/apply_font/inject_css/add_section/fill_section/patch_section/remove_section/scaffold/custom_feature
 - `routes.py` — 20+ endpoint
 
-### Categories & Layouts:
-- 🍽️ مطاعم (3 تصاميم: كلاسيكي، عصري، طعام شارع)
-- ☕ كوفي شوب (2 تصاميم: دافئ، مختص حديث)
-- 🛍️ متاجر (2 تصاميم: عام، أزياء)
-- 💈 حلاقة (2 تصاميم: كلاسيكي، عصري)
-- 🐱 قطط وحيوانات (2 تصاميم: متجر قطط، حيوانات أليفة)
-- 🏥 عيادات (2 تصاميم: أسنان، عامة)
-- 🔧 سباكة (1 تصميم: خدمات سبّاك)
-- ⚡ كهرباء (1 تصميم: خدمات كهرباء)
-- 🏢 شركات، 🎨 بورتفوليو، 💻 SaaS، ✨ فارغ/مخصّص
+### Categories & Layouts (Feb 2026 — 20+ designs per category via procedural multiplication):
+- كل فئة: base layouts × 10 style variants × 2 hero layouts = 21-63 تصميم فريد
+- 🍽️ مطاعم (63)، ☕ كوفي (42)، 🛍️ متاجر (42)، 💈 حلاقة (42)، 🐱 قطط (42)، 🏥 عيادات (42)
+- 🔧 سباكة (21)، ⚡ كهرباء (21)، 🏢 شركات (21)، 🎨 بورتفوليو (21)، 💻 SaaS (21)، ✨ مخصّص (21)
+- **المجموع**: 399 تصميم
+
+### Live-Before-Commit UX (الجديد):
+- كل ضغطة رقاقة (لون/خط/زر/نمط) → `POST /build-preview` بتحديث مؤقت → المعاينة تتحدّث لايف
+- Pending Confirm Bar ظاهر مع "اعتمد" (يحفظ) و "جرّب غيره" (يلغي)
+- Multi-select: كل toggle يحدّث المعاينة فوراً
+- Dashboard: عند اختيار Layout (cards/sidebar/tabs) يظهر كقسم لايف + toggle عناصر يُحدّثها
 
 ### Frontend (`/frontend/src/pages/websites/WebsiteStudio.js`):
 تخطيط جديد محسَّن (Feb 2026):
