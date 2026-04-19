@@ -378,6 +378,45 @@ def _section_dashboard(d, theme) -> str:
 <div class="dp-cards-grid">{panels}</div></section>"""
 
 
+def _section_video(d, theme) -> str:
+    url = _esc(d.get("url", "https://www.youtube.com/embed/dQw4w9WgXcQ"))
+    return f"""<section class="video-sec" id="video" data-hl="video"><div class="container"><h2>{_esc(d.get('title','شاهد قصتنا'))}</h2><div class="video-frame"><iframe src="{url}" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe></div></div></section>"""
+
+
+def _section_newsletter(d, theme) -> str:
+    return f"""<section class="newsletter-sec" id="newsletter" data-hl="newsletter"><div class="container nl-inner"><div><h2>{_esc(d.get('title','اشترك في نشرتنا'))}</h2><p>{_esc(d.get('subtitle','خصومات حصرية وعروض أولاً'))}</p></div><form class="nl-form"><input type="email" placeholder="بريدك الإلكتروني"/><button class="btn btn-primary">اشترك</button></form></div></section>"""
+
+
+def _section_stats_band(d, theme) -> str:
+    items = d.get("items", [])
+    cards = "".join(f'<div class="sb-item"><div class="sb-val">{_esc(i.get("value",""))}</div><div class="sb-lbl">{_esc(i.get("label",""))}</div></div>' for i in items)
+    return f"""<section class="stats-band" id="stats_band" data-hl="stats_band"><div class="container"><h2>{_esc(d.get('title',''))}</h2><div class="sb-grid">{cards}</div></div></section>"""
+
+
+def _floating_widgets(theme: Dict[str, Any]) -> str:
+    extras = theme.get("extras", []) or []
+    html = ""
+    if "announce_bar" in extras:
+        html += '<div class="zx-announce">🎉 عرض محدود: خصم 20% على أول طلب — استخدم كوبون WELCOME20</div>'
+    if "sticky_phone" in extras:
+        html += '<a href="tel:+966500000000" class="zx-sticky-phone" data-hl="extra-phone">📞 اتصل: 0500000000</a>'
+    if "whatsapp_float" in extras:
+        html += '<a href="https://wa.me/966500000000" class="zx-whatsapp" data-hl="extra-whatsapp" target="_blank">💬</a>'
+    if "scroll_top" in extras:
+        html += '<button class="zx-scroll-top" onclick="window.scrollTo({top:0,behavior:\'smooth\'})" data-hl="extra-scroll">⬆</button>'
+    if "countdown" in extras:
+        html += '<div class="zx-countdown" data-hl="extra-countdown">⏰ ينتهي العرض خلال: <span class="zx-cd-val">23:45:12</span></div>'
+    if "rating_widget" in extras:
+        html += '<div class="zx-rating" data-hl="extra-rating"><span class="zx-stars">★★★★★</span><div class="zx-rtx">4.9 من 5 · 2,450 تقييم</div></div>'
+    if "social_bar" in extras:
+        html += '<div class="zx-social" data-hl="extra-social"><a>📘</a><a>📸</a><a>🐦</a><a>🎬</a></div>'
+    if "trust_badges" in extras:
+        html += '<div class="zx-trust" data-hl="extra-trust"><span>🔒 دفع آمن</span><span>✅ ضمان جودة</span><span>🚚 توصيل سريع</span><span>💳 فيزا/مدى</span></div>'
+    if "live_chat" in extras:
+        html += '<div class="zx-chat" data-hl="extra-chat"><div class="zx-chat-head">💬 محادثة فورية</div><div class="zx-chat-body">أهلاً! كيف يمكننا مساعدتك؟</div></div>'
+    return html
+
+
 RENDERERS = {
     "hero": _section_hero, "features": _section_features, "about": _section_about,
     "products": _section_products, "menu": _section_menu, "gallery": _section_gallery,
@@ -388,6 +427,9 @@ RENDERERS = {
     "process_steps": _section_process_steps,
     "reservation": _section_reservation,
     "quote": _section_quote,
+    "video": _section_video,
+    "newsletter": _section_newsletter,
+    "stats_band": _section_stats_band,
 }
 
 
@@ -513,6 +555,44 @@ img{{max-width:100%;display:block;border-radius:{r}}}
   .ps-arrow{{transform:rotate(-90deg)}}
   .tl-line::before{{right:30px}}
   .tl-node{{grid-template-columns:60px 30px 1fr}}
+}}
+
+/* VIDEO / NEWSLETTER / STATS_BAND */
+.video-sec{{padding:60px 0;text-align:center}}
+.video-frame{{max-width:880px;margin:20px auto;aspect-ratio:16/9;border-radius:{r};overflow:hidden;box-shadow:0 40px 80px rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.08)}}
+.video-frame iframe{{width:100%;height:100%;border:0}}
+.newsletter-sec{{padding:60px 0;background:linear-gradient(135deg,{p}22,{a}22)}}
+.nl-inner{{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:center}}
+.nl-form{{display:flex;gap:8px}}
+.nl-form input{{flex:1;padding:14px 18px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:{r};color:inherit;font-family:inherit;font-size:14px}}
+.stats-band{{padding:70px 0;background:linear-gradient(135deg,{p}22,{a}11);text-align:center}}
+.sb-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:20px;margin-top:24px}}
+.sb-item{{padding:20px;background:rgba(255,255,255,.04);border-radius:{r};border:1px solid rgba(255,255,255,.08)}}
+.sb-val{{font-size:36px;font-weight:900;color:{p}}}
+.sb-lbl{{font-size:13px;opacity:.75;margin-top:4px}}
+
+/* FLOATING WIDGETS */
+.zx-announce{{position:sticky;top:0;left:0;right:0;background:linear-gradient(90deg,{p},{a});color:{s};padding:10px 16px;text-align:center;font-size:13px;font-weight:700;z-index:100}}
+.zx-sticky-phone{{position:fixed;bottom:20px;left:20px;background:{p};color:{s};padding:12px 20px;border-radius:99px;font-weight:900;box-shadow:0 10px 30px rgba(0,0,0,.4);text-decoration:none;z-index:90;font-size:14px;animation:zxPop .4s}}
+.zx-whatsapp{{position:fixed;bottom:20px;right:20px;width:56px;height:56px;border-radius:50%;background:#25D366;color:#fff;display:flex;align-items:center;justify-content:center;font-size:28px;text-decoration:none;box-shadow:0 10px 30px rgba(0,0,0,.4);z-index:90;animation:zxPop .4s}}
+.zx-scroll-top{{position:fixed;bottom:90px;right:20px;width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.2);color:#fff;cursor:pointer;font-size:18px;z-index:90}}
+.zx-countdown{{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.85);color:{p};padding:10px 22px;border-radius:99px;font-weight:700;font-size:13px;z-index:95;border:1px solid {p}44}}
+.zx-cd-val{{color:{p};font-family:monospace;margin-right:6px}}
+.zx-rating{{position:fixed;top:80px;right:20px;background:rgba(255,255,255,.08);backdrop-filter:blur(10px);padding:10px 14px;border-radius:{r};border:1px solid rgba(255,255,255,.1);z-index:85;text-align:center}}
+.zx-stars{{color:#fbbf24;font-size:16px}}
+.zx-rtx{{font-size:11px;opacity:.75;margin-top:2px}}
+.zx-social{{position:fixed;right:10px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:8px;z-index:85}}
+.zx-social a{{width:38px;height:38px;background:rgba(255,255,255,.1);border-radius:50%;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:18px;transition:.2s}}
+.zx-social a:hover{{background:{p};transform:scale(1.1)}}
+.zx-trust{{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;padding:14px;background:rgba(255,255,255,.03);border-top:1px solid rgba(255,255,255,.06);border-bottom:1px solid rgba(255,255,255,.06)}}
+.zx-trust span{{font-size:12px;padding:6px 12px;background:rgba(255,255,255,.06);border-radius:99px;font-weight:700}}
+.zx-chat{{position:fixed;bottom:20px;right:20px;width:280px;background:rgba(14,20,40,.95);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.15);border-radius:{r};z-index:95;overflow:hidden;animation:zxPop .4s}}
+.zx-chat-head{{background:{p};color:{s};padding:10px 14px;font-weight:900;font-size:13px}}
+.zx-chat-body{{padding:14px;font-size:13px}}
+@keyframes zxPop{{from{{opacity:0;transform:scale(.8)}}to{{opacity:1;transform:scale(1)}}}}
+@media (max-width:768px){{
+  .nl-inner{{grid-template-columns:1fr}}
+  .zx-rating,.zx-social{{display:none}}
 }}
 .hero p{{font-size:18px;opacity:.85;margin-bottom:24px;max-width:560px}}
 
@@ -744,6 +824,7 @@ def render_website_to_html(project: Dict[str, Any]) -> str:
 <style>{theme.get('custom_css','')}</style>
 </head>
 <body>
+{_floating_widgets(theme)}
 {''.join(body_parts)}
 </body>
 </html>"""

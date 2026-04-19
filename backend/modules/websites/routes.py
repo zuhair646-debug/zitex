@@ -96,6 +96,21 @@ def register_routes(app, database, auth_dep):
         project = {"name": L["name"], "theme": theme, "sections": L["sections"], "meta": {"title": L["name"]}}
         return {"html": render_website_to_html(project)}
 
+    # DNA Mixer — random layout for a category
+    @r.get("/categories/{category_id}/mix")
+    async def _c_mix(category_id: str):
+        import random
+        layouts = list_layouts(category_id)
+        if not layouts:
+            raise HTTPException(404, "No layouts")
+        L = random.choice(layouts)
+        theme = dict(L.get("theme") or {})
+        if L.get("custom_css"):
+            theme["custom_css"] = L["custom_css"]
+        project = {"name": L["name"], "theme": theme, "sections": L["sections"], "meta": {"title": L["name"]}}
+        return {"layout": {"id": L["id"], "name": L["name"], "icon": L.get("icon", "")},
+                "html": render_website_to_html(project)}
+
     @r.get("/templates/{template_id}/variants")
     async def _t_variants(template_id: str):
         return {"variants": list_variants_for_template(template_id)}
@@ -434,6 +449,34 @@ def register_routes(app, database, auth_dep):
         return d
 
     # ---------------- Independence placeholder (returns guide only, no code) ----------------
+    @r.post("/projects/{project_id}/approve")
+    async def _p_approve(project_id: str, current_user: dict = Depends(auth_dep)):
+        from datetime import datetime, timezone
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "Project not found")
+        now = datetime.now(timezone.utc).isoformat()
+        await database.website_projects.update_one(
+            {"id": project_id},
+            {"$set": {"status": "approved", "approved_at": now, "updated_at": now}}
+        )
+        return {"ok": True, "status": "approved", "approved_at": now}
+
+    @r.post("/projects/{project_id}/unapprove")
+    async def _p_unapprove(project_id: str, current_user: dict = Depends(auth_dep)):
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "Project not found")
+        await database.website_projects.update_one(
+            {"id": project_id},
+            {"$set": {"status": "draft", "updated_at": _iso_now()}}
+        )
+        return {"ok": True, "status": "draft"}
+
     @r.post("/projects/{project_id}/independence/request")
     async def _independence(project_id: str, current_user: dict = Depends(auth_dep)):
         p = await database.website_projects.find_one(

@@ -35,6 +35,8 @@ class WebsiteProject(BaseModel):
     meta: Dict[str, Any] = Field(default_factory=dict)   # site title, description, og image
     chat: List[Dict[str, Any]] = Field(default_factory=list)   # conversational history
     wizard: Optional[Dict[str, Any]] = None   # consultative wizard state
+    status: Optional[str] = None   # draft | approved
+    approved_at: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 

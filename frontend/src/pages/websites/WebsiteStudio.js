@@ -47,6 +47,7 @@ function LayoutBrowser({ category, layouts, onBack, onConfirm, loading }) {
   const [selected, setSelected] = useState(layouts[0] || null);
   const [html, setHtml] = useState('');
   const [htmlLoading, setHtmlLoading] = useState(false);
+  const [mixing, setMixing] = useState(false);
 
   useEffect(() => { if (layouts?.length && !selected) setSelected(layouts[0]); }, [layouts, selected]);
 
@@ -56,6 +57,23 @@ function LayoutBrowser({ category, layouts, onBack, onConfirm, loading }) {
     fetch(`${API}/api/websites/categories/${category.id}/layouts/${selected.id}/preview-html`)
       .then((r) => r.json()).then((d) => setHtml(d.html || '')).finally(() => setHtmlLoading(false));
   }, [category?.id, selected?.id]);
+
+  const mix = async () => {
+    if (!category?.id) return;
+    setMixing(true);
+    try {
+      const r = await fetch(`${API}/api/websites/categories/${category.id}/mix`);
+      const d = await r.json();
+      if (d.layout) {
+        // Find the full layout object from `layouts` to include theme
+        const found = layouts.find((L) => L.id === d.layout.id);
+        setSelected(found || { ...d.layout, theme: {} });
+        setHtml(d.html || '');
+        toast.success(`🎲 تم اقتراح: ${d.layout.name}`);
+      }
+    } catch (_) { toast.error('فشل الخلط'); }
+    finally { setMixing(false); }
+  };
 
   return (
     <div className="flex-1 flex flex-col min-h-0" data-testid="layout-browser">
@@ -68,6 +86,13 @@ function LayoutBrowser({ category, layouts, onBack, onConfirm, loading }) {
         <span className="font-bold text-sm md:text-base">{category?.name}</span>
         <span className="text-xs opacity-60">• {layouts.length} تصميم</span>
         <div className="flex-1" />
+        <button
+          onClick={mix}
+          disabled={mixing || loading}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-500/30 to-pink-500/30 hover:from-purple-500/50 hover:to-pink-500/50 border border-purple-400/40 rounded-lg text-xs font-bold disabled:opacity-50"
+          title="اخلط تصميم عشوائي مبتكر"
+          data-testid="mix-dna-btn"
+        >{mixing ? <RefreshCw className="w-4 h-4 animate-spin" /> : '🎲'} اخلط تصميم</button>
         <button
           onClick={() => selected && onConfirm(selected)}
           disabled={!selected || loading}
@@ -527,10 +552,38 @@ function IndependenceModal({ onClose }) {
 /* ================================================================
    LIBRARY MODAL (compact)
    ================================================================ */
-function LibraryModal({ projects, onOpen, onDelete, onClose }) {
+function LibraryModal({ projects, onOpen, onDelete, onDuplicate, onApprove, onClose }) {
+  const approved = projects.filter((p) => p.status === 'approved');
+  const drafts = projects.filter((p) => p.status !== 'approved');
+
+  const Card = ({ p, isApproved }) => (
+    <div className={`p-4 rounded-xl border relative ${isApproved ? 'bg-gradient-to-br from-green-500/10 to-emerald-500/5 border-green-500/40' : 'bg-white/5 border-white/10'}`} data-testid={`library-project-${p.id}`}>
+      {isApproved && (
+        <span className="absolute top-2 left-2 text-[10px] bg-green-500 text-black font-bold px-2 py-0.5 rounded-full">✓ معتمد</span>
+      )}
+      <div className="font-bold mb-1 truncate pr-6">{p.name}</div>
+      <div className="text-xs text-white/50 mb-3">{p.template} • {(p.sections || []).length} أقسام{p.approved_at ? ` • ${new Date(p.approved_at).toLocaleDateString('ar')}` : ''}</div>
+      <div className="grid grid-cols-2 gap-1.5">
+        <button onClick={() => onOpen(p.id)} className="px-2 py-1.5 bg-yellow-500/20 hover:bg-yellow-500/40 rounded text-xs font-bold" data-testid={`open-${p.id}`}>✏️ تعديل</button>
+        <button onClick={() => onDuplicate(p.id)} className="px-2 py-1.5 bg-white/10 hover:bg-white/20 rounded text-xs font-bold">📋 نسخ</button>
+        {isApproved ? (
+          <>
+            <button disabled className="px-2 py-1.5 bg-blue-500/10 text-blue-300 rounded text-xs font-bold opacity-60 cursor-not-allowed">📱 تطبيق جوال (قريباً)</button>
+            <button className="px-2 py-1.5 bg-purple-500/20 hover:bg-purple-500/40 rounded text-xs font-bold" onClick={() => toast.info('سيتم التواصل لتفعيل الدعم والصيانة')}>🛠️ دعم وصيانة</button>
+          </>
+        ) : (
+          <>
+            <button onClick={() => onApprove(p.id)} className="px-2 py-1.5 bg-green-500/20 hover:bg-green-500/40 rounded text-xs font-bold" data-testid={`approve-${p.id}`}>✅ اعتماد</button>
+            <button onClick={() => onDelete(p.id)} className="px-2 py-1.5 bg-red-600/20 hover:bg-red-600/40 rounded text-xs"><Trash2 className="w-3 h-3 inline" /> حذف</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="fixed inset-0 bg-black/80 z-[55] flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-[#0e1128] rounded-2xl max-w-4xl w-full max-h-[80vh] overflow-y-auto border border-yellow-500/30 p-5" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-[#0e1128] rounded-2xl max-w-5xl w-full max-h-[85vh] overflow-y-auto border border-yellow-500/30 p-5" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold">مواقعي ({projects.length})</h2>
           <button onClick={onClose} className="p-1 hover:bg-white/10 rounded"><X className="w-5 h-5" /></button>
@@ -538,18 +591,26 @@ function LibraryModal({ projects, onOpen, onDelete, onClose }) {
         {projects.length === 0 ? (
           <div className="text-center py-12 text-white/50">لم تنشئ أي موقع بعد</div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {projects.map((p) => (
-              <div key={p.id} className="bg-white/5 hover:bg-white/10 p-4 rounded-xl border border-white/10" data-testid={`library-project-${p.id}`}>
-                <div className="font-bold mb-1 truncate">{p.name}</div>
-                <div className="text-xs text-white/50 mb-3">{p.template} • {(p.sections || []).length} أقسام</div>
-                <div className="flex gap-2">
-                  <button onClick={() => onOpen(p.id)} className="flex-1 px-3 py-1.5 bg-yellow-500/20 hover:bg-yellow-500/40 rounded text-xs font-bold">فتح</button>
-                  <button onClick={() => onDelete(p.id)} className="px-3 py-1.5 bg-red-600/20 hover:bg-red-600/40 rounded text-xs"><Trash2 className="w-3 h-3" /></button>
+          <>
+            {approved.length > 0 && (
+              <div className="mb-5">
+                <div className="text-sm font-bold text-green-400 mb-2 flex items-center gap-2">
+                  ✓ المشاريع المعتمدة ({approved.length})
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {approved.map((p) => <Card key={p.id} p={p} isApproved />)}
                 </div>
               </div>
-            ))}
-          </div>
+            )}
+            {drafts.length > 0 && (
+              <div>
+                <div className="text-sm font-bold text-white/70 mb-2">مسوّدات ({drafts.length})</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {drafts.map((p) => <Card key={p.id} p={p} isApproved={false} />)}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -607,6 +668,34 @@ function buildOverrides(step, value, project) {
     // For sections step, we show a preview with only selected + footer
     const wanted = Array.isArray(value) ? value : [value];
     const kept = sections.filter((s) => wanted.includes(s.type) || s.type === 'footer');
+    sections_override = kept.map((s, i) => ({ ...s, order: i }));
+  } else if (step === 'extras') {
+    // Apply extras to theme (floating widgets)
+    const wanted = Array.isArray(value) ? value : [value];
+    theme_override.extras = wanted;
+    // Also add/remove section-extras (video, newsletter, stats_band)
+    const sectionMap = {
+      video_section:   { type: 'video', data: { title: 'شاهد قصتنا', url: 'https://www.youtube.com/embed/dQw4w9WgXcQ' } },
+      newsletter:      { type: 'newsletter', data: { title: 'اشترك في نشرتنا', subtitle: 'خصومات حصرية' } },
+      stats_band:      { type: 'stats_band', data: { title: 'أرقام نفتخر بها', items: [
+        { label: 'عميل سعيد', value: '5,000+' }, { label: 'طلب', value: '12,400' },
+        { label: 'سنوات خبرة', value: '10' }, { label: 'تقييم', value: '4.9★' },
+      ] } },
+    };
+    const wantedTypes = new Set();
+    wanted.forEach((e) => { if (sectionMap[e]) wantedTypes.add(sectionMap[e].type); });
+    const kept = sections.filter((s) => !['video', 'newsletter', 'stats_band'].includes(s.type) || wantedTypes.has(s.type));
+    const existingTypes = new Set(kept.map((s) => s.type));
+    const footerIdx = kept.findIndex((s) => s.type === 'footer');
+    const insertAt = footerIdx >= 0 ? footerIdx : kept.length;
+    const toInsert = [];
+    wanted.forEach((e) => {
+      const m = sectionMap[e];
+      if (m && !existingTypes.has(m.type)) {
+        toInsert.push({ id: `preview-${m.type}`, type: m.type, order: 0, visible: true, data: m.data });
+      }
+    });
+    kept.splice(insertAt, 0, ...toInsert);
     sections_override = kept.map((s, i) => ({ ...s, order: i }));
   }
   return { theme_override, sections_override };
@@ -749,6 +838,23 @@ export default function WebsiteStudio({ user }) {
         if (step === 'dashboard_items' && Array.isArray(value) && value.length > 0) {
           const last = value[value.length - 1];
           target = doc.getElementById(`panel-${last}`);
+        } else if (step === 'extras' && Array.isArray(value) && value.length > 0) {
+          const last = value[value.length - 1];
+          const extraMap = {
+            video_section: '[data-hl="video"]',
+            newsletter: '[data-hl="newsletter"]',
+            stats_band: '[data-hl="stats_band"]',
+            sticky_phone: '[data-hl="extra-phone"]',
+            whatsapp_float: '[data-hl="extra-whatsapp"]',
+            scroll_top: '[data-hl="extra-scroll"]',
+            countdown: '[data-hl="extra-countdown"]',
+            rating_widget: '[data-hl="extra-rating"]',
+            social_bar: '[data-hl="extra-social"]',
+            trust_badges: '[data-hl="extra-trust"]',
+            live_chat: '[data-hl="extra-chat"]',
+          };
+          const sel = extraMap[last];
+          if (sel) target = doc.querySelector(sel);
         } else {
           const sel = SCROLL_MAP[step];
           if (sel) target = doc.querySelector(sel);
@@ -815,6 +921,26 @@ export default function WebsiteStudio({ user }) {
       setProject(d);
       setShowLibrary(false);
     } catch (_) { toast.error('فشل الفتح'); }
+  };
+
+  const duplicateProject = async (id) => {
+    try {
+      const r = await fetch(`${API}/api/websites/projects/${id}/duplicate`, { method: 'POST', headers: authH() });
+      const d = await r.json();
+      toast.success('تم نسخ المشروع');
+      await loadProjects();
+      setProject(d);
+      setShowLibrary(false);
+    } catch (_) { toast.error('فشل النسخ'); }
+  };
+
+  const approveProject = async (id) => {
+    try {
+      await fetch(`${API}/api/websites/projects/${id}/approve`, { method: 'POST', headers: authH() });
+      toast.success('✅ تم اعتماد المشروع رسمياً');
+      await loadProjects();
+      if (project?.id === id) setProject({ ...project, status: 'approved' });
+    } catch (_) { toast.error('فشل الاعتماد'); }
   };
 
   const deleteProject = async (id) => {
@@ -934,6 +1060,16 @@ export default function WebsiteStudio({ user }) {
               {logoGenerating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-purple-300" />}
               <span className="hidden md:inline text-xs">{logoGenerating ? 'جاري...' : 'اعمل لوقو'}</span>
             </button>
+            {project && project.status !== 'approved' && (
+              <button onClick={() => approveProject(project.id)} className="p-2 md:px-3 md:py-2 bg-gradient-to-r from-green-500/30 to-emerald-500/30 hover:from-green-500/50 hover:to-emerald-500/50 border border-green-400/40 rounded-lg flex items-center gap-1.5" data-testid="approve-btn" title="اعتماد نهائي">
+                <Check className="w-4 h-4 text-green-300" /><span className="hidden md:inline text-xs font-bold">اعتماد</span>
+              </button>
+            )}
+            {project?.status === 'approved' && (
+              <span className="px-2 md:px-3 py-2 bg-green-500 text-black rounded-lg text-xs font-bold flex items-center gap-1" data-testid="approved-badge">
+                <Check className="w-4 h-4" /><span className="hidden md:inline">معتمد</span>
+              </span>
+            )}
             {project?.theme?.logo_url && (
               <button onClick={removeLogo} className="p-2 bg-white/10 hover:bg-red-500/20 rounded-lg" title="إزالة اللوقو" data-testid="remove-logo-btn"><X className="w-4 h-4" /></button>
             )}
@@ -1008,7 +1144,7 @@ export default function WebsiteStudio({ user }) {
         )
       )}
 
-      {showLibrary && <LibraryModal projects={projects} onOpen={openProject} onDelete={deleteProject} onClose={() => setShowLibrary(false)} />}
+      {showLibrary && <LibraryModal projects={projects} onOpen={openProject} onDelete={deleteProject} onDuplicate={duplicateProject} onApprove={approveProject} onClose={() => setShowLibrary(false)} />}
       {showIndependence && <IndependenceModal onClose={() => setShowIndependence(false)} />}
     </div>
   );

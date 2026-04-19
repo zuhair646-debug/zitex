@@ -186,9 +186,44 @@ STEPS: List[Dict[str, Any]] = [
         "applies": "payment_methods",
     },
     {
+        "id": "extras",
+        "title": "إضافات حيّة",
+        "question": "✨ هنا تختار الإضافات التفاعلية — كل اختيار يظهر فوراً كعنصر حيّ في موقعك!",
+        "chips": [
+            {"id": "sticky_phone",  "label": "📞 زر جوال لاصق"},
+            {"id": "whatsapp_float","label": "💬 واتساب عائم"},
+            {"id": "announce_bar",  "label": "📢 شريط إعلاني علوي"},
+            {"id": "countdown",     "label": "⏰ عدّاد تنازلي"},
+            {"id": "video_section", "label": "🎬 قسم فيديو تعريفي"},
+            {"id": "newsletter",    "label": "📧 نموذج اشتراك"},
+            {"id": "rating_widget", "label": "⭐ شارة التقييم"},
+            {"id": "social_bar",    "label": "📱 أيقونات التواصل"},
+            {"id": "trust_badges",  "label": "🛡️ شارات ثقة"},
+            {"id": "scroll_top",    "label": "⬆️ زر العودة للأعلى"},
+            {"id": "live_chat",     "label": "💬 محادثة فورية"},
+            {"id": "stats_band",    "label": "📊 شريط إحصائيات"},
+        ],
+        "multi": True,
+        "render": "chips",
+        "applies": "extras",
+    },
+    {
+        "id": "final_confirm",
+        "title": "المراجعة النهائية",
+        "question": "🎉 تمّت كل المراحل! قبل الاعتماد الرسمي — هل تريد إضافة أي شيء آخر للموقع؟ تصفّح المعاينة جيداً.",
+        "chips": [
+            {"id": "approve", "label": "✅ اعتماد نهائي", "value": "approve"},
+            {"id": "more",    "label": "➕ أحتاج إضافات أخرى", "value": "more"},
+            {"id": "redo_colors", "label": "🎨 إعادة ضبط الألوان", "value": "redo_colors"},
+            {"id": "redo_sections","label": "📋 تعديل الأقسام", "value": "redo_sections"},
+        ],
+        "render": "chips",
+        "applies": "final_confirm",
+    },
+    {
         "id": "review",
         "title": "مراجعة",
-        "question": "🎉 تمّت كل الأسئلة! راجع المعاينة على اليسار — أي تعديل اكتبه لي الآن ونطبقه مباشرة. لما تكون جاهز، اضغط 'اعتماد نهائي'.",
+        "question": "الموقع جاهز! راجع المعاينة على اليسار — أي تعديل اكتبه لي الآن.",
         "chips": [
             {"id": "approve", "label": "✅ اعتماد نهائي"},
             {"id": "change_colors", "label": "🎨 تغيير الألوان"},
@@ -318,6 +353,14 @@ def apply_answer(project: Dict[str, Any], step_id: str, value: Any) -> Dict[str,
         project = _apply_branding(project, str(value))
     elif step_id == "payment":
         ans["payment"] = value if isinstance(value, list) else [value]
+    elif step_id == "extras":
+        ans["extras"] = value if isinstance(value, list) else [value]
+        project = _apply_extras(project, ans["extras"])
+    elif step_id == "final_confirm":
+        ans["final_confirm"] = value
+        if value == "approve":
+            project["status"] = "approved"
+            project["approved_at"] = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
     elif step_id == "review":
         ans["review"] = value
 
@@ -436,4 +479,41 @@ def _apply_dashboard_items(project: Dict[str, Any], items: List[str]) -> Dict[st
         return _apply_dashboard_layout(project, "cards", {"dashboard_items": items})
     sections[idx] = {**sections[idx], "data": {**(sections[idx].get("data") or {}), "items": items}}
     project["sections"] = sections
+    return project
+
+
+def _apply_extras(project: Dict[str, Any], extras: List[str]) -> Dict[str, Any]:
+    """Store extras in theme so renderer can emit floating widgets.
+
+    Also inject visible sections for some extras (video, newsletter, stats_band).
+    """
+    import uuid as _uuid
+    theme = {**(project.get("theme") or {}), "extras": extras}
+    project["theme"] = theme
+    # Section-based extras: toggle insertion/removal
+    section_extras = {
+        "video_section":   ("video",       {"title": "شاهد قصتنا", "url": "https://www.youtube.com/embed/dQw4w9WgXcQ"}),
+        "newsletter":      ("newsletter",  {"title": "اشترك في نشرتنا", "subtitle": "خصومات حصرية وعروض أولاً"}),
+        "stats_band":      ("stats_band",  {"title": "أرقام نفتخر بها", "items": [
+            {"label": "عميل سعيد", "value": "5,000+"},
+            {"label": "طلب منفّذ", "value": "12,400"},
+            {"label": "سنوات خبرة", "value": "10"},
+            {"label": "تقييم", "value": "4.9★"},
+        ]}),
+    }
+    sections = list(project.get("sections") or [])
+    # Remove previously-inserted extra sections not currently wanted
+    wanted_types = {section_extras[e][0] for e in extras if e in section_extras}
+    sections = [s for s in sections if s.get("type") not in {"video", "newsletter", "stats_band"} or s.get("type") in wanted_types]
+    # Insert wanted ones before footer if not present
+    existing_types = {s.get("type") for s in sections}
+    footer_idx = next((i for i, s in enumerate(sections) if s.get("type") == "footer"), len(sections))
+    for e in extras:
+        if e in section_extras:
+            stype, sdata = section_extras[e]
+            if stype not in existing_types:
+                sections.insert(footer_idx, {"id": f"sec-{_uuid.uuid4().hex[:8]}", "type": stype,
+                                              "order": footer_idx, "visible": True, "data": sdata})
+                footer_idx += 1
+    project["sections"] = [{**s, "order": i} for i, s in enumerate(sections)]
     return project
