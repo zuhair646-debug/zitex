@@ -728,10 +728,46 @@ export default function WebsiteStudio({ user }) {
     finally { setChatLoading(false); }
   };
 
+  // Auto-scroll the iframe to the relevant section per wizard step + pulse highlight
+  const scrollIframeTo = useCallback((step, value) => {
+    setTimeout(() => {
+      try {
+        const iframe = document.querySelector('[data-testid="live-preview"]');
+        const doc = iframe && iframe.contentDocument;
+        if (!doc) return;
+        const SCROLL_MAP = {
+          variant:      '[data-hl="hero"]',
+          colors:       '[data-hl="hero"]',
+          buttons:      '[data-hl="btn"]',
+          typography:   '[data-hl="h1"]',
+          features:     '[data-hl="features"]',
+          branding:     '[data-hl="hero"]',
+          payment:      '[data-hl="pricing"],[data-hl="cta"]',
+          sections:     '[data-hl="features"]',
+        };
+        let target = null;
+        if (step === 'dashboard_items' && Array.isArray(value) && value.length > 0) {
+          const last = value[value.length - 1];
+          target = doc.getElementById(`panel-${last}`);
+        } else {
+          const sel = SCROLL_MAP[step];
+          if (sel) target = doc.querySelector(sel);
+        }
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          target.classList.remove('zx-pulse');
+          // Force reflow then add pulse
+          void target.offsetWidth;
+          target.classList.add('zx-pulse');
+          setTimeout(() => target.classList.remove('zx-pulse'), 1600);
+        }
+      } catch (_) { /* ignore */ }
+    }, 450);
+  }, []);
+
   // Live-preview: applies theme/section overrides WITHOUT persisting
   const previewAnswer = async (step, value) => {
     if (!project?.id) return;
-    // Build the override based on step
     const overrides = buildOverrides(step, value, project);
     try {
       const r = await fetch(`${API}/api/websites/projects/${project.id}/build-preview`, {
@@ -742,18 +778,7 @@ export default function WebsiteStudio({ user }) {
       const d = await r.json();
       setPreviewHtml(d.html || '');
       setPending({ step, value });
-      // Auto-scroll iframe to the last-added item (for dashboard_items)
-      if (step === 'dashboard_items' && Array.isArray(value) && value.length > 0) {
-        setTimeout(() => {
-          try {
-            const iframe = document.querySelector('[data-testid="live-preview"]');
-            const doc = iframe && iframe.contentDocument;
-            const last = value[value.length - 1];
-            const panel = doc && doc.getElementById(`panel-${last}`);
-            if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          } catch (_) { /* ignore cross-origin */ }
-        }, 400);
-      }
+      scrollIframeTo(step, value);
     } catch (_) { /* ignore */ }
   };
 

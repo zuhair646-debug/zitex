@@ -17,17 +17,64 @@ def _section_hero(d: Dict[str, Any], theme: Dict[str, Any]) -> str:
     link = _esc(d.get("cta_link", "#"))
     logo = theme.get("logo_url") or ""
     logo_html = f'<img src="{_esc(logo)}" class="brand-logo" alt="logo"/>' if logo else ""
+    btn = f'<a href="{link}" class="btn btn-primary" data-hl="btn">{cta}</a>' if cta else ''
     if layout == "split":
-        return f"""<section class="hero hero-split"><div class="container"><div class="hero-copy">{logo_html}<h1>{title}</h1><p>{sub}</p>{f'<a href="{link}" class="btn btn-primary">{cta}</a>' if cta else ''}</div><div class="hero-media"><img src="{img}" alt=""/></div></div></section>"""
+        return f"""<section class="hero hero-split" id="hero" data-hl="hero"><div class="container"><div class="hero-copy">{logo_html}<h1 data-hl="h1">{title}</h1><p>{sub}</p>{btn}</div><div class="hero-media"><img src="{img}" alt=""/></div></div></section>"""
     if layout == "portrait":
-        return f"""<section class="hero hero-portrait" style="background-image:linear-gradient(180deg,rgba(0,0,0,.4),rgba(0,0,0,.8)),url('{img}')"><div class="container" style="text-align:center">{logo_html}<h1>{title}</h1><p>{sub}</p>{f'<a href="{link}" class="btn btn-primary">{cta}</a>' if cta else ''}</div></section>"""
-    return f"""<section class="hero hero-full" style="background-image:linear-gradient(rgba(0,0,0,.35),rgba(0,0,0,.7)),url('{img}')"><div class="container">{logo_html}<h1>{title}</h1><p>{sub}</p>{f'<a href="{link}" class="btn btn-primary">{cta}</a>' if cta else ''}</div></section>"""
+        return f"""<section class="hero hero-portrait" id="hero" data-hl="hero" style="background-image:linear-gradient(180deg,rgba(0,0,0,.4),rgba(0,0,0,.8)),url('{img}')"><div class="container" style="text-align:center">{logo_html}<h1 data-hl="h1">{title}</h1><p>{sub}</p>{btn}</div></section>"""
+    if layout == "centered":
+        return f"""<section class="hero hero-centered" id="hero" data-hl="hero"><div class="container hero-centered-inner">{logo_html}<h1 data-hl="h1">{title}</h1><p>{sub}</p>{btn}<div class="hero-centered-media" style="background-image:url('{img}')"></div></div></section>"""
+    if layout == "magazine":
+        return f"""<section class="hero hero-magazine" id="hero" data-hl="hero"><div class="container mag-grid"><div class="mag-copy"><div class="mag-eyebrow">✦ مرحباً بكم</div>{logo_html}<h1 data-hl="h1">{title}</h1><div class="mag-divider"></div><p>{sub}</p>{btn}</div><div class="mag-frame"><img src="{img}" alt=""/><div class="mag-tag">EDITORIAL</div></div></div></section>"""
+    if layout == "boxed":
+        return f"""<section class="hero hero-boxed" id="hero" data-hl="hero" style="background-image:linear-gradient(rgba(0,0,0,.65),rgba(0,0,0,.9)),url('{img}')"><div class="hero-boxed-card">{logo_html}<h1 data-hl="h1">{title}</h1><p>{sub}</p>{btn}</div></section>"""
+    if layout == "story":
+        return f"""<section class="hero hero-story" id="hero" data-hl="hero"><div class="container"><div class="story-lead">{logo_html}<div class="story-tag">منذ 2010</div><h1 data-hl="h1">{title}</h1><p>{sub}</p>{btn}</div><div class="story-arrow">↓</div></div></section>"""
+    if layout == "form":
+        return f"""<section class="hero hero-form" id="hero" data-hl="hero" style="background-image:linear-gradient(rgba(0,0,0,.55),rgba(0,0,0,.85)),url('{img}')"><div class="container hero-form-grid"><div class="hero-form-copy">{logo_html}<h1 data-hl="h1">{title}</h1><p>{sub}</p></div><div class="hero-form-box"><h3>احجز الآن</h3><input placeholder="الاسم"/><input placeholder="رقم الجوال"/><input placeholder="التاريخ" type="date"/><button class="btn btn-primary" data-hl="btn">{cta or 'تأكيد'}</button></div></div></section>"""
+    return f"""<section class="hero hero-full" id="hero" data-hl="hero" style="background-image:linear-gradient(rgba(0,0,0,.35),rgba(0,0,0,.7)),url('{img}')"><div class="container">{logo_html}<h1 data-hl="h1">{title}</h1><p>{sub}</p>{btn}</div></section>"""
 
 
 def _section_features(d: Dict[str, Any], theme) -> str:
     items = d.get("items", [])
+    layout = d.get("layout", "grid")
+    if layout == "alt":
+        rows = ""
+        for idx, it in enumerate(items):
+            side = "feat-alt-right" if idx % 2 else "feat-alt-left"
+            rows += f"""<div class="feat-alt-row {side}"><div class="feat-alt-media"><div class="feat-alt-ico">{_esc(it.get('icon','✨'))}</div></div><div class="feat-alt-body"><div class="feat-alt-num">{idx+1:02d}</div><h3>{_esc(it.get('title',''))}</h3><p>{_esc(it.get('text',''))}</p></div></div>"""
+        return f"""<section class="features features-alt" id="features" data-hl="features"><div class="container"><h2>{_esc(d.get('title',''))}</h2>{rows}</div></section>"""
+    if layout == "horizontal":
+        cards = "".join(f'<div class="feat-h"><div class="feat-h-ico">{_esc(i.get("icon","✨"))}</div><div><h3>{_esc(i.get("title",""))}</h3><p>{_esc(i.get("text",""))}</p></div></div>' for i in items)
+        return f"""<section class="features features-h" id="features" data-hl="features"><div class="container"><h2>{_esc(d.get('title',''))}</h2><div class="feat-h-list">{cards}</div></div></section>"""
     cards = "".join(f"""<div class="feature-card"><div class="feature-icon">{_esc(i.get('icon',''))}</div><h3>{_esc(i.get('title',''))}</h3><p>{_esc(i.get('text',''))}</p></div>""" for i in items)
-    return f"""<section class="features"><div class="container"><h2>{_esc(d.get('title',''))}</h2><div class="feature-grid">{cards}</div></div></section>"""
+    return f"""<section class="features" id="features" data-hl="features"><div class="container"><h2>{_esc(d.get('title',''))}</h2><div class="feature-grid">{cards}</div></div></section>"""
+
+
+def _section_story_timeline(d, theme) -> str:
+    items = d.get("items", [])
+    nodes = "".join(
+        f'<div class="tl-node"><div class="tl-year">{_esc(i.get("year",""))}</div><div class="tl-dot"></div><div class="tl-body"><h4>{_esc(i.get("title",""))}</h4><p>{_esc(i.get("text",""))}</p></div></div>'
+        for i in items
+    ) or '<div class="tl-empty">اكتب قصتك هنا</div>'
+    return f"""<section class="story-tl" id="story" data-hl="story"><div class="container"><h2>{_esc(d.get('title','قصتنا'))}</h2><div class="tl-line">{nodes}</div></div></section>"""
+
+
+def _section_process_steps(d, theme) -> str:
+    items = d.get("items", [])
+    steps = "".join(
+        f'<div class="ps-step"><div class="ps-num">{idx+1}</div><div class="ps-body"><h4>{_esc(i.get("title",""))}</h4><p>{_esc(i.get("text",""))}</p></div></div>{("<div class=ps-arrow>←</div>" if idx < len(items)-1 else "")}'
+        for idx, i in enumerate(items)
+    ) or '<div class="ps-empty">أضف خطوات</div>'
+    return f"""<section class="process" id="process" data-hl="process"><div class="container"><h2>{_esc(d.get('title','كيف تطلب؟'))}</h2><div class="ps-list">{steps}</div></div></section>"""
+
+
+def _section_reservation(d, theme) -> str:
+    return f"""<section class="reservation" id="reservation" data-hl="reservation"><div class="container reservation-grid"><div class="res-copy"><h2>{_esc(d.get('title','احجز الآن'))}</h2><p>{_esc(d.get('subtitle','اختر الوقت المناسب واستمتع بتجربة لا تُنسى'))}</p></div><form class="res-form"><div class="res-row"><label>الاسم</label><input placeholder="اسمك الكامل"/></div><div class="res-row-2"><div><label>التاريخ</label><input type="date"/></div><div><label>الوقت</label><input type="time"/></div></div><div class="res-row-2"><div><label>العدد</label><select><option>1</option><option>2</option><option>4+</option></select></div><div><label>الجوال</label><input type="tel" placeholder="05xxxxxxxx"/></div></div><button class="btn btn-primary">✓ تأكيد الحجز</button></form></div></section>"""
+
+
+def _section_quote(d, theme) -> str:
+    return f"""<section class="quote-block" id="quote" data-hl="quote"><div class="container"><div class="quote-ico">"</div><blockquote>{_esc(d.get('text',''))}</blockquote><div class="quote-author">— {_esc(d.get('author',''))}{f", <span>{_esc(d.get('role',''))}</span>" if d.get('role') else ''}</div></div></section>"""
 
 
 def _section_about(d, theme) -> str:
@@ -35,7 +82,7 @@ def _section_about(d, theme) -> str:
     if d.get("stats"):
         stats_html = '<div class="stats-row">' + "".join(f'<div class="stat-item"><div class="stat-value">{_esc(s.get("value"))}</div><div class="stat-label">{_esc(s.get("label"))}</div></div>' for s in d["stats"]) + '</div>'
     img_html = f'<div class="about-media"><img src="{_esc(d.get("image"))}" alt=""/></div>' if d.get("image") else ''
-    return f"""<section class="about"><div class="container about-layout"><div class="about-copy"><h2>{_esc(d.get('title',''))}</h2><p>{_esc(d.get('text',''))}</p>{stats_html}</div>{img_html}</div></section>"""
+    return f"""<section class="about" id="about" data-hl="about"><div class="container about-layout"><div class="about-copy"><h2>{_esc(d.get('title',''))}</h2><p>{_esc(d.get('text',''))}</p>{stats_html}</div>{img_html}</div></section>"""
 
 
 def _section_products(d, theme) -> str:
@@ -48,7 +95,7 @@ def _section_products(d, theme) -> str:
           <button class="btn btn-sm">أضف للسلة</button></div></div>"""
         for i in items
     )
-    return f"""<section class="products" id="products"><div class="container"><h2>{_esc(d.get('title',''))}</h2><div class="product-grid">{cards}</div></div></section>"""
+    return f"""<section class="products" id="products" data-hl="products"><div class="container"><h2>{_esc(d.get('title',''))}</h2><div class="product-grid">{cards}</div></div></section>"""
 
 
 def _section_menu(d, theme) -> str:
@@ -60,25 +107,25 @@ def _section_menu(d, theme) -> str:
             for i in c.get("items", [])
         )
         cats_html += f"""<div class="menu-cat"><h3>{_esc(c.get('name',''))}</h3><div class="menu-grid">{items_html}</div></div>"""
-    return f"""<section class="menu"><div class="container"><h2>{_esc(d.get('title',''))}</h2>{cats_html}</div></section>"""
+    return f"""<section class="menu" id="menu" data-hl="menu"><div class="container"><h2>{_esc(d.get('title',''))}</h2>{cats_html}</div></section>"""
 
 
 def _section_gallery(d, theme) -> str:
     imgs = d.get("images", [])
     cards = "".join(f"""<div class="gallery-item" style="background-image:url('{_esc(u)}')"></div>""" for u in imgs)
-    return f"""<section class="gallery"><div class="container"><h2>{_esc(d.get('title',''))}</h2><div class="gallery-grid">{cards}</div></div></section>"""
+    return f"""<section class="gallery" id="gallery" data-hl="gallery"><div class="container"><h2>{_esc(d.get('title',''))}</h2><div class="gallery-grid">{cards}</div></div></section>"""
 
 
 def _section_testimonials(d, theme) -> str:
     items = d.get("items", [])
     cards = "".join(f"""<div class="testimonial-card"><div class="stars">{'★' * int(i.get('rating', 5))}</div><p>{_esc(i.get('text',''))}</p><div class="author">— {_esc(i.get('name',''))}</div></div>""" for i in items)
-    return f"""<section class="testimonials"><div class="container"><h2>{_esc(d.get('title',''))}</h2><div class="testimonials-grid">{cards}</div></div></section>"""
+    return f"""<section class="testimonials" id="testimonials" data-hl="testimonials"><div class="container"><h2>{_esc(d.get('title',''))}</h2><div class="testimonials-grid">{cards}</div></div></section>"""
 
 
 def _section_team(d, theme) -> str:
     items = d.get("members", [])
     cards = "".join(f"""<div class="team-card"><div class="team-photo" style="background-image:url('{_esc(i.get("image",""))}')"></div><h3>{_esc(i.get('name',''))}</h3><p>{_esc(i.get('role',''))}</p></div>""" for i in items)
-    return f"""<section class="team"><div class="container"><h2>{_esc(d.get('title',''))}</h2><div class="team-grid">{cards}</div></div></section>"""
+    return f"""<section class="team" id="team" data-hl="team"><div class="container"><h2>{_esc(d.get('title',''))}</h2><div class="team-grid">{cards}</div></div></section>"""
 
 
 def _section_pricing(d, theme) -> str:
@@ -92,7 +139,7 @@ def _section_pricing(d, theme) -> str:
         </div>"""
         for p in items
     )
-    return f"""<section class="pricing" id="pricing"><div class="container"><h2>{_esc(d.get('title',''))}</h2><div class="pricing-grid">{cards}</div></div></section>"""
+    return f"""<section class="pricing" id="pricing" data-hl="pricing"><div class="container"><h2>{_esc(d.get('title',''))}</h2><div class="pricing-grid">{cards}</div></div></section>"""
 
 
 def _section_faq(d, theme) -> str:
@@ -102,7 +149,7 @@ def _section_faq(d, theme) -> str:
 
 
 def _section_contact(d, theme) -> str:
-    return f"""<section class="contact" id="contact"><div class="container"><h2>{_esc(d.get('title','تواصل معنا'))}</h2><div class="contact-grid">
+    return f"""<section class="contact" id="contact" data-hl="contact"><div class="container"><h2>{_esc(d.get('title','تواصل معنا'))}</h2><div class="contact-grid">
       <div class="contact-card"><div class="icon">📧</div><div>{_esc(d.get('email',''))}</div></div>
       <div class="contact-card"><div class="icon">📞</div><div>{_esc(d.get('phone',''))}</div></div>
       <div class="contact-card"><div class="icon">📍</div><div>{_esc(d.get('address',''))}</div></div>
@@ -111,7 +158,7 @@ def _section_contact(d, theme) -> str:
 
 
 def _section_cta(d, theme) -> str:
-    return f"""<section class="cta-band"><div class="container"><h2>{_esc(d.get('title',''))}</h2><p>{_esc(d.get('subtitle',''))}</p><button class="btn btn-primary btn-lg">{_esc(d.get('cta_text','ابدأ'))}</button></div></section>"""
+    return f"""<section class="cta-band" id="cta" data-hl="cta"><div class="container"><h2>{_esc(d.get('title',''))}</h2><p>{_esc(d.get('subtitle',''))}</p><button class="btn btn-primary btn-lg" data-hl="btn">{_esc(d.get('cta_text','ابدأ'))}</button></div></section>"""
 
 
 def _section_footer(d, theme) -> str:
@@ -337,6 +384,10 @@ RENDERERS = {
     "testimonials": _section_testimonials, "team": _section_team, "pricing": _section_pricing,
     "faq": _section_faq, "contact": _section_contact, "cta": _section_cta, "footer": _section_footer,
     "dashboard": _section_dashboard,
+    "story_timeline": _section_story_timeline,
+    "process_steps": _section_process_steps,
+    "reservation": _section_reservation,
+    "quote": _section_quote,
 }
 
 
@@ -371,6 +422,98 @@ img{{max-width:100%;display:block;border-radius:{r}}}
 .hero-split .hero-media img{{border-radius:{r};box-shadow:0 30px 80px rgba(0,0,0,.5)}}
 .hero-full,.hero-portrait{{padding:120px 0;background-size:cover;background-position:center}}
 .hero-full h1,.hero-portrait h1{{text-align:center}}
+
+/* NEW HERO VARIANTS */
+.hero-centered{{text-align:center;padding:80px 0}}
+.hero-centered-inner{{max-width:800px;margin:0 auto}}
+.hero-centered-media{{width:100%;height:320px;background-size:cover;background-position:center;border-radius:{r};margin-top:40px;box-shadow:0 40px 80px rgba(0,0,0,.4)}}
+.hero-magazine{{padding:60px 0;background:linear-gradient(135deg,rgba(255,255,255,.02),rgba(255,255,255,.05))}}
+.mag-grid{{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center}}
+.mag-eyebrow{{font-size:12px;letter-spacing:4px;color:{p};margin-bottom:16px;text-transform:uppercase}}
+.mag-divider{{width:60px;height:3px;background:{p};margin:20px 0}}
+.mag-frame{{position:relative}}
+.mag-frame img{{width:100%;border-radius:{r};filter:grayscale(.2)}}
+.mag-tag{{position:absolute;top:-12px;right:-12px;background:{p};color:{s};padding:8px 14px;font-size:11px;letter-spacing:2px;font-weight:900;border-radius:4px}}
+.hero-boxed{{min-height:90vh;display:flex;align-items:center;justify-content:center;background-size:cover;background-position:center}}
+.hero-boxed-card{{background:rgba(255,255,255,.05);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.15);padding:60px 50px;border-radius:{r};max-width:560px;text-align:center;box-shadow:0 40px 100px rgba(0,0,0,.6)}}
+.hero-story{{padding:120px 0 80px;text-align:center}}
+.story-lead{{max-width:720px;margin:0 auto}}
+.story-tag{{display:inline-block;background:rgba(255,255,255,.08);padding:6px 20px;border-radius:99px;font-size:12px;letter-spacing:3px;margin-bottom:18px;color:{p}}}
+.story-arrow{{margin-top:60px;font-size:32px;animation:bounce 2s infinite;color:{p}}}
+@keyframes bounce{{0%,100%{{transform:translateY(0)}}50%{{transform:translateY(10px)}}}}
+.hero-form{{padding:80px 0;background-size:cover;background-position:center;min-height:80vh;display:flex;align-items:center}}
+.hero-form-grid{{display:grid;grid-template-columns:1.2fr 1fr;gap:48px;align-items:center}}
+.hero-form-box{{background:rgba(0,0,0,.6);backdrop-filter:blur(16px);padding:32px;border-radius:{r};border:1px solid rgba(255,255,255,.1)}}
+.hero-form-box h3{{margin-bottom:18px;color:{p}}}
+.hero-form-box input{{width:100%;padding:12px 14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#fff;margin-bottom:12px;font-family:inherit;box-sizing:border-box}}
+.hero-form-box .btn-primary{{width:100%}}
+
+/* Alt features */
+.features-alt{{padding:80px 0}}
+.feat-alt-row{{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center;margin-bottom:80px}}
+.feat-alt-row.feat-alt-right{{direction:ltr}}
+.feat-alt-media{{background:linear-gradient(135deg,{p}33,{a}33);border-radius:{r};padding:60px;text-align:center;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center}}
+.feat-alt-ico{{font-size:96px}}
+.feat-alt-num{{font-size:14px;letter-spacing:4px;color:{p};font-weight:900;margin-bottom:14px}}
+.feat-alt-body h3{{font-size:32px;margin-bottom:14px}}
+
+/* Horizontal features */
+.feat-h-list{{display:flex;flex-direction:column;gap:14px;max-width:820px;margin:0 auto}}
+.feat-h{{display:grid;grid-template-columns:auto 1fr;gap:18px;background:rgba(255,255,255,.03);padding:20px;border-radius:{r};border:1px solid rgba(255,255,255,.06);transition:.2s}}
+.feat-h:hover{{border-color:{p};transform:translateX(4px)}}
+.feat-h-ico{{font-size:40px;width:60px;height:60px;display:flex;align-items:center;justify-content:center;background:{p}22;border-radius:{r}}}
+
+/* Story Timeline */
+.story-tl{{padding:80px 0;background:linear-gradient(135deg,rgba(255,255,255,.02),rgba(255,255,255,.05))}}
+.tl-line{{position:relative;padding:40px 0}}
+.tl-line::before{{content:'';position:absolute;right:120px;top:0;bottom:0;width:2px;background:linear-gradient(180deg,{p},{a});opacity:.3}}
+.tl-node{{display:grid;grid-template-columns:100px 40px 1fr;gap:20px;margin-bottom:32px;align-items:start}}
+.tl-year{{color:{p};font-size:28px;font-weight:900;text-align:left;padding-top:4px}}
+.tl-dot{{width:16px;height:16px;border-radius:50%;background:{p};margin-top:10px;margin-right:auto;box-shadow:0 0 0 4px {p}33}}
+.tl-body{{background:rgba(255,255,255,.03);padding:18px 20px;border-radius:{r};border-right:3px solid {p}}}
+.tl-body h4{{margin:0 0 6px;font-size:17px}}
+.tl-body p{{margin:0;font-size:14px;opacity:.8}}
+
+/* Process Steps */
+.process{{padding:80px 0}}
+.ps-list{{display:flex;align-items:stretch;flex-wrap:wrap;gap:12px;justify-content:center}}
+.ps-step{{background:rgba(255,255,255,.04);padding:24px;border-radius:{r};border:1px solid rgba(255,255,255,.08);min-width:200px;max-width:260px;flex:1;text-align:center}}
+.ps-num{{width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,{p},{a});color:{s};display:flex;align-items:center;justify-content:center;font-weight:900;font-size:20px;margin:0 auto 14px}}
+.ps-arrow{{display:flex;align-items:center;color:{p};font-size:28px;font-weight:900}}
+
+/* Reservation */
+.reservation{{padding:80px 0;background:linear-gradient(135deg,{p}11,{a}11)}}
+.reservation-grid{{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center}}
+.res-form{{background:rgba(255,255,255,.03);padding:28px;border-radius:{r};border:1px solid rgba(255,255,255,.1);display:flex;flex-direction:column;gap:14px}}
+.res-row, .res-row-2{{display:flex;flex-direction:column;gap:6px}}
+.res-row-2{{display:grid;grid-template-columns:1fr 1fr;gap:12px}}
+.res-form label{{font-size:12px;opacity:.7}}
+.res-form input, .res-form select{{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.1);color:#fff;padding:10px 12px;border-radius:8px;font-family:inherit}}
+.res-form .btn-primary{{margin-top:10px}}
+
+/* Quote block */
+.quote-block{{padding:100px 0;text-align:center;background:linear-gradient(135deg,{p}22,{a}22)}}
+.quote-ico{{font-size:80px;color:{p};line-height:.5;margin-bottom:-20px;opacity:.5}}
+.quote-block blockquote{{font-size:28px;font-weight:300;font-style:italic;max-width:760px;margin:20px auto;line-height:1.6}}
+.quote-author{{color:{p};font-weight:700;margin-top:20px}}
+.quote-author span{{opacity:.7;font-weight:400}}
+
+/* Highlight Pulse (for wizard scroll-to) */
+[data-hl]{{transition:.3s}}
+.zx-pulse{{animation:zxPulse 1.5s ease-out}}
+@keyframes zxPulse{{
+  0%{{box-shadow:0 0 0 0 {p}99, 0 0 0 0 {p}66}}
+  50%{{box-shadow:0 0 0 14px {p}22, 0 0 40px 10px {p}44}}
+  100%{{box-shadow:0 0 0 0 transparent}}
+}}
+
+@media (max-width:768px){{
+  .mag-grid,.feat-alt-row,.reservation-grid,.hero-form-grid{{grid-template-columns:1fr}}
+  .ps-list{{flex-direction:column}}
+  .ps-arrow{{transform:rotate(-90deg)}}
+  .tl-line::before{{right:30px}}
+  .tl-node{{grid-template-columns:60px 30px 1fr}}
+}}
 .hero p{{font-size:18px;opacity:.85;margin-bottom:24px;max-width:560px}}
 
 /* FEATURES */

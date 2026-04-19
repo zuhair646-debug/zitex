@@ -489,8 +489,92 @@ def list_categories() -> List[Dict[str, Any]]:
     return out
 
 
+def _mutate_sections(base_sections: List[Dict[str, Any]], hero_layout: str, arrangement: str) -> List[Dict[str, Any]]:
+    """Apply a structural arrangement to base sections — creates radically different layouts."""
+    out = []
+    footer = None
+    non_hero = []
+    for s in base_sections:
+        if s.get("type") == "hero":
+            new = {**s, "data": {**(s.get("data") or {}), "layout": hero_layout}}
+            out.append(new)
+        elif s.get("type") == "footer":
+            footer = s
+        else:
+            non_hero.append(s)
+
+    # arrangement strategies: each produces a DIFFERENT structural feel
+    if arrangement == "story_first":
+        # Brand story timeline comes right after hero
+        out.append({
+            "id": "story-tl-auto", "type": "story_timeline", "order": 1, "visible": True,
+            "data": {"title": "قصتنا", "items": [
+                {"year": "2015", "title": "البداية", "text": "انطلقنا برؤية فريدة لخدمة مميزة."},
+                {"year": "2019", "title": "التوسّع", "text": "فتحنا فروعاً في 3 مدن جديدة."},
+                {"year": "2022", "title": "التميّز", "text": "أُعلنّا كأفضل علامة في المنطقة."},
+                {"year": "2025", "title": "اليوم", "text": "آلاف العملاء الراضين عنا."},
+            ]},
+        })
+        out.extend(non_hero)
+    elif arrangement == "process_first":
+        # "How it works" steps come right after hero
+        out.append({
+            "id": "ps-auto", "type": "process_steps", "order": 1, "visible": True,
+            "data": {"title": "كيف تعمل خدمتنا؟", "items": [
+                {"title": "اختر", "text": "تصفّح خياراتنا بسهولة"},
+                {"title": "اطلب", "text": "قدّم طلبك في دقائق"},
+                {"title": "استمتع", "text": "نوصّل إليك أينما كنت"},
+            ]},
+        })
+        out.extend(non_hero)
+    elif arrangement == "reservation_first":
+        # Booking form comes right after hero
+        out.append({
+            "id": "res-auto", "type": "reservation", "order": 1, "visible": True,
+            "data": {"title": "احجز مكانك الآن", "subtitle": "لا تفوّت فرصتك — املأ النموذج وسنعاود التواصل فوراً"},
+        })
+        out.extend(non_hero)
+    elif arrangement == "feature_alt":
+        # Replace features with alt layout
+        swapped = []
+        for s in non_hero:
+            if s.get("type") == "features":
+                swapped.append({**s, "data": {**(s.get("data") or {}), "layout": "alt"}})
+            else:
+                swapped.append(s)
+        out.extend(swapped)
+    elif arrangement == "quote_middle":
+        # Insert a big quote block in the middle
+        mid = len(non_hero) // 2
+        out.extend(non_hero[:mid])
+        out.append({
+            "id": "q-auto", "type": "quote", "order": 0, "visible": True,
+            "data": {"text": "خدمة استثنائية تفوق التوقّعات — كل مرة.", "author": "ضيف دائم", "role": "عميل منذ 2020"},
+        })
+        out.extend(non_hero[mid:])
+    elif arrangement == "horizontal_features":
+        # Features as horizontal list (different visual)
+        swapped = []
+        for s in non_hero:
+            if s.get("type") == "features":
+                swapped.append({**s, "data": {**(s.get("data") or {}), "layout": "horizontal"}})
+            else:
+                swapped.append(s)
+        out.extend(swapped)
+    elif arrangement == "reversed":
+        # Reverse the section order
+        out.extend(list(reversed(non_hero)))
+    else:  # "default"
+        out.extend(non_hero)
+
+    if footer:
+        out.append(footer)
+    # Renumber orders
+    return [{**s, "order": i} for i, s in enumerate(out)]
+
+
 def list_layouts(category_id: str) -> List[Dict[str, Any]]:
-    """Return all layouts for a category — procedural multiplication to reach 20+ per category."""
+    """Return all layouts for a category — RADICALLY different via hero + arrangement combinations."""
     from .variants import STYLE_VARIANTS
 
     base_layouts: List[Dict[str, Any]] = []
@@ -499,30 +583,50 @@ def list_layouts(category_id: str) -> List[Dict[str, Any]]:
     for layout in EXTRA_LAYOUTS.get(category_id, []):
         base_layouts.append(layout)
 
-    out: List[Dict[str, Any]] = list(base_layouts)
-    # Each base × each style variant (10) × each hero layout (2) — skip duplicates
-    hero_variants = [("split", ""), ("full", " — بانر كامل")]
+    out: List[Dict[str, Any]] = []
+
+    # Radical design combinations: hero_layout × arrangement × 3 top themes
+    HERO_LAYOUTS = [
+        ("split",       "مقسّم كلاسيكي"),
+        ("centered",    "مركزي بصورة سفلية"),
+        ("magazine",    "مجلة تحريرية"),
+        ("boxed",       "بطاقة زجاجية"),
+        ("story",       "قصّة روائية"),
+        ("form",        "بانر + حجز"),
+        ("full",        "بانر كامل"),
+        ("portrait",    "عمودي"),
+    ]
+    ARRANGEMENTS = [
+        ("default",             ""),
+        ("story_first",         "+ جدول زمني"),
+        ("process_first",       "+ خطوات"),
+        ("reservation_first",   "+ نموذج حجز"),
+        ("feature_alt",         "مميزات متناوبة"),
+        ("quote_middle",        "+ اقتباس"),
+        ("horizontal_features", "مميزات أفقية"),
+        ("reversed",            "ترتيب عكسي"),
+    ]
+    TOP_STYLES = [v for v in STYLE_VARIANTS if v["id"] in ("modern", "luxury", "warm", "dark_pro", "nature", "bold", "pastel", "minimal", "classic", "urban")]
+
     for base in base_layouts:
-        for style in STYLE_VARIANTS:
-            for hero_id, hero_suffix in hero_variants:
-                merged_theme = {**base.get("theme", {}), **style["theme_override"]}
-                # Mutate the hero section to use the new layout
-                mutated_sections = []
-                for s in base.get("sections", []):
-                    if s.get("type") == "hero":
-                        new_data = {**(s.get("data") or {}), "layout": hero_id}
-                        mutated_sections.append({**s, "data": new_data})
-                    else:
-                        mutated_sections.append(s)
-                out.append({
-                    "id": f"{base['id']}__{style['id']}__{hero_id}",
-                    "name": f"{base['name']} — {style['name']}{hero_suffix}",
-                    "icon": base.get("icon", ""),
-                    "description": base.get("description", ""),
-                    "theme": merged_theme,
-                    "sections": mutated_sections,
-                    "custom_css": base.get("custom_css", ""),
-                })
+        out.append(base)  # original
+        for hero_id, hero_lbl in HERO_LAYOUTS:
+            for arr_id, arr_lbl in ARRANGEMENTS:
+                # pick a style for this combo
+                for style in TOP_STYLES[:3]:
+                    merged_theme = {**base.get("theme", {}), **style["theme_override"]}
+                    mutated = _mutate_sections(base.get("sections", []), hero_id, arr_id)
+                    suffix_parts = [hero_lbl, arr_lbl, style["name"]]
+                    suffix = " · ".join([p for p in suffix_parts if p])
+                    out.append({
+                        "id": f"{base['id']}__{hero_id}__{arr_id}__{style['id']}",
+                        "name": f"{base['name']} — {suffix}",
+                        "icon": base.get("icon", ""),
+                        "description": base.get("description", ""),
+                        "theme": merged_theme,
+                        "sections": mutated,
+                        "custom_css": base.get("custom_css", ""),
+                    })
     # Deduplicate by id
     seen = set()
     unique = []
@@ -531,7 +635,8 @@ def list_layouts(category_id: str) -> List[Dict[str, Any]]:
             continue
         seen.add(L["id"])
         unique.append(L)
-    return unique
+    # Cap per-category to keep API lightweight (e.g., 80 max per category)
+    return unique[:120]
 
 
 def get_layout(category_id: str, layout_id: str) -> Dict[str, Any]:
