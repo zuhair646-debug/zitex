@@ -588,35 +588,21 @@ function buildOverrides(step, value, project) {
   } else if (step === 'typography') {
     theme_override.font = value;
   } else if (step === 'dashboard') {
-    // Add or update a dashboard section
+    // Dashboard-only mode: replace ALL sections with just the dashboard
     const existing = sections.find((s) => s.type === 'dashboard');
     if (value === 'none') {
+      // User said no dashboard — show the regular site without dashboard
       sections_override = sections.filter((s) => s.type !== 'dashboard').map((s, i) => ({ ...s, order: i }));
     } else {
-      const dashData = { layout: value, title: 'لوحة التحكم', items: existing?.data?.items || [], contact: existing?.data?.contact || {} };
-      if (existing) {
-        sections_override = sections.map((s) => s.type === 'dashboard' ? { ...s, data: { ...s.data, ...dashData } } : s);
-      } else {
-        const before_footer = sections.findIndex((s) => s.type === 'footer');
-        const insert_at = before_footer >= 0 ? before_footer : sections.length;
-        sections_override = [...sections];
-        sections_override.splice(insert_at, 0, { id: `preview-dash`, type: 'dashboard', order: insert_at, visible: true, data: dashData });
-        sections_override = sections_override.map((s, i) => ({ ...s, order: i }));
-      }
+      const dashData = { layout: value, title: 'لوحة التحكم', items: existing?.data?.items || [] };
+      sections_override = [{ id: 'preview-dash', type: 'dashboard', order: 0, visible: true, data: dashData }];
     }
   } else if (step === 'dashboard_items') {
-    const items = Array.isArray(value) ? value : [value];
+    // Dashboard-only mode with chosen items — full screen admin UI
+    const items = Array.isArray(value) ? value : (value ? [value] : []);
     const existing = sections.find((s) => s.type === 'dashboard');
-    if (existing) {
-      sections_override = sections.map((s) => s.type === 'dashboard' ? { ...s, data: { ...s.data, items } } : s);
-    } else {
-      // Create a cards dashboard
-      const before_footer = sections.findIndex((s) => s.type === 'footer');
-      const insert_at = before_footer >= 0 ? before_footer : sections.length;
-      sections_override = [...sections];
-      sections_override.splice(insert_at, 0, { id: 'preview-dash', type: 'dashboard', order: insert_at, visible: true, data: { layout: 'cards', title: 'لوحة التحكم', items } });
-      sections_override = sections_override.map((s, i) => ({ ...s, order: i }));
-    }
+    const layout = existing?.data?.layout || 'sidebar';
+    sections_override = [{ id: 'preview-dash', type: 'dashboard', order: 0, visible: true, data: { layout, title: 'لوحة التحكم', items } }];
   } else if (step === 'sections') {
     // For sections step, we show a preview with only selected + footer
     const wanted = Array.isArray(value) ? value : [value];
@@ -756,6 +742,18 @@ export default function WebsiteStudio({ user }) {
       const d = await r.json();
       setPreviewHtml(d.html || '');
       setPending({ step, value });
+      // Auto-scroll iframe to the last-added item (for dashboard_items)
+      if (step === 'dashboard_items' && Array.isArray(value) && value.length > 0) {
+        setTimeout(() => {
+          try {
+            const iframe = document.querySelector('[data-testid="live-preview"]');
+            const doc = iframe && iframe.contentDocument;
+            const last = value[value.length - 1];
+            const panel = doc && doc.getElementById(`panel-${last}`);
+            if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          } catch (_) { /* ignore cross-origin */ }
+        }, 400);
+      }
     } catch (_) { /* ignore */ }
   };
 
@@ -819,11 +817,14 @@ export default function WebsiteStudio({ user }) {
   // Auto-preview an empty dashboard when entering the dashboard step (teaser)
   useEffect(() => {
     if (!project?.id || !currentStep) return;
-    if (currentStep === 'dashboard') {
-      const hasDash = (project.sections || []).some((s) => s.type === 'dashboard');
-      if (!hasDash && !pending) {
-        previewAnswer('dashboard', 'cards');
-      }
+    if (currentStep === 'dashboard' && !pending) {
+      // Show empty sidebar dashboard full-screen
+      previewAnswer('dashboard', 'sidebar');
+    } else if (currentStep === 'dashboard_items' && !pending) {
+      // Show current items as full dashboard
+      const existing = (project.sections || []).find((s) => s.type === 'dashboard');
+      const items = existing?.data?.items || [];
+      previewAnswer('dashboard_items', items);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id, currentStep]);
