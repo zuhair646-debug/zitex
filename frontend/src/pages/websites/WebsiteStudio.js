@@ -11,30 +11,119 @@ const API = process.env.REACT_APP_BACKEND_URL;
 const authH = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
 
 /* ================================================================
-   TEMPLATE PICKER — only shown BEFORE a project exists (empty state)
+   CATEGORY PICKER — first stage of empty state
    ================================================================ */
-function TemplatePicker({ templates, onPick, loading }) {
+function CategoryPicker({ categories, onPick }) {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6" data-testid="template-picker-empty">
-      <div className="text-center mb-8 max-w-xl">
-        <Sparkles className="w-14 h-14 mx-auto mb-4 text-yellow-500" />
-        <h2 className="text-2xl md:text-3xl font-bold mb-2">ابدأ بموقعك في 3 خطوات</h2>
-        <p className="text-white/60 text-sm md:text-base">1. اختر واجهة • 2. اختر نمطاً بصرياً • 3. أجب المستشار الذكي</p>
+    <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-6" data-testid="category-picker">
+      <div className="text-center mb-6 max-w-xl">
+        <Sparkles className="w-12 h-12 mx-auto mb-3 text-yellow-500" />
+        <h2 className="text-xl md:text-3xl font-bold mb-1.5">اختر نوع موقعك</h2>
+        <p className="text-white/60 text-xs md:text-sm">12 فئة • أكثر من 20 تصميماً مختلفاً</p>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 w-full max-w-5xl">
-        {templates.map((t) => (
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 w-full max-w-5xl">
+        {categories.map((c) => (
           <button
-            key={t.id}
-            onClick={() => onPick(t)}
-            disabled={loading}
-            className="group relative p-4 md:p-5 rounded-2xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10 hover:border-yellow-500/60 hover:bg-white/10 transition-all text-right disabled:opacity-50 hover:shadow-xl hover:shadow-yellow-500/10 hover:-translate-y-0.5"
-            data-testid={`template-card-${t.id}`}
+            key={c.id}
+            onClick={() => onPick(c)}
+            className="group relative p-3 md:p-4 rounded-xl border border-white/10 hover:border-yellow-500/60 transition-all text-center hover:-translate-y-0.5 hover:shadow-xl hover:shadow-yellow-500/10"
+            style={{ background: `linear-gradient(135deg, ${c.color}22, ${c.color}08)` }}
+            data-testid={`category-card-${c.id}`}
           >
-            <div className="text-3xl md:text-4xl mb-2">{t.icon}</div>
-            <div className="font-bold text-base md:text-lg mb-1 group-hover:text-yellow-400">{t.name}</div>
-            <p className="text-xs md:text-sm opacity-60 line-clamp-2">{t.description}</p>
+            <div className="text-3xl md:text-4xl mb-1.5">{c.icon}</div>
+            <div className="font-bold text-sm md:text-base mb-0.5 group-hover:text-yellow-400">{c.name}</div>
+            <div className="text-[10px] opacity-60">{c.layouts_count} تصميم</div>
           </button>
         ))}
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
+   LAYOUT BROWSER — stage 2: gallery + live preview + confirm
+   ================================================================ */
+function LayoutBrowser({ category, layouts, onBack, onConfirm, loading }) {
+  const [selected, setSelected] = useState(layouts[0] || null);
+  const [html, setHtml] = useState('');
+  const [htmlLoading, setHtmlLoading] = useState(false);
+
+  useEffect(() => { if (layouts?.length && !selected) setSelected(layouts[0]); }, [layouts, selected]);
+
+  useEffect(() => {
+    if (!category?.id || !selected?.id) return;
+    setHtmlLoading(true);
+    fetch(`${API}/api/websites/categories/${category.id}/layouts/${selected.id}/preview-html`)
+      .then((r) => r.json()).then((d) => setHtml(d.html || '')).finally(() => setHtmlLoading(false));
+  }, [category?.id, selected?.id]);
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0" data-testid="layout-browser">
+      {/* Header */}
+      <div className="flex items-center gap-2 px-3 md:px-4 py-2.5 bg-[#0a0e1c] border-b border-white/10">
+        <button onClick={onBack} className="p-1.5 hover:bg-white/10 rounded-lg" data-testid="back-to-categories-btn">
+          <ArrowLeft className="w-4 h-4" />
+        </button>
+        <span className="text-xl">{category?.icon}</span>
+        <span className="font-bold text-sm md:text-base">{category?.name}</span>
+        <span className="text-xs opacity-60">• {layouts.length} تصميم</span>
+        <div className="flex-1" />
+        <button
+          onClick={() => selected && onConfirm(selected)}
+          disabled={!selected || loading}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-green-500 to-emerald-500 text-black rounded-lg text-xs font-bold disabled:opacity-40"
+          data-testid="confirm-layout-btn"
+        ><Check className="w-4 h-4" />هل أنت متأكد؟ اعتمد</button>
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 flex min-h-0 flex-col md:flex-row">
+        {/* Layouts list */}
+        <aside className="md:w-64 md:shrink-0 max-h-[200px] md:max-h-none overflow-auto bg-[#0e1128] border-b md:border-b-0 md:border-s border-white/10 p-2">
+          <div className="grid grid-cols-2 md:grid-cols-1 gap-1.5">
+            {layouts.map((L) => (
+              <button
+                key={L.id}
+                onClick={() => setSelected(L)}
+                className={`text-right p-2 rounded-lg border transition-all ${
+                  selected?.id === L.id
+                    ? 'bg-yellow-500/20 border-yellow-500/70 shadow-lg shadow-yellow-500/10'
+                    : 'bg-white/5 border-white/10 hover:border-yellow-400/40'
+                }`}
+                data-testid={`layout-${L.id}`}
+              >
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <span className="text-base">{L.icon}</span>
+                  <span className="font-bold text-xs md:text-sm truncate">{L.name}</span>
+                </div>
+                <div className="text-[10px] opacity-60 line-clamp-1">{L.description}</div>
+                <div className="flex gap-1 mt-1">
+                  {['primary', 'accent', 'secondary'].map((k) => (
+                    <span key={k} className="w-3 h-3 rounded-full border border-white/20" style={{ background: L.theme?.[k] || '#000' }} />
+                  ))}
+                </div>
+              </button>
+            ))}
+          </div>
+        </aside>
+
+        {/* Live preview */}
+        <div className="flex-1 flex flex-col min-h-0 bg-[#050815] p-2">
+          <div className="text-xs opacity-70 mb-1.5 px-1 flex items-center gap-1.5">
+            <Eye className="w-3.5 h-3.5 text-yellow-500" />
+            معاينة حيّة • {selected?.name || '—'}
+            {htmlLoading && <span className="opacity-60">• جاري التحميل...</span>}
+          </div>
+          <iframe
+            key={selected?.id}
+            srcDoc={html}
+            className="flex-1 w-full bg-white rounded-lg shadow-2xl"
+            sandbox="allow-scripts allow-same-origin"
+            title="layout-preview"
+            data-testid="layout-preview-iframe"
+          />
+          <div className="mt-2 text-[11px] opacity-60 text-center">تصفّح تصاميم أخرى بحرّية — اضغط "اعتمد" عندما تختار</div>
+        </div>
       </div>
     </div>
   );
@@ -450,7 +539,9 @@ function LibraryModal({ projects, onOpen, onDelete, onClose }) {
    ================================================================ */
 export default function WebsiteStudio({ user }) {
   const nav = useNavigate();
-  const [templates, setTemplates] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [activeCategory, setActiveCategory] = useState(null);
+  const [layouts, setLayouts] = useState([]);
   const [variants, setVariants] = useState([]);
   const [wizardSteps, setWizardSteps] = useState([]);
   const [project, setProject] = useState(null);
@@ -461,12 +552,11 @@ export default function WebsiteStudio({ user }) {
   const [loading, setLoading] = useState(false);
   const [chatLoading, setChatLoading] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
-  const [mobileView, setMobileView] = useState('preview'); // 'preview' | 'chat'
+  const [mobileView, setMobileView] = useState('preview');
   const buildTimer = useRef(null);
 
-  // Load meta
   useEffect(() => {
-    fetch(`${API}/api/websites/templates`).then((r) => r.json()).then((d) => setTemplates(d.templates || []));
+    fetch(`${API}/api/websites/categories`).then((r) => r.json()).then((d) => setCategories(d.categories || []));
     fetch(`${API}/api/websites/wizard/steps`).then((r) => r.json()).then((d) => setWizardSteps(d.steps || []));
     loadProjects();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -480,7 +570,14 @@ export default function WebsiteStudio({ user }) {
     } catch (_) { /* ignore */ }
   };
 
-  // Variants follow template
+  // Load layouts when category is chosen
+  useEffect(() => {
+    if (!activeCategory?.id) { setLayouts([]); return; }
+    fetch(`${API}/api/websites/categories/${activeCategory.id}/layouts`)
+      .then((r) => r.json()).then((d) => setLayouts(d.layouts || []));
+  }, [activeCategory?.id]);
+
+  // Load variants when project exists
   useEffect(() => {
     if (!project?.template) { setVariants([]); return; }
     fetch(`${API}/api/websites/templates/${project.template}/variants`)
@@ -511,18 +608,25 @@ export default function WebsiteStudio({ user }) {
   }, []);
 
   // Actions
-  const pickTemplate = async (t) => {
+  const confirmLayout = async (L) => {
+    if (!activeCategory || !L) return;
     setLoading(true);
     try {
       const r = await fetch(`${API}/api/websites/projects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authH() },
-        body: JSON.stringify({ name: `موقع ${t.name}`, template: t.id, business_type: t.business_type }),
+        body: JSON.stringify({
+          name: `${L.name}`,
+          template: activeCategory.id,
+          business_type: activeCategory.id,
+          meta: { layout_id: L.id },
+        }),
       });
       const d = await r.json();
       setProject(d);
+      setActiveCategory(null);
       await loadProjects();
-      toast.success(`✨ تم اختيار قالب ${t.name}`);
+      toast.success(`✨ تم اعتماد تصميم ${L.name}`);
     } catch (_) { toast.error('فشل إنشاء المشروع'); }
     finally { setLoading(false); }
   };
@@ -588,7 +692,7 @@ export default function WebsiteStudio({ user }) {
 
   const currentStep = project?.wizard?.step;
   const stepMeta = wizardSteps.find((s) => s.id === currentStep);
-  const activeTemplate = templates.find((t) => t.id === project?.template);
+  const activeTemplate = categories.find((c) => c.id === project?.template);
 
   return (
     <div className="h-screen flex flex-col bg-[#0b0f1f] text-white overflow-hidden" dir="rtl" data-testid="website-studio">
@@ -610,13 +714,13 @@ export default function WebsiteStudio({ user }) {
                 />
                 {activeTemplate && (
                   <button
-                    onClick={() => setProject(null)}
+                    onClick={() => { setProject(null); setActiveCategory(null); }}
                     className="hidden md:flex items-center gap-1.5 px-2.5 py-1 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 rounded-lg text-xs font-bold"
                     title="تغيير القالب"
                     data-testid="change-template-btn"
                   >
                     <span>{activeTemplate.icon}</span>
-                    <span>قالب: {activeTemplate.name}</span>
+                    <span>{activeTemplate.name}</span>
                     <RefreshCw className="w-3 h-3" />
                   </button>
                 )}
@@ -626,10 +730,10 @@ export default function WebsiteStudio({ user }) {
             )}
           </div>
           <div className="flex items-center gap-1.5">
-            <button onClick={() => setProject(null)} className="p-2 md:px-3 md:py-2 bg-white/10 hover:bg-white/20 rounded-lg flex items-center gap-1.5" data-testid="new-site-btn">
+            <button onClick={() => { setProject(null); setActiveCategory(null); }} className="p-2 md:px-3 md:py-2 bg-white/10 hover:bg-white/20 rounded-lg flex items-center gap-1.5" data-testid="new-site-btn">
               <Plus className="w-4 h-4" /><span className="hidden md:inline text-xs">جديد</span>
             </button>
-            <button onClick={() => setShowLibrary(true)} className="p-2 md:px-3 md:py-2 bg-white/10 hover:bg-white/20 rounded-lg flex items-center gap-1.5" data-testid="library-btn">
+            <button onClick={() => { loadProjects(); setShowLibrary(true); }} className="p-2 md:px-3 md:py-2 bg-white/10 hover:bg-white/20 rounded-lg flex items-center gap-1.5" data-testid="library-btn">
               <FolderOpen className="w-4 h-4" /><span className="hidden md:inline text-xs">مواقعي ({projects.length})</span>
             </button>
             <button onClick={exportHtml} disabled={!project} className="p-2 md:px-3 md:py-2 bg-white/10 hover:bg-white/20 rounded-lg flex items-center gap-1.5 disabled:opacity-40" data-testid="export-btn">
@@ -687,7 +791,17 @@ export default function WebsiteStudio({ user }) {
           </div>
         </>
       ) : (
-        <TemplatePicker templates={templates} onPick={pickTemplate} loading={loading} />
+        activeCategory ? (
+          <LayoutBrowser
+            category={activeCategory}
+            layouts={layouts}
+            onBack={() => setActiveCategory(null)}
+            onConfirm={confirmLayout}
+            loading={loading}
+          />
+        ) : (
+          <CategoryPicker categories={categories} onPick={setActiveCategory} />
+        )
       )}
 
       {showLibrary && <LibraryModal projects={projects} onOpen={openProject} onDelete={deleteProject} onClose={() => setShowLibrary(false)} />}

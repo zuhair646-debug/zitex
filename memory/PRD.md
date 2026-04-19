@@ -18,15 +18,27 @@
 
 ## ✅ Websites Module (مكتمل + محدّث Feb 2026)
 
-### Backend (`/backend/modules/websites/` — 7 ملفات):
+### Backend (`/backend/modules/websites/` — 8 ملفات):
 - `__init__.py`
-- `models.py` — WebsiteProject (يضم الآن `wizard` field)
-- `templates.py` — 6 قوالب
+- `models.py` — WebsiteProject (يضم `wizard` field)
+- `templates.py` — 6 قوالب أساسية
+- `catalog.py` ⭐ **(جديد Feb 2026)** — 12 فئة × 1-3 layouts = 19+ تصميم متنوّع
 - `variants.py` — 10 أنماط بصرية لكل قالب
-- `wizard.py` ⭐ **(جديد)** — محرك الـ wizard، 10 خطوات، تطبيق الإجابات
-- `renderer.py` — JSON → HTML (يدعم radius="full" للأزرار الدائرية)
-- `ai_service.py` — consultant أولوية + تفسير توجيهات [WIZARD_ACTION]
-- `routes.py` — 16 endpoint
+- `wizard.py` — محرك الـ wizard، 11 خطوة
+- `renderer.py` — JSON → HTML (يدعم `theme.custom_css` للأفكار الابتكارية)
+- `ai_service.py` — consultant priority-aware + directives: advance/apply_theme/apply_button/apply_font/inject_css/add_section/fill_section/patch_section/remove_section/scaffold/custom_feature
+- `routes.py` — 20+ endpoint
+
+### Categories & Layouts:
+- 🍽️ مطاعم (3 تصاميم: كلاسيكي، عصري، طعام شارع)
+- ☕ كوفي شوب (2 تصاميم: دافئ، مختص حديث)
+- 🛍️ متاجر (2 تصاميم: عام، أزياء)
+- 💈 حلاقة (2 تصاميم: كلاسيكي، عصري)
+- 🐱 قطط وحيوانات (2 تصاميم: متجر قطط، حيوانات أليفة)
+- 🏥 عيادات (2 تصاميم: أسنان، عامة)
+- 🔧 سباكة (1 تصميم: خدمات سبّاك)
+- ⚡ كهرباء (1 تصميم: خدمات كهرباء)
+- 🏢 شركات، 🎨 بورتفوليو، 💻 SaaS، ✨ فارغ/مخصّص
 
 ### Frontend (`/frontend/src/pages/websites/WebsiteStudio.js`):
 تخطيط جديد محسَّن (Feb 2026):

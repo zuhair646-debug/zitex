@@ -277,6 +277,7 @@ def render_website_to_html(project: Dict[str, Any]) -> str:
 <title>{title}</title>
 <link href="https://fonts.googleapis.com/css2?family={theme.get('font','Tajawal').replace(' ','+')}:wght@400;700;900&display=swap" rel="stylesheet">
 <style>{_base_css(theme)}</style>
+<style>{theme.get('custom_css','')}</style>
 </head>
 <body>
 {''.join(body_parts)}

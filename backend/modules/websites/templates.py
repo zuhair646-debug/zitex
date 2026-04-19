@@ -241,19 +241,32 @@ TEMPLATES: Dict[str, Dict[str, Any]] = {
 
     # ======================= BLANK =======================
     "blank": {
-        "name": "فارغ",
-        "icon": "📄",
-        "description": "ابدأ من الصفر",
+        "name": "فارغ / مخصّص",
+        "icon": "✨",
+        "description": "ابدأ من الصفر — أخبر المستشار عن فكرتك وسيبني لك تصميماً ابتكارياً",
         "business_type": "company",
         "theme": _common_theme(),
         "sections": [
             {"type": "hero", "order": 0, "data": {
-                "title": "عنوان رئيسي",
-                "subtitle": "عنوان فرعي يصف ما تقدّمه",
-                "cta_text": "ابدأ الآن",
-                "image": "https://images.unsplash.com/photo-1557683316-973673baf926?w=1600",
+                "title": "مشروعك الابتكاري يبدأ هنا",
+                "subtitle": "أخبر المستشار الذكي بفكرتك وسأبني لك موقعاً فريداً يعكس طابع نشاطك — ألوان، أيقونات، تصاميم مخصّصة",
+                "cta_text": "ابدأ الحوار مع المستشار ←",
+                "cta_link": "#",
+                "image": "https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=1600",
                 "layout": "split",
             }},
+            {"type": "features", "order": 1, "data": {
+                "title": "كيف يعمل؟",
+                "items": [
+                    {"icon": "💬", "title": "صف فكرتك", "text": "اكتب وصفاً حرّاً لنشاطك في الشات"},
+                    {"icon": "🎨", "title": "تصميم ابتكاري", "text": "يطبّق المستشار أفكاراً بصرية فريدة"},
+                    {"icon": "⚡", "title": "معاينة لايف", "text": "شاهد كل تغيير فوراً"},
+                ]}},
+            {"type": "cta", "order": 2, "data": {
+                "title": "جرّب الآن", "subtitle": "اكتب في الشات مثلاً: 'أبي موقع لمتجر قطط'",
+                "cta_text": "ابدأ ←",
+            }},
+            {"type": "footer", "order": 3, "data": {"brand": "موقعي المخصّص"}},
         ],
     },
 }

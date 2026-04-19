@@ -14,6 +14,7 @@ from .ai_service import (
     extract_build_payload, build_sections_from_payload,
 )
 from .variants import list_variants_for_template, list_style_variants, get_variant_project
+from .catalog import list_categories, list_layouts, get_layout
 from .wizard import (
     STEPS, default_wizard_state, get_step, get_question_for_step,
     get_chips_for_step, next_step_id, apply_answer, steps_metadata,
@@ -55,6 +56,30 @@ def register_routes(app, database, auth_dep):
     async def _v_list():
         return {"variants": list_style_variants()}
 
+    # ---------------- Categories & Layouts (public) ----------------
+    @r.get("/categories")
+    async def _c_list():
+        return {"categories": list_categories()}
+
+    @r.get("/categories/{category_id}/layouts")
+    async def _c_layouts(category_id: str):
+        layouts = list_layouts(category_id)
+        # Strip heavy sections from list response; include enough for card previews
+        return {"layouts": [
+            {"id": L["id"], "name": L["name"], "icon": L.get("icon", ""), "description": L.get("description", ""),
+             "theme": L.get("theme", {})}
+            for L in layouts
+        ]}
+
+    @r.get("/categories/{category_id}/layouts/{layout_id}/preview-html")
+    async def _c_layout_preview(category_id: str, layout_id: str):
+        L = get_layout(category_id, layout_id)
+        theme = dict(L.get("theme") or {})
+        if L.get("custom_css"):
+            theme["custom_css"] = L["custom_css"]
+        project = {"name": L["name"], "theme": theme, "sections": L["sections"], "meta": {"title": L["name"]}}
+        return {"html": render_website_to_html(project)}
+
     @r.get("/templates/{template_id}/variants")
     async def _t_variants(template_id: str):
         return {"variants": list_variants_for_template(template_id)}
@@ -94,18 +119,39 @@ def register_routes(app, database, auth_dep):
         d["user_id"] = current_user["user_id"]
         d["created_at"] = now
         d["updated_at"] = now
-        tpl = get_template(d.get("template") or "blank")
-        if not d.get("sections"):
-            d["sections"] = [s.copy() for s in tpl["sections"]]
-            d["theme"] = {**tpl["theme"], **(d.get("theme") or {})}
+        # Resolve catalog layout if provided in meta
+        layout_id = (d.get("meta") or {}).get("layout_id") if d.get("meta") else None
+        category_id = d.get("template") or "blank"
+        if layout_id:
+            L = get_layout(category_id, layout_id)
+            if not d.get("sections"):
+                d["sections"] = [s.copy() for s in L["sections"]]
+            theme = dict(L.get("theme") or {})
+            if L.get("custom_css"):
+                theme["custom_css"] = L["custom_css"]
+            d["theme"] = {**theme, **(d.get("theme") or {})}
+            # Store layout_id for reference
+            d["meta"] = {**(d.get("meta") or {}), "layout_id": layout_id}
+        else:
+            tpl = get_template(category_id)
+            if not d.get("sections"):
+                d["sections"] = [s.copy() for s in tpl["sections"]]
+                d["theme"] = {**tpl["theme"], **(d.get("theme") or {})}
         for s in d["sections"]:
             if not s.get("id"):
                 s["id"] = f"sec-{uuid.uuid4().hex[:8]}"
         # Init wizard state + greet message
-        d["wizard"] = default_wizard_state()
-        first_q = get_question_for_step(d["wizard"]["step"])
+        is_blank = category_id == "blank"
+        wiz = default_wizard_state()
+        if is_blank:
+            wiz["step"] = "brief"
+        d["wizard"] = wiz
+        if is_blank:
+            greet = "✨ ممتاز! اخترت قالباً مخصّصاً. صف لي نشاطك بحرّية (مثل: 'متجر قطط' أو 'عيادة أسنان حديثة') وسأبني لك تصميماً ابتكارياً فوراً."
+        else:
+            greet = get_question_for_step(wiz["step"])
         if not d.get("chat"):
-            d["chat"] = [{"role": "assistant", "content": first_q}]
+            d["chat"] = [{"role": "assistant", "content": greet}]
         await database.website_projects.insert_one(d)
         d.pop("_id", None)
         return d
@@ -363,6 +409,10 @@ def _apply_ai_action(project: Dict[str, Any], action: Optional[Dict[str, Any]]) 
             project["theme"] = {**(project.get("theme") or {}), "radius": RADIUS_MAP.get(str(v), "medium")}
         if a == "apply_font":
             project["theme"] = {**(project.get("theme") or {}), "font": str(v) or "Tajawal"}
+        if a == "inject_css" and isinstance(v, str):
+            # append to existing custom_css
+            existing = (project.get("theme") or {}).get("custom_css", "")
+            project["theme"] = {**(project.get("theme") or {}), "custom_css": (existing + "\n" + v).strip()}
         if a == "add_section" and isinstance(v, dict):
             sections = list(project.get("sections") or [])
             sections.append({
@@ -370,8 +420,63 @@ def _apply_ai_action(project: Dict[str, Any], action: Optional[Dict[str, Any]]) 
                 "order": len(sections), "visible": True, "data": v.get("data") or {},
             })
             project["sections"] = sections
+        if a == "fill_section" and isinstance(v, dict):
+            # Merge AI-provided data into an existing section matching section_type
+            stype = v.get("section_type")
+            patch = v.get("data") or {}
+            sections = list(project.get("sections") or [])
+            for i, s in enumerate(sections):
+                if s.get("type") == stype:
+                    sections[i] = {**s, "data": {**(s.get("data") or {}), **patch}}
+                    break
+            project["sections"] = sections
+        if a == "patch_section" and isinstance(v, dict):
+            # Precise edit by section_id OR section_type, can also reorder/hide/show
+            sid = v.get("section_id")
+            stype = v.get("section_type")
+            patch_data = v.get("data")  # dict or None
+            set_fields = v.get("set") or {}   # visible / order etc.
+            sections = list(project.get("sections") or [])
+            for i, s in enumerate(sections):
+                match = (sid and s.get("id") == sid) or (not sid and s.get("type") == stype)
+                if match:
+                    if patch_data:
+                        s = {**s, "data": {**(s.get("data") or {}), **patch_data}}
+                    for k, val in set_fields.items():
+                        s[k] = val
+                    sections[i] = s
+                    break
+            project["sections"] = sections
+        if a == "remove_section" and isinstance(v, dict):
+            sid = v.get("section_id")
+            stype = v.get("section_type")
+            sections = [s for s in (project.get("sections") or [])
+                        if not ((sid and s.get("id") == sid) or (not sid and s.get("type") == stype))]
+            project["sections"] = [{**s, "order": i} for i, s in enumerate(sections)]
+        if a == "scaffold" and isinstance(v, dict):
+            # Full scaffold: replace sections + merge theme + inject custom_css
+            new_sections = v.get("sections") or []
+            if new_sections:
+                project["sections"] = [
+                    {"id": f"sec-{uuid.uuid4().hex[:8]}", "type": s.get("type", "hero"),
+                     "order": i, "visible": True, "data": s.get("data") or {}}
+                    for i, s in enumerate(new_sections)
+                ]
+            hints = v.get("theme_hints") or {}
+            theme = {**(project.get("theme") or {}), **hints}
+            if v.get("custom_css"):
+                theme["custom_css"] = (theme.get("custom_css", "") + "\n" + v["custom_css"]).strip()
+            project["theme"] = theme
+            if v.get("name"):
+                project["name"] = v["name"]
+            # Auto-advance past brief step if currently there
+            wiz = project.get("wizard") or default_wizard_state()
+            if wiz.get("step") == "brief":
+                wiz["answers"] = {**(wiz.get("answers") or {}), "brief": v.get("name") or "custom"}
+                wiz["completed"] = list(dict.fromkeys((wiz.get("completed") or []) + ["brief"]))
+                wiz["step"] = "variant"
+                project["wizard"] = wiz
         if a == "custom_feature" and isinstance(v, dict):
-            # Store as a feature hint and add a CTA section showcasing it
             wizard = project.get("wizard") or default_wizard_state()
             ans = dict(wizard.get("answers") or {})
             cf = list(ans.get("custom_features") or [])

@@ -26,6 +26,17 @@ from typing import List, Dict, Any, Optional
 # ---------------------------------------------------------------------------
 STEPS: List[Dict[str, Any]] = [
     {
+        "id": "brief",
+        "title": "وصف النشاط",
+        "question": "✨ صف لي نشاطك بحرّية — كلما كان وصفك أغنى، كان تصميمي أكثر إبداعاً.",
+        "chips": [],
+        "render": "free_text",
+        "free_text": True,
+        "applies": "brief",
+        # Only active when template is 'blank' or user explicitly requests a custom start
+        "condition": lambda ans: ans.get("__show_brief__", False),
+    },
+    {
         "id": "variant",
         "title": "النمط البصري",
         "question": "ممتاز! ✨ اخترت هذا القالب. الآن اختر النمط البصري — كل نمط مختلف بألوانه وإحساسه:",
