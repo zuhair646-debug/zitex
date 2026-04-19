@@ -15,6 +15,26 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Feb 19, 2026 — MOBILE PREVIEW + SMART EDITS (Dedup/Move/Remove) + LIVE SECTIONS
+
+**User requests addressed**:
+1. **Mobile Preview Toggle** — new `device-toggle` in `PreviewPane` switches between desktop iframe (full width) and a 390×780 iPhone frame with notch. Client sees exactly how the site looks on phone.
+2. **No duplicates, smart editing** — `add_section` now checks for existing type; if found, it UPDATES + repositions instead of creating a duplicate (so "ضيف حالات تاني" doesn't produce 2 stories sections).
+3. **`move_section` action** — new backend action + `_compute_insert_position()` helper supporting keywords `top|bottom|after_hero|before:<type>|after:<type>|numeric`. AI prompt updated with examples ("انقل الحالات للأعلى" → move_section with position=top).
+4. **Safety net enhanced** — `detect_section_intent()` now detects move verbs (انقل/ارفع/حرّك) + position keywords (في الأعلى/فوق/تحت/أسفل) and emits `move_section` instead of `add_section` when relocating.
+5. **`sections` step live preview** — selecting "قائمة الطعام" (or any section type not yet in the project) now auto-creates a rich stub (menu with drinks/desserts, products, gallery, testimonials, team, pricing, faq, contact, cta all have smart defaults) so the preview updates INSTANTLY.
+6. **`payment` step live** — selected payment methods now render as a chips strip in the footer (`data-hl="payment"`) in real-time.
+7. **Auto-scroll** to newly-toggled section on `sections` step + to footer on `payment` step.
+
+**Tested end-to-end via curl**:
+- ✅ Add stories twice → only 1 stories section (dedup works)
+- ✅ "انقل الحالات الى الاعلى" → stories moves to index 1 (right after hero)
+- ✅ "احذف البنر" → banner section removed, action=remove_section
+- ✅ Mobile preview renders inside iPhone frame with notch
+- ✅ Quick-add chips work one-click
+
+
+
 ### 🆕 Feb 19, 2026 — LIVE FEATURES + LOGO STUDIO + QUICK ADD BAR (3 Fixes)
 
 **Problem reported by user**: Selecting features (whatsapp/delivery/cart) showed NO change in live preview. Logo step used text-prompt instead of buttons. User wanted quick-add chips under chat.

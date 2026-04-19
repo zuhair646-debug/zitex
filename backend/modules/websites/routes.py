@@ -434,7 +434,7 @@ def register_routes(app, database, auth_dep):
         action = extract_wizard_action(ai_text)
         # 🛡️ Safety net: if AI didn't emit a structural directive but the user
         # explicitly asked to add a known section type, inject the directive now.
-        STRUCTURAL_ACTIONS = {"add_section", "scaffold", "fill_section", "patch_section", "remove_section"}
+        STRUCTURAL_ACTIONS = {"add_section", "scaffold", "fill_section", "patch_section", "remove_section", "move_section"}
         if not action or action.get("action") not in STRUCTURAL_ACTIONS:
             fallback = detect_section_intent(body.message)
             if fallback:
@@ -669,6 +669,46 @@ def _chip_label(step_id: str, value: Any) -> str:
     return (c or {}).get("label", str(value))
 
 
+def _compute_insert_position(sections: List[Dict[str, Any]], position: str) -> int:
+    """Map a position keyword to an actual list index for insertion.
+    Keywords: 'top'|'bottom'|'after_hero'|'before_footer'|'after:TYPE'|'before:TYPE'|numeric.
+    Defaults to 'before_footer' (smart default — sections go visibly before the footer)."""
+    if not sections:
+        return 0
+    # Numeric index
+    try:
+        if position and position.lstrip("-").isdigit():
+            n = int(position)
+            return max(0, min(n, len(sections)))
+    except Exception:
+        pass
+    p = (position or "").strip().lower()
+    if p in ("top", "first", "start", "begin"):
+        # After hero (if any) — "top" visually means above-the-fold
+        hero_idx = next((i for i, s in enumerate(sections) if s.get("type") == "hero"), -1)
+        return hero_idx + 1 if hero_idx >= 0 else 0
+    if p in ("very_top", "absolute_top", "above_hero"):
+        return 0
+    if p in ("bottom", "last", "end"):
+        return len(sections)
+    if p == "after_hero":
+        hero_idx = next((i for i, s in enumerate(sections) if s.get("type") == "hero"), -1)
+        return hero_idx + 1 if hero_idx >= 0 else 0
+    if p.startswith("after:"):
+        tgt = p.split(":", 1)[1].strip()
+        idx = next((i for i, s in enumerate(sections) if s.get("type") == tgt), -1)
+        if idx >= 0:
+            return idx + 1
+    if p.startswith("before:"):
+        tgt = p.split(":", 1)[1].strip()
+        idx = next((i for i, s in enumerate(sections) if s.get("type") == tgt), -1)
+        if idx >= 0:
+            return idx
+    # Default: before footer
+    footer_idx = next((i for i, s in enumerate(sections) if s.get("type") == "footer"), -1)
+    return footer_idx if footer_idx >= 0 else len(sections)
+
+
 def _apply_ai_action(project: Dict[str, Any], action: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """Mutate project based on a directive returned by the AI."""
     if not action or not isinstance(action, dict):
@@ -689,12 +729,38 @@ def _apply_ai_action(project: Dict[str, Any], action: Optional[Dict[str, Any]]) 
             existing = (project.get("theme") or {}).get("custom_css", "")
             project["theme"] = {**(project.get("theme") or {}), "custom_css": (existing + "\n" + v).strip()}
         if a == "add_section" and isinstance(v, dict):
+            # 🧠 Smart dedup + positioning — NEVER create duplicates.
+            # If a section of the same type already exists, UPDATE its data + move it to requested position.
+            stype = v.get("type", "hero")
+            new_data = v.get("data") or {}
+            position = str(v.get("position") or "").lower()  # 'top' | 'bottom' | 'after_hero' | int | ''
             sections = list(project.get("sections") or [])
-            sections.append({
-                "id": f"sec-{uuid.uuid4().hex[:8]}", "type": v.get("type", "hero"),
-                "order": len(sections), "visible": True, "data": v.get("data") or {},
-            })
-            project["sections"] = sections
+            existing_idx = next((i for i, s in enumerate(sections) if s.get("type") == stype), -1)
+            if existing_idx >= 0:
+                # Update data, then reposition if requested
+                sec = sections.pop(existing_idx)
+                # Merge data: new fields override, but preserve missing keys
+                sec = {**sec, "data": {**(sec.get("data") or {}), **new_data}, "visible": True}
+            else:
+                sec = {"id": f"sec-{uuid.uuid4().hex[:8]}", "type": stype,
+                       "order": 0, "visible": True, "data": new_data}
+            # Compute insert index
+            insert_at = _compute_insert_position(sections, position)
+            sections.insert(insert_at, sec)
+            project["sections"] = [{**s, "order": i} for i, s in enumerate(sections)]
+        if a == "move_section" and isinstance(v, dict):
+            # 🚚 Move an existing section (by section_id or section_type) to a new position.
+            sid = v.get("section_id")
+            stype = v.get("section_type")
+            position = str(v.get("position") or "").lower()
+            sections = list(project.get("sections") or [])
+            idx = next((i for i, s in enumerate(sections)
+                        if (sid and s.get("id") == sid) or (not sid and s.get("type") == stype)), -1)
+            if idx >= 0:
+                sec = sections.pop(idx)
+                insert_at = _compute_insert_position(sections, position)
+                sections.insert(insert_at, sec)
+                project["sections"] = [{**s, "order": i} for i, s in enumerate(sections)]
         if a == "fill_section" and isinstance(v, dict):
             # Merge AI-provided data into an existing section matching section_type
             stype = v.get("section_type")

@@ -184,7 +184,15 @@ def _section_cta(d, theme) -> str:
 def _section_footer(d, theme) -> str:
     logo = theme.get("logo_url") or ""
     brand_html = f'<img src="{_esc(logo)}" class="footer-logo" alt="logo"/>' if logo else f'<div class="footer-brand">{_esc(d.get("brand",""))}</div>'
-    return f"""<footer class="site-footer"><div class="container">{brand_html}<div class="footer-meta"><span>© 2026 — جميع الحقوق محفوظة</span><span>مدعوم من Zitex</span></div></div></footer>"""
+    # Payment methods strip (if configured in theme)
+    pay_map = {"stripe":"💳 فيزا/ماستر","mada":"🏦 مدى","applepay":"📱 Apple Pay","stcpay":"💰 STC Pay","paypal":"🅿️ PayPal","cod":"💵 كاش","bank":"🏛️ تحويل"}
+    methods = theme.get("payment_methods") or []
+    pay_html = ""
+    if methods:
+        chips = "".join(f'<span class="pay-chip">{_esc(pay_map.get(m, m))}</span>' for m in methods if m != "none")
+        if chips:
+            pay_html = f'<div class="footer-pay" data-hl="payment"><div class="pay-label">وسائل الدفع المقبولة:</div><div class="pay-chips">{chips}</div></div>'
+    return f"""<footer class="site-footer" data-hl="footer"><div class="container">{brand_html}{pay_html}<div class="footer-meta"><span>© 2026 — جميع الحقوق محفوظة</span><span>مدعوم من Zitex</span></div></div></footer>"""
 
 
 # ---- Dashboard (admin / customer panel) ----
@@ -879,6 +887,10 @@ img{{max-width:100%;display:block;border-radius:{r}}}
 .site-footer .container{{display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px}}
 .footer-brand{{font-weight:900;color:{p}}}
 .footer-meta{{display:flex;gap:20px;opacity:.6;font-size:13px}}
+.footer-pay{{margin:14px 0 10px;padding:12px 0;border-top:1px solid rgba(255,255,255,.06);border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;gap:12px;flex-wrap:wrap}}
+.pay-label{{font-size:12px;opacity:.7;font-weight:700}}
+.pay-chips{{display:flex;gap:6px;flex-wrap:wrap}}
+.pay-chip{{font-size:12px;padding:5px 11px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:99px;font-weight:700}}
 
 /* DASHBOARD */
 .brand-logo{{max-width:140px;max-height:90px;margin-bottom:18px;display:block;object-fit:contain}}

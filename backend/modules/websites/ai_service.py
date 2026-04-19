@@ -51,9 +51,12 @@ Actions:
   - "inject_css" → ⭐ **أضف CSS مخصّصة إبداعية** (يظهر فوراً في المعاينة). مثال:
      value: ".btn-primary::before{content:'🐾 ';font-size:14px} .btn-primary{letter-spacing:2px}"
      استخدمها لإضافة أيقونات/إطارات/تأثيرات تعكس طابع النشاط.
-  - "add_section" → ⭐ قسم جديد يظهر **فوراً** في اللايف: {"type":"<one of supported>", "data":{...}}
+  - "add_section" → ⭐ قسم جديد يظهر **فوراً** في اللايف. إذا كان من نفس النوع موجوداً فسيتم **تحديثه وليس تكراره** (لا تكرار أبداً). يدعم position:
+     {"type":"<one of supported>", "data":{...}, "position":"top|bottom|after_hero|before:<type>|after:<type>"}
+  - "move_section" → ⭐ نقل قسم موجود لموضع آخر (بدون إنشاء جديد):
+     {"section_type":"<type>", "position":"top|bottom|after_hero|..."}
   - "fill_section" → ملء محتوى قسم موجود: {"section_type":"hero|about|...", "data":{...}}
-  - "patch_section" → تعديل قسم موجود: {"section_type":"<type>", "data":{...}, "set":{"visible":true}}
+  - "patch_section" → تعديل قسم موجود: {"section_type":"<type>", "data":{...}, "set":{"visible":true, "order":2}}
   - "remove_section" → حذف قسم: {"section_type":"<type>"}
   - "scaffold" → ⭐ **بناء موقع كامل من وصف حرّ** (للقالب الفارغ أو طلب خاص):
      value: {"name":"اسم", "sections":[{"type":"hero","data":{...}}, ...], "theme_hints":{"primary":"#..."}, "custom_css":"..."}
@@ -70,13 +73,24 @@ reservation, quote, video, newsletter, stats_band,
 **announce_bar_section** (شريط إعلاني علوي),
 **custom** (قسم عام مرن لأي فكرة — استخدمه عندما لا يناسبك أي نوع آخر).
 
-⚡ **قاعدة ذهبية — "كل ما يُطلب يظهر في اللايف":**
-- لو العميل قال "أضف حالات" أو "قصص" أو "ستوري" → استخدم `add_section` بـ `type: "stories"` مع items بها {title, image} (6 عناصر على الأقل).
-- لو قال "أضف بنر" أو "banner" أو "إعلان" → استخدم `type: "banner"` مع {title, subtitle, cta_text, image}.
-- لو قال "شريط إعلان علوي" → `type: "announce_bar_section"` مع {text, cta_text}.
-- لو طلب أي شيء آخر (مثلاً "قسم عروض"، "قسم مقالات"، "وصفات"، "أحداث") → استخدم `type: "custom"` مع {title, subtitle, layout: "grid|list|row", items: [{icon, title, text, image, cta}]}.
-- **ممنوع أن تقول "تمت الإضافة" دون إرسال `add_section` فعلياً** — لأن كل رد يجب أن يترجم إلى تغيير مرئي فوري في المعاينة.
-- عند تعديل محتوى قسم موجود استخدم `patch_section` أو `fill_section`.
+⚡ **قاعدة ذهبية — "كل ما يُطلب يظهر في اللايف + بلا تكرار":**
+- لو العميل قال "أضف حالات" → `add_section` type=stories. لو القسم موجود **لن يُكرَّر** — فقط يُحدَّث.
+- لو قال "اجعل الحالات في الأعلى" أو "ارفع البنر للأعلى" → **`move_section`** (ليس add_section) بـ position="top".
+- لو قال "احذف البنر" → `remove_section`.
+- لو قال "غيّر عنوان الهيرو إلى ..." → `patch_section` بـ {section_type:"hero", data:{title:"..."}}.
+- لو قال "بدل لون اللوقو/الأزرار" → `apply_theme` أو `apply_button`.
+- لو طلب شيء غير مألوف → `add_section` بـ type="custom" مع محتوى غني.
+- **ممنوع أن تقول "تمت الإضافة" دون إرسال directive فعلي** — كل رد يجب أن يترجم إلى تغيير مرئي فوري في المعاينة.
+
+✨ **مثال: "ارفع الحالات للأعلى":**
+[WIZARD_ACTION]
+{"action":"move_section","value":{"section_type":"stories","position":"top"}}
+[/WIZARD_ACTION]
+
+✨ **مثال: "غيّر عنوان الهيرو إلى كوفي دافئ":**
+[WIZARD_ACTION]
+{"action":"patch_section","value":{"section_type":"hero","data":{"title":"كوفي دافئ"}}}
+[/WIZARD_ACTION]
 
 ✨ **مثال طلب "أضف حالات" في موقع كافي:**
 ردّك:
@@ -271,22 +285,56 @@ _ADD_VERB_PAT = re.compile(
     re.IGNORECASE,
 )
 
+# Move / reposition verbs — signals the user wants to RELOCATE, not add a new one
+_MOVE_VERB_PAT = re.compile(
+    r"\b(?:انقل|انقلها|انقله|حرّ?ك|حركها|حركه|ارفع|ارفعها|ارفعه|نزّ?ل|اجعل|خلّ?ي|ضعه?ا?|حطه?ا?|move|relocate)\b",
+    re.IGNORECASE,
+)
+
+# Position keywords in Arabic / English
+_POSITION_PATTERNS = [
+    (r"(?:في\s+)?(?:الأعلى|فوق|للأعلى|بالأعلى|اعلى|الاعلى|على\s+راس|راس\s+الصفحة|قبل\s+كل\s+شي(?:ء)?|أول\s+شي(?:ء)?|top|first)", "top"),
+    (r"(?:في\s+)?(?:الأسفل|تحت|للأسفل|بالأسفل|اسفل|الاسفل|آخر\s+شي(?:ء)?|نهاية|bottom|last)", "bottom"),
+    (r"بعد\s+(?:ال)?هيرو|after\s+hero", "after_hero"),
+    (r"قبل\s+(?:ال)?فوتر|قبل\s+(?:ال)?تذييل|before\s+footer", "before:footer"),
+]
+
+
+def detect_position(text: str) -> str:
+    """Extract a position keyword from free text. Returns '' if none."""
+    if not text:
+        return ""
+    for pat, pos in _POSITION_PATTERNS:
+        if re.search(pat, text, flags=re.IGNORECASE):
+            return pos
+    return ""
+
 
 def detect_section_intent(user_message: str) -> Optional[Dict[str, Any]]:
-    """If the user explicitly asks to add a section that maps to a known type,
-    return a structured add_section directive. This is a SAFETY NET — used only
-    when the AI didn't already emit a stronger directive."""
+    """If the user explicitly asks to add/move a section that maps to a known type,
+    return a structured directive. Handles BOTH adding and relocating — never creates
+    duplicates (the backend's add_section handler deduplicates by type)."""
     if not user_message:
         return None
     txt = user_message.strip()
     word_count = len(txt.split())
     has_add_verb = bool(_ADD_VERB_PAT.search(txt))
+    has_move_verb = bool(_MOVE_VERB_PAT.search(txt))
     has_section_word = bool(re.search(r"(?:قسم|صف\s|جزء|شريط|بلوك|section|صفحة)", txt, flags=re.IGNORECASE))
-    is_short_request = word_count <= 5   # terse messages like "ستوري مثل السناب"
+    is_short_request = word_count <= 5
+    position = detect_position(txt)
     for pattern, stype, default_data in _INTENT_PATTERNS:
         if re.search(pattern, txt, flags=re.IGNORECASE):
-            if has_add_verb or has_section_word or is_short_request:
-                return {"action": "add_section", "value": {"type": stype, "data": dict(default_data)}}
+            if has_move_verb and position:
+                # User asked to RELOCATE — use move_section (no new content)
+                return {"action": "move_section", "value": {"section_type": stype, "position": position}}
+            if has_add_verb or has_section_word or is_short_request or position:
+                value = {"type": stype, "data": dict(default_data)}
+                if position:
+                    value["position"] = position
+                return {"action": "add_section", "value": value}
+    # No type matched but clear move command with position? (e.g., "انقل البنر الى الاعلى")
+    # Already handled above because the type pattern must match first. This is sufficient.
     return None
 
 

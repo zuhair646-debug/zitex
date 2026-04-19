@@ -517,9 +517,10 @@ function ChatColumn({ project, stepMeta, variants, loading, onSendText, onAnswer
 }
 
 /* ================================================================
-   PREVIEW PANE with fullscreen
+   PREVIEW PANE — desktop + mobile toggle + fullscreen
    ================================================================ */
-function PreviewPane({ html, project, fullscreen, onToggleFullscreen, onRefresh }) {
+function PreviewPane({ html, project, fullscreen, onToggleFullscreen, onRefresh, device, onToggleDevice }) {
+  const isMobile = device === 'mobile';
   return (
     <div className={`flex flex-col min-h-0 bg-[#050815] ${fullscreen ? 'fixed inset-0 z-50' : 'flex-1'}`} data-testid="preview-pane">
       <div className="flex items-center gap-2 px-3 py-2 text-xs bg-[#0a0e1c] border-b border-white/10">
@@ -527,6 +528,20 @@ function PreviewPane({ html, project, fullscreen, onToggleFullscreen, onRefresh 
         <span className="opacity-70 font-bold">معاينة لايف</span>
         <span className="opacity-50 truncate">• {project?.sections?.length || 0} أقسام</span>
         <div className="flex-1" />
+        <div className="flex items-center bg-white/5 border border-white/10 rounded-lg overflow-hidden" data-testid="device-toggle">
+          <button
+            onClick={() => onToggleDevice('desktop')}
+            className={`px-2.5 py-1 text-[11px] font-bold flex items-center gap-1 transition-colors ${!isMobile ? 'bg-yellow-500 text-black' : 'hover:bg-white/10'}`}
+            title="عرض حاسوب"
+            data-testid="device-desktop-btn"
+          ><Monitor className="w-3.5 h-3.5" />حاسوب</button>
+          <button
+            onClick={() => onToggleDevice('mobile')}
+            className={`px-2.5 py-1 text-[11px] font-bold flex items-center gap-1 transition-colors ${isMobile ? 'bg-yellow-500 text-black' : 'hover:bg-white/10'}`}
+            title="عرض جوال"
+            data-testid="device-mobile-btn"
+          ><span className="text-base leading-none">📱</span>جوال</button>
+        </div>
         <button
           onClick={onRefresh}
           className="p-1.5 hover:bg-white/10 rounded-lg"
@@ -540,14 +555,30 @@ function PreviewPane({ html, project, fullscreen, onToggleFullscreen, onRefresh 
           data-testid="preview-fullscreen-btn"
         >{fullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}</button>
       </div>
-      <iframe
-        key={project?.id}
-        srcDoc={html}
-        className="flex-1 w-full bg-white"
-        sandbox="allow-scripts allow-same-origin"
-        title="preview"
-        data-testid="live-preview"
-      />
+      <div className={`flex-1 w-full ${isMobile ? 'flex items-start justify-center overflow-y-auto py-4 bg-gradient-to-b from-[#050815] to-[#0b0f1f]' : ''}`}>
+        {isMobile ? (
+          <div className="relative bg-black rounded-[40px] shadow-2xl border-[10px] border-[#0a0e1c] overflow-hidden" style={{ width: 390, height: 780 }} data-testid="mobile-frame">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-5 bg-black rounded-b-2xl z-10" />
+            <iframe
+              key={`${project?.id}-mobile`}
+              srcDoc={html}
+              className="w-full h-full bg-white"
+              sandbox="allow-scripts allow-same-origin"
+              title="preview-mobile"
+              data-testid="live-preview"
+            />
+          </div>
+        ) : (
+          <iframe
+            key={project?.id}
+            srcDoc={html}
+            className="flex-1 w-full h-full bg-white"
+            sandbox="allow-scripts allow-same-origin"
+            title="preview"
+            data-testid="live-preview"
+          />
+        )}
+      </div>
     </div>
   );
 }
@@ -939,10 +970,34 @@ function buildOverrides(step, value, project) {
     const layout = existing?.data?.layout || 'sidebar';
     sections_override = [{ id: 'preview-dash', type: 'dashboard', order: 0, visible: true, data: { layout, title: 'لوحة التحكم', items } }];
   } else if (step === 'sections') {
-    // For sections step, we show a preview with only selected + footer
+    // Live-update: show EXACTLY the sections the user has toggled (plus footer).
+    // If a wanted type is missing from current sections, create a stub so it shows instantly.
     const wanted = Array.isArray(value) ? value : [value];
-    const kept = sections.filter((s) => wanted.includes(s.type) || s.type === 'footer');
-    sections_override = kept.map((s, i) => ({ ...s, order: i }));
+    const existingByType = {};
+    (sections || []).forEach((s) => { existingByType[s.type] = s; });
+    const DEFAULT_STUBS = {
+      hero:        { title: project?.name || 'عنوان رئيسي', subtitle: 'عنوان فرعي ملهم', cta_text: 'ابدأ الآن', layout: 'split' },
+      about:       { title: 'من نحن', text: 'اكتب نبذة مختصرة عن نشاطك.' },
+      features:    { title: 'مميزاتنا', items: [{ icon:'✨', title:'ميزة أولى', text:'وصف' },{ icon:'🚀', title:'ميزة ثانية', text:'وصف' },{ icon:'💎', title:'ميزة ثالثة', text:'وصف' }] },
+      menu:        { title: 'قائمة الطعام', categories: [{ name:'المشروبات الساخنة', items:[{name:'قهوة تركية',price:'15'},{name:'كابتشينو',price:'20'},{name:'لاتيه',price:'22'}] },{ name:'الحلويات', items:[{name:'تشيز كيك',price:'28'},{name:'براوني',price:'24'}] }] },
+      products:    { title: 'منتجاتنا', items: [{name:'منتج 1',price:'99'},{name:'منتج 2',price:'149'},{name:'منتج 3',price:'199'}] },
+      gallery:     { title: 'معرض الصور', images: ['https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800','https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=800','https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=800'] },
+      testimonials:{ title: 'آراء عملائنا', items: [{name:'أحمد',text:'تجربة رائعة!',rating:5},{name:'سارة',text:'جودة ممتازة',rating:5}] },
+      team:        { title: 'فريقنا', members: [{name:'محمد',role:'المؤسس'},{name:'أحمد',role:'المدير'},{name:'فاطمة',role:'التسويق'}] },
+      pricing:     { title: 'خطط الأسعار', plans: [{name:'أساسي',price:'99',features:['ميزة 1','ميزة 2']},{name:'احترافي',price:'199',features:['كل ما سبق','ميزة 3'],highlighted:true}] },
+      faq:         { title: 'أسئلة شائعة', items: [{q:'كيف أطلب؟',a:'بسهولة عبر الموقع'},{q:'مدة التوصيل؟',a:'من 1-3 أيام'}] },
+      contact:     { title: 'تواصل معنا', email: 'info@example.com', phone: '+966 50 000 0000' },
+      cta:         { title: 'جاهز للبدء؟', cta_text: 'انضم إلينا' },
+    };
+    const built = wanted.map((t) => existingByType[t] || ({ id: `preview-${t}`, type: t, order: 0, visible: true, data: DEFAULT_STUBS[t] || { title: t } }));
+    // Always include footer at end if exists
+    const footer = (sections || []).find((s) => s.type === 'footer');
+    if (footer) built.push(footer);
+    sections_override = built.map((s, i) => ({ ...s, order: i }));
+  } else if (step === 'payment') {
+    // Live: show selected payment methods in a small preview band (stored in theme)
+    const wanted = Array.isArray(value) ? value : [value];
+    theme_override.payment_methods = wanted.filter((p) => p !== 'none');
   } else if (step === 'features') {
     // 🆕 Each feature must materialize in the live preview immediately.
     const wanted = Array.isArray(value) ? value : [value];
@@ -1034,6 +1089,7 @@ export default function WebsiteStudio({ user }) {
   const [fullscreen, setFullscreen] = useState(false);
   const [mobileView, setMobileView] = useState('preview');
   const [pending, setPending] = useState(null); // { step, value, html }
+  const [previewDevice, setPreviewDevice] = useState('desktop'); // desktop | mobile
   const buildTimer = useRef(null);
 
   useEffect(() => {
@@ -1151,6 +1207,12 @@ export default function WebsiteStudio({ user }) {
         if (step === 'dashboard_items' && Array.isArray(value) && value.length > 0) {
           const last = value[value.length - 1];
           target = doc.getElementById(`panel-${last}`);
+        } else if (step === 'sections' && Array.isArray(value) && value.length > 0) {
+          // Scroll to the LAST toggled section so user sees it instantly
+          const last = value[value.length - 1];
+          target = doc.querySelector(`[data-hl="${last}"]`) || doc.getElementById(last);
+        } else if (step === 'payment' && Array.isArray(value) && value.length > 0) {
+          target = doc.querySelector('[data-hl="payment"]') || doc.querySelector('footer,[data-hl="footer"]');
         } else if (step === 'features' && Array.isArray(value) && value.length > 0) {
           const last = value[value.length - 1];
           const featureMap = {
@@ -1443,6 +1505,8 @@ export default function WebsiteStudio({ user }) {
                 fullscreen={fullscreen}
                 onToggleFullscreen={() => setFullscreen((f) => !f)}
                 onRefresh={() => refreshPreview(project)}
+                device={previewDevice}
+                onToggleDevice={setPreviewDevice}
               />
             </div>
 
