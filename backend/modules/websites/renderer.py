@@ -15,11 +15,13 @@ def _section_hero(d: Dict[str, Any], theme: Dict[str, Any]) -> str:
     sub = _esc(d.get("subtitle", ""))
     cta = _esc(d.get("cta_text", ""))
     link = _esc(d.get("cta_link", "#"))
+    logo = theme.get("logo_url") or ""
+    logo_html = f'<img src="{_esc(logo)}" class="brand-logo" alt="logo"/>' if logo else ""
     if layout == "split":
-        return f"""<section class="hero hero-split"><div class="container"><div class="hero-copy"><h1>{title}</h1><p>{sub}</p>{f'<a href="{link}" class="btn btn-primary">{cta}</a>' if cta else ''}</div><div class="hero-media"><img src="{img}" alt=""/></div></div></section>"""
+        return f"""<section class="hero hero-split"><div class="container"><div class="hero-copy">{logo_html}<h1>{title}</h1><p>{sub}</p>{f'<a href="{link}" class="btn btn-primary">{cta}</a>' if cta else ''}</div><div class="hero-media"><img src="{img}" alt=""/></div></div></section>"""
     if layout == "portrait":
-        return f"""<section class="hero hero-portrait" style="background-image:linear-gradient(180deg,rgba(0,0,0,.4),rgba(0,0,0,.8)),url('{img}')"><div class="container" style="text-align:center"><h1>{title}</h1><p>{sub}</p>{f'<a href="{link}" class="btn btn-primary">{cta}</a>' if cta else ''}</div></section>"""
-    return f"""<section class="hero hero-full" style="background-image:linear-gradient(rgba(0,0,0,.35),rgba(0,0,0,.7)),url('{img}')"><div class="container"><h1>{title}</h1><p>{sub}</p>{f'<a href="{link}" class="btn btn-primary">{cta}</a>' if cta else ''}</div></section>"""
+        return f"""<section class="hero hero-portrait" style="background-image:linear-gradient(180deg,rgba(0,0,0,.4),rgba(0,0,0,.8)),url('{img}')"><div class="container" style="text-align:center">{logo_html}<h1>{title}</h1><p>{sub}</p>{f'<a href="{link}" class="btn btn-primary">{cta}</a>' if cta else ''}</div></section>"""
+    return f"""<section class="hero hero-full" style="background-image:linear-gradient(rgba(0,0,0,.35),rgba(0,0,0,.7)),url('{img}')"><div class="container">{logo_html}<h1>{title}</h1><p>{sub}</p>{f'<a href="{link}" class="btn btn-primary">{cta}</a>' if cta else ''}</div></section>"""
 
 
 def _section_features(d: Dict[str, Any], theme) -> str:
@@ -113,7 +115,9 @@ def _section_cta(d, theme) -> str:
 
 
 def _section_footer(d, theme) -> str:
-    return f"""<footer class="site-footer"><div class="container"><div class="footer-brand">{_esc(d.get('brand',''))}</div><div class="footer-meta"><span>© 2026 — جميع الحقوق محفوظة</span><span>مدعوم من Zitex</span></div></div></footer>"""
+    logo = theme.get("logo_url") or ""
+    brand_html = f'<img src="{_esc(logo)}" class="footer-logo" alt="logo"/>' if logo else f'<div class="footer-brand">{_esc(d.get("brand",""))}</div>'
+    return f"""<footer class="site-footer"><div class="container">{brand_html}<div class="footer-meta"><span>© 2026 — جميع الحقوق محفوظة</span><span>مدعوم من Zitex</span></div></div></footer>"""
 
 
 # ---- Dashboard (admin / customer panel) ----
@@ -292,6 +296,8 @@ img{{max-width:100%;display:block;border-radius:{r}}}
 .footer-meta{{display:flex;gap:20px;opacity:.6;font-size:13px}}
 
 /* DASHBOARD */
+.brand-logo{{max-width:140px;max-height:90px;margin-bottom:18px;display:block;object-fit:contain}}
+.footer-logo{{max-width:120px;max-height:60px;object-fit:contain}}
 .dashboard{{background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,.05));border-top:1px solid rgba(255,255,255,.08);border-bottom:1px solid rgba(255,255,255,.08)}}
 .dash-contact{{background:rgba(255,255,255,.06);padding:10px 16px;border-radius:{r};display:inline-block;margin:4px 6px;font-weight:700}}
 .dash-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-top:20px}}

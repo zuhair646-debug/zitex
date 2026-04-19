@@ -57,6 +57,8 @@ Actions:
      value: {"name":"اسم", "sections":[{"type":"hero","data":{...}}, {"type":"features","data":{...}}, ...], "theme_hints":{"primary":"#..."}, "custom_css":"..."}
      يُستخدم عندما يذكر المستخدم فكرة نشاط ونحن في blank template أو عندما يطلب تعديلاً جذرياً.
   - "custom_feature" → حفظ ميزة مخصّصة: {"title":"...", "section_type":"..."}
+  - "generate_logo" → ⭐ توليد لوقو احترافي: value = {"prompt":"وصف كامل للوقو", "style":"minimal/elegant/playful"}
+     يُستخدم عندما يطلب المستخدم صنع شعار/لوقو.
   - "no_action" → مجرد حديث
 
 ✨ **مثال على الإبداع:**

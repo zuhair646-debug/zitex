@@ -816,6 +816,52 @@ export default function WebsiteStudio({ user }) {
   const stepMeta = wizardSteps.find((s) => s.id === currentStep);
   const activeTemplate = categories.find((c) => c.id === project?.template);
 
+  // Auto-preview an empty dashboard when entering the dashboard step (teaser)
+  useEffect(() => {
+    if (!project?.id || !currentStep) return;
+    if (currentStep === 'dashboard') {
+      const hasDash = (project.sections || []).some((s) => s.type === 'dashboard');
+      if (!hasDash && !pending) {
+        previewAnswer('dashboard', 'cards');
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.id, currentStep]);
+
+  // Logo generation
+  const [logoGenerating, setLogoGenerating] = useState(false);
+  const generateLogoPrompt = async () => {
+    if (!project?.id) return;
+    const prompt = window.prompt('صف اللوقو الذي تريده (مثال: لوقو لمتجر قطط اسمه "مملكة القطط" — خطوات قطط وألوان دافئة)');
+    if (!prompt) return;
+    setLogoGenerating(true);
+    toast.info('🎨 جاري توليد اللوقو... قد يستغرق 15-30 ثانية');
+    try {
+      const r = await fetch(`${API}/api/websites/projects/${project.id}/generate-logo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authH() },
+        body: JSON.stringify({ prompt, style_hint: '' }),
+      });
+      if (!r.ok) throw new Error('failed');
+      const d = await r.json();
+      setProject({ ...project, theme: { ...(project.theme || {}), logo_url: d.logo_url } });
+      toast.success('✨ تم توليد اللوقو وتثبيته في الموقع!');
+    } catch (_) { toast.error('فشل التوليد — حاول بوصف أوضح'); }
+    finally { setLogoGenerating(false); }
+  };
+
+  const removeLogo = async () => {
+    if (!project?.id) return;
+    const newTheme = { ...(project.theme || {}) };
+    delete newTheme.logo_url;
+    setProject({ ...project, theme: newTheme });
+    await fetch(`${API}/api/websites/projects/${project.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authH() },
+      body: JSON.stringify({ ...project, theme: newTheme }),
+    });
+    toast.success('تم إزالة اللوقو');
+  };
+
   return (
     <div className="h-screen flex flex-col bg-[#0b0f1f] text-white overflow-hidden" dir="rtl" data-testid="website-studio">
       {/* Top bar (hidden in preview fullscreen) */}
@@ -858,6 +904,13 @@ export default function WebsiteStudio({ user }) {
             <button onClick={() => { loadProjects(); setShowLibrary(true); }} className="p-2 md:px-3 md:py-2 bg-white/10 hover:bg-white/20 rounded-lg flex items-center gap-1.5" data-testid="library-btn">
               <FolderOpen className="w-4 h-4" /><span className="hidden md:inline text-xs">مواقعي ({projects.length})</span>
             </button>
+            <button onClick={generateLogoPrompt} disabled={!project || logoGenerating} className="p-2 md:px-3 md:py-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 hover:from-purple-500/30 hover:to-pink-500/30 border border-purple-400/30 rounded-lg flex items-center gap-1.5 disabled:opacity-40" data-testid="gen-logo-btn" title="توليد لوقو بالذكاء الاصطناعي">
+              {logoGenerating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-purple-300" />}
+              <span className="hidden md:inline text-xs">{logoGenerating ? 'جاري...' : 'اعمل لوقو'}</span>
+            </button>
+            {project?.theme?.logo_url && (
+              <button onClick={removeLogo} className="p-2 bg-white/10 hover:bg-red-500/20 rounded-lg" title="إزالة اللوقو" data-testid="remove-logo-btn"><X className="w-4 h-4" /></button>
+            )}
             <button onClick={exportHtml} disabled={!project} className="p-2 md:px-3 md:py-2 bg-white/10 hover:bg-white/20 rounded-lg flex items-center gap-1.5 disabled:opacity-40" data-testid="export-btn">
               <Download className="w-4 h-4" /><span className="hidden md:inline text-xs">تصدير</span>
             </button>

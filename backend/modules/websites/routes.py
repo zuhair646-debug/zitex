@@ -15,6 +15,7 @@ from .ai_service import (
 )
 from .variants import list_variants_for_template, list_style_variants, get_variant_project
 from .catalog import list_categories, list_layouts, get_layout
+from .logo_service import generate_logo, generate_hero_image
 from .wizard import (
     STEPS, default_wizard_state, get_step, get_question_for_step,
     get_chips_for_step, next_step_id, apply_answer, steps_metadata,
@@ -31,6 +32,16 @@ class WizardStepIn(BaseModel):
 
 class WizardChatIn(BaseModel):
     message: str
+
+
+class LogoGenerateIn(BaseModel):
+    prompt: str
+    style_hint: Optional[str] = ""
+
+
+class HeroImageIn(BaseModel):
+    prompt: str
+    section_type: str = "hero"
 
 
 class BuildPreviewIn(BaseModel):
@@ -209,6 +220,46 @@ def register_routes(app, database, auth_dep):
             raise HTTPException(404, "Project not found")
         return {"html": render_website_to_html(p), "project_id": project_id}
 
+    # ---------------- Logo / Hero image generation (AI) ----------------
+    @r.post("/projects/{project_id}/generate-logo")
+    async def _p_generate_logo(project_id: str, body: LogoGenerateIn, current_user: dict = Depends(auth_dep)):
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "Project not found")
+        result = await generate_logo(body.prompt, body.style_hint or "")
+        if not result:
+            raise HTTPException(500, "فشل توليد اللوقو — حاول بوصف مختلف")
+        data_url, _sid = result
+        theme = {**(p.get("theme") or {}), "logo_url": data_url}
+        await database.website_projects.update_one(
+            {"id": project_id},
+            {"$set": {"theme": theme, "updated_at": _iso_now()}},
+        )
+        return {"ok": True, "logo_url": data_url}
+
+    @r.post("/projects/{project_id}/generate-hero-image")
+    async def _p_generate_hero(project_id: str, body: HeroImageIn, current_user: dict = Depends(auth_dep)):
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "Project not found")
+        url = await generate_hero_image(body.prompt)
+        if not url:
+            raise HTTPException(500, "فشل توليد الصورة")
+        sections = list(p.get("sections") or [])
+        for i, s in enumerate(sections):
+            if s.get("type") == body.section_type:
+                sections[i] = {**s, "data": {**(s.get("data") or {}), "image": url}}
+                break
+        await database.website_projects.update_one(
+            {"id": project_id},
+            {"$set": {"sections": sections, "updated_at": _iso_now()}},
+        )
+        return {"ok": True, "image_url": url}
+
     # Preview with un-persisted theme / section overrides (used for live-before-confirm)
     @r.post("/projects/{project_id}/build-preview")
     async def _p_build_preview(project_id: str, body: BuildPreviewIn, current_user: dict = Depends(auth_dep)):
@@ -294,6 +345,16 @@ def register_routes(app, database, auth_dep):
         p["chat"] = history
         # Apply AI action (if any)
         p = _apply_ai_action(p, action)
+        # Handle async generate_logo directive
+        if action and action.get("action") == "generate_logo" and isinstance(action.get("value"), dict):
+            try:
+                v = action["value"]
+                result = await generate_logo(v.get("prompt", ""), v.get("style", ""))
+                if result:
+                    data_url, _ = result
+                    p["theme"] = {**(p.get("theme") or {}), "logo_url": data_url}
+            except Exception as e:
+                logger.warning(f"logo gen in chat failed: {e}")
         await database.website_projects.update_one(
             {"id": project_id},
             {"$set": {

@@ -39,7 +39,14 @@
 - كل ضغطة رقاقة (لون/خط/زر/نمط) → `POST /build-preview` بتحديث مؤقت → المعاينة تتحدّث لايف
 - Pending Confirm Bar ظاهر مع "اعتمد" (يحفظ) و "جرّب غيره" (يلغي)
 - Multi-select: كل toggle يحدّث المعاينة فوراً
-- Dashboard: عند اختيار Layout (cards/sidebar/tabs) يظهر كقسم لايف + toggle عناصر يُحدّثها
+- Dashboard: عند دخول الخطوة → **معاينة تلقائية للوحة فارغة** + بار التأكيد → toggle العناصر يُضيف/يزيل فوراً
+
+### AI Logo & Hero Image Generation (جديد Feb 2026):
+- Endpoint: `POST /projects/{id}/generate-logo` — يستقبل وصف → يولّد لوقو احترافي عبر GPT-Image-1 → يحفظ كـ data URL في `theme.logo_url` → يظهر في Hero + Footer فوراً
+- Endpoint: `POST /projects/{id}/generate-hero-image` — يولّد صورة Hero مخصّصة
+- AI directive جديد `generate_logo` — عند طلب المستخدم لشعار، AI يطلقه تلقائياً
+- زر "اعمل لوقو" في شريط الاستوديو (purple/pink gradient) — يفتح نافذة وصف ويولّد اللوقو
+- زر X لإزالة اللوقو
 
 ### Frontend (`/frontend/src/pages/websites/WebsiteStudio.js`):
 تخطيط جديد محسَّن (Feb 2026):
