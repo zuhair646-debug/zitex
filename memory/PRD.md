@@ -42,7 +42,23 @@
   - 🛡️ شارات ثقة، ⬆️ زر للأعلى، 💬 محادثة فورية، 📊 شريط إحصائيات
 - كل ودجت له `data-hl` للـ auto-scroll
 
-### Approval System (معتمد):
+### Public Sites & Admin Oversight (Feb 2026 ⭐):
+- **Slug تلقائي** لكل مشروع معتمد (`site-xxxxx` إذا كان الاسم عربي)
+- **رابط عام**: `/sites/{slug}` — كل من يفتحه يشاهد الموقع الحي فقط (iframe + sandbox)
+- **عدّاد زيارات** تلقائي `visits++` في كل فتح
+- **API عام**: `GET /api/websites/public/{slug}` يُرجع HTML + يزيد العدّاد
+- **Admin Panel** (`/admin/sites` — owner/admin فقط):
+  - جدول بكل المواقع المعتمدة لكل العملاء
+  - KPIs: عدد المشاريع، إجمالي الزيارات، عدد العملاء، متوسط الزيارات
+  - أزرار لكل صف: نسخ الرابط، معاينة (iframe ملء الشاشة بدون علم العميل)، فتح في تبويب جديد
+  - ملكية العميل (اسم + بريد) ظاهرة لكل مشروع
+- **بطاقات المكتبة** للمشاريع المعتمدة تعرض الرابط + زر نسخ + زر زيارة
+- **Auto-fix**: المشاريع المعتمدة القديمة بدون slug تحصل على slug تلقائياً عند زيارة API
+
+### Saved Correctly:
+- كل حالة تُحفظ في MongoDB (slug, visits, approved_at, status, theme, sections, wizard, chat)
+- `/projects` و `/admin/sites` يُعيدان أحدث البيانات
+- URL `/sites/{slug}` يُحدّث `visits` تلقائياً عند كل زيارة
 - حقل `status: "approved" | "draft"` + `approved_at`
 - Endpoints: `POST /projects/{id}/approve` و `/unapprove`
 - زر "اعتماد" أخضر في الاستوديو + "اعتماد نهائي" في خطوة `final_confirm`

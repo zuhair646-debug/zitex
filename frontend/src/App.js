@@ -26,6 +26,8 @@ import AIChat from '@/pages/AIChat';
 import ProjectsPage from '@/pages/ProjectsPage';
 import VisualDesigner from '@/pages/VisualDesigner';
 import WebsiteStudio from '@/pages/websites/WebsiteStudio';
+import PublicSite from '@/pages/PublicSite';
+import AdminSites from '@/pages/websites/AdminSites';
 import '@/App.css';
 
 function App() {
@@ -95,6 +97,8 @@ function App() {
           <Route path="/projects" element={<ProtectedRoute><ProjectsPage user={user} /></ProtectedRoute>} />
           <Route path="/designer" element={<ProtectedRoute><VisualDesigner user={user} /></ProtectedRoute>} />
           <Route path="/websites" element={<ProtectedRoute><WebsiteStudio user={user} /></ProtectedRoute>} />
+          <Route path="/sites/:slug" element={<PublicSite />} />
+          <Route path="/admin/sites" element={<ProtectedRoute adminOnly><AdminSites user={user} /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
       <Toaster position="top-center" richColors />

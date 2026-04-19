@@ -37,6 +37,8 @@ class WebsiteProject(BaseModel):
     wizard: Optional[Dict[str, Any]] = None   # consultative wizard state
     status: Optional[str] = None   # draft | approved
     approved_at: Optional[str] = None
+    slug: Optional[str] = None   # public URL slug for approved sites
+    visits: Optional[int] = 0   # view counter for live link
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 

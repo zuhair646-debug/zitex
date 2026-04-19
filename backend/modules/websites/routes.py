@@ -1,9 +1,11 @@
 """FastAPI routes for the Websites module — fully isolated."""
 import uuid
+import re
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, List
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from .models import WebsiteProject, ChatMessageIn, AIGenerateIn
@@ -51,6 +53,33 @@ class BuildPreviewIn(BaseModel):
 
 def _iso_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _slugify(text: str) -> str:
+    """ASCII-safe slug generation from (possibly Arabic) text."""
+    if not text:
+        return "site"
+    # Keep alphanumerics + dashes; replace spaces with dashes
+    slug = re.sub(r"[^\w\u0600-\u06FF\s-]", "", str(text)).strip().lower()
+    slug = re.sub(r"\s+", "-", slug)
+    # If mostly non-ASCII, fall back to a short random id prefix
+    if not re.search(r"[a-z0-9]", slug):
+        slug = f"site-{uuid.uuid4().hex[:8]}"
+    return slug[:60] or f"site-{uuid.uuid4().hex[:8]}"
+
+
+async def _generate_unique_slug(database, base: str) -> str:
+    """Ensure slug is unique in collection."""
+    slug = _slugify(base)
+    candidate = slug
+    i = 1
+    while await database.website_projects.find_one({"slug": candidate}, {"_id": 0, "id": 1}):
+        i += 1
+        candidate = f"{slug}-{i}"
+        if i > 99:
+            candidate = f"{slug}-{uuid.uuid4().hex[:6]}"
+            break
+    return candidate
 
 
 def register_routes(app, database, auth_dep):
@@ -128,6 +157,14 @@ def register_routes(app, database, auth_dep):
     # ---------------- Projects ----------------
     @r.get("/projects")
     async def _p_list(current_user: dict = Depends(auth_dep)):
+        # Auto-fix: ensure approved projects of this user have a slug
+        missing = await database.website_projects.find(
+            {"user_id": current_user["user_id"], "status": "approved", "slug": {"$in": [None, ""]}},
+            {"_id": 0, "id": 1, "name": 1}
+        ).to_list(200)
+        for m in missing:
+            new_slug = await _generate_unique_slug(database, m.get("name") or "site")
+            await database.website_projects.update_one({"id": m["id"]}, {"$set": {"slug": new_slug}})
         items = await database.website_projects.find(
             {"user_id": current_user["user_id"]}, {"_id": 0}
         ).sort("updated_at", -1).to_list(200)
@@ -458,11 +495,15 @@ def register_routes(app, database, auth_dep):
         if not p:
             raise HTTPException(404, "Project not found")
         now = datetime.now(timezone.utc).isoformat()
+        # Generate slug if not already set
+        slug = p.get("slug")
+        if not slug:
+            slug = await _generate_unique_slug(database, p.get("name") or "site")
         await database.website_projects.update_one(
             {"id": project_id},
-            {"$set": {"status": "approved", "approved_at": now, "updated_at": now}}
+            {"$set": {"status": "approved", "approved_at": now, "updated_at": now, "slug": slug}}
         )
-        return {"ok": True, "status": "approved", "approved_at": now}
+        return {"ok": True, "status": "approved", "approved_at": now, "slug": slug, "public_url": f"/sites/{slug}"}
 
     @r.post("/projects/{project_id}/unapprove")
     async def _p_unapprove(project_id: str, current_user: dict = Depends(auth_dep)):
@@ -494,6 +535,66 @@ def register_routes(app, database, auth_dep):
                 {"id": "github", "name": "GitHub Pages", "summary": "مجاني تماماً للمواقع الثابتة (بدون Backend)."},
             ],
         }
+
+    # ---------------- Public site by slug ----------------
+    @r.get("/public/{slug}", response_class=HTMLResponse)
+    async def _public_site(slug: str):
+        p = await database.website_projects.find_one({"slug": slug, "status": "approved"}, {"_id": 0})
+        if not p:
+            return HTMLResponse("<h1>الموقع غير موجود</h1>", status_code=404)
+        # increment visits
+        try:
+            await database.website_projects.update_one({"id": p["id"]}, {"$inc": {"visits": 1}})
+        except Exception:
+            pass
+        return HTMLResponse(render_website_to_html(p))
+
+    @r.get("/public/{slug}/info")
+    async def _public_site_info(slug: str):
+        """Public metadata only (no PII)."""
+        p = await database.website_projects.find_one({"slug": slug, "status": "approved"},
+                                                    {"_id": 0, "name": 1, "template": 1, "slug": 1, "approved_at": 1, "visits": 1})
+        if not p:
+            raise HTTPException(404, "not found")
+        return p
+
+    # ---------------- Admin: all approved sites (owner view) ----------------
+    @r.get("/admin/sites")
+    async def _admin_sites(current_user: dict = Depends(auth_dep)):
+        # Only owner/admin can see ALL users' approved sites
+        user_doc = await database.users.find_one({"id": current_user["user_id"]}, {"_id": 0, "role": 1, "email": 1})
+        role = (user_doc or {}).get("role", "client")
+        if role not in ("owner", "super_admin", "admin"):
+            raise HTTPException(403, "غير مسموح — لوحة المشرف فقط")
+        # Auto-fix: ensure every approved project has a slug
+        missing = await database.website_projects.find({"status": "approved", "slug": {"$in": [None, ""]}}, {"_id": 0}).to_list(500)
+        for m in missing:
+            new_slug = await _generate_unique_slug(database, m.get("name") or "site")
+            await database.website_projects.update_one({"id": m["id"]}, {"$set": {"slug": new_slug}})
+        items = await database.website_projects.find(
+            {"status": "approved"},
+            {"_id": 0, "id": 1, "name": 1, "template": 1, "slug": 1, "approved_at": 1, "visits": 1, "user_id": 1, "theme": 1}
+        ).sort("approved_at", -1).to_list(500)
+        # Attach user email
+        user_ids = list({it["user_id"] for it in items})
+        users = await database.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "email": 1, "name": 1}).to_list(500)
+        umap = {u["id"]: u for u in users}
+        for it in items:
+            u = umap.get(it["user_id"], {})
+            it["owner_email"] = u.get("email")
+            it["owner_name"] = u.get("name")
+            it["public_url"] = f"/sites/{it.get('slug','')}"
+        return {"sites": items, "total": len(items)}
+
+    @r.get("/admin/sites/{project_id}")
+    async def _admin_site_detail(project_id: str, current_user: dict = Depends(auth_dep)):
+        user_doc = await database.users.find_one({"id": current_user["user_id"]}, {"_id": 0, "role": 1})
+        if (user_doc or {}).get("role") not in ("owner", "super_admin", "admin"):
+            raise HTTPException(403, "غير مسموح")
+        p = await database.website_projects.find_one({"id": project_id}, {"_id": 0})
+        if not p:
+            raise HTTPException(404, "Project not found")
+        return p
 
     app.include_router(r)
     return r

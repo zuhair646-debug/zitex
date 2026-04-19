@@ -556,13 +556,26 @@ function LibraryModal({ projects, onOpen, onDelete, onDuplicate, onApprove, onCl
   const approved = projects.filter((p) => p.status === 'approved');
   const drafts = projects.filter((p) => p.status !== 'approved');
 
-  const Card = ({ p, isApproved }) => (
+  const Card = ({ p, isApproved }) => {
+    const copyPublic = () => {
+      const url = `${window.location.origin}/sites/${p.slug}`;
+      navigator.clipboard.writeText(url);
+      toast.success('📋 تم نسخ الرابط');
+    };
+    return (
     <div className={`p-4 rounded-xl border relative ${isApproved ? 'bg-gradient-to-br from-green-500/10 to-emerald-500/5 border-green-500/40' : 'bg-white/5 border-white/10'}`} data-testid={`library-project-${p.id}`}>
       {isApproved && (
         <span className="absolute top-2 left-2 text-[10px] bg-green-500 text-black font-bold px-2 py-0.5 rounded-full">✓ معتمد</span>
       )}
       <div className="font-bold mb-1 truncate pr-6">{p.name}</div>
-      <div className="text-xs text-white/50 mb-3">{p.template} • {(p.sections || []).length} أقسام{p.approved_at ? ` • ${new Date(p.approved_at).toLocaleDateString('ar')}` : ''}</div>
+      <div className="text-xs text-white/50 mb-2">{p.template} • {(p.sections || []).length} أقسام{p.approved_at ? ` • ${new Date(p.approved_at).toLocaleDateString('ar')}` : ''}{isApproved && p.visits ? ` • 👁️ ${p.visits} زيارة` : ''}</div>
+      {isApproved && p.slug && (
+        <div className="mb-2 flex items-center gap-1.5 bg-black/30 rounded-lg px-2 py-1.5">
+          <code className="flex-1 text-[10px] text-yellow-400 truncate">/sites/{p.slug}</code>
+          <button onClick={copyPublic} className="text-xs px-2 py-0.5 bg-yellow-500/20 hover:bg-yellow-500/40 rounded" data-testid={`copy-link-${p.id}`}>📋</button>
+          <a href={`/sites/${p.slug}`} target="_blank" rel="noreferrer" className="text-xs px-2 py-0.5 bg-green-500/20 hover:bg-green-500/40 rounded text-green-400" data-testid={`visit-${p.id}`}>↗</a>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-1.5">
         <button onClick={() => onOpen(p.id)} className="px-2 py-1.5 bg-yellow-500/20 hover:bg-yellow-500/40 rounded text-xs font-bold" data-testid={`open-${p.id}`}>✏️ تعديل</button>
         <button onClick={() => onDuplicate(p.id)} className="px-2 py-1.5 bg-white/10 hover:bg-white/20 rounded text-xs font-bold">📋 نسخ</button>
@@ -579,7 +592,8 @@ function LibraryModal({ projects, onOpen, onDelete, onDuplicate, onApprove, onCl
         )}
       </div>
     </div>
-  );
+    );
+  };
 
   return (
     <div className="fixed inset-0 bg-black/80 z-[55] flex items-center justify-center p-4" onClick={onClose}>
