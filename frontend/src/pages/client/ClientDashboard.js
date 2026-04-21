@@ -428,6 +428,225 @@ function SupportTab({ token }) {
 }
 
 /* ================================================================
+   ORDERS TAB — owner views & manages orders from their site
+   ================================================================ */
+function OrdersTab({ token }) {
+  const [orders, setOrders] = useState([]);
+  const [drivers, setDrivers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [oR, dR] = await Promise.all([
+        fetch(`${API}/api/websites/client/orders${filter ? `?status=${filter}` : ''}`, { headers: authH(token) }),
+        fetch(`${API}/api/websites/client/drivers`, { headers: authH(token) }),
+      ]);
+      const oD = await oR.json(); const dD = await dR.json();
+      setOrders(oD.orders || []); setDrivers(dD.drivers || []);
+    } catch (_) {} finally { setLoading(false); }
+  }, [token, filter]);
+  useEffect(() => { load(); }, [load]);
+
+  const setStatus = async (id, status, driverId = null) => {
+    try {
+      await fetch(`${API}/api/websites/client/orders/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authH(token) },
+        body: JSON.stringify({ status, driver_id: driverId }),
+      });
+      toast.success('تم التحديث'); load();
+    } catch (_) { toast.error('فشل'); }
+  };
+
+  const STATUS_LABELS = { pending: '⏳ قيد المراجعة', accepted: '✓ مقبول', preparing: '👨‍🍳 قيد التحضير', ready: '📦 جاهز', on_the_way: '🛵 في الطريق', delivered: '✅ تم التوصيل', cancelled: '❌ ملغي' };
+  const STATUS_COLORS = { pending: 'bg-yellow-500/20 text-yellow-300', accepted: 'bg-blue-500/20 text-blue-300', preparing: 'bg-orange-500/20 text-orange-300', ready: 'bg-purple-500/20 text-purple-300', on_the_way: 'bg-cyan-500/20 text-cyan-300', delivered: 'bg-green-500/20 text-green-300', cancelled: 'bg-red-500/20 text-red-300' };
+
+  return (
+    <div data-testid="orders-tab">
+      <div className="flex gap-1 flex-wrap mb-3">
+        {['', 'pending', 'accepted', 'preparing', 'on_the_way', 'delivered', 'cancelled'].map((s) => (
+          <button key={s || 'all'} onClick={() => setFilter(s)} className={`text-[11px] px-2.5 py-1 rounded-full font-bold ${filter === s ? 'bg-yellow-500 text-black' : 'bg-white/5 hover:bg-white/10'}`} data-testid={`filter-${s || 'all'}`}>
+            {s ? STATUS_LABELS[s] : 'الكل'}
+          </button>
+        ))}
+      </div>
+      {loading ? <div className="text-center py-10 opacity-60">جاري التحميل...</div> : orders.length === 0 ? (
+        <div className="text-center py-12 bg-white/3 border border-dashed border-white/15 rounded-2xl">
+          <div className="text-4xl mb-2">🛒</div>
+          <div className="text-sm opacity-60">لا توجد طلبات بعد</div>
+          <div className="text-xs opacity-40 mt-1">طلبات عملاء الموقع ستظهر هنا مباشرة</div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {orders.map((o) => {
+            const drv = drivers.find((d) => d.id === o.driver_id);
+            return (
+              <div key={o.id} className="bg-white/5 border border-white/10 rounded-xl p-3" data-testid={`order-${o.id}`}>
+                <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-sm">#{o.id.slice(0, 8)}</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${STATUS_COLORS[o.status] || 'bg-white/10'}`}>{STATUS_LABELS[o.status] || o.status}</span>
+                  </div>
+                  <div className="text-xs font-black text-yellow-400">{o.total} ر.س</div>
+                </div>
+                <div className="text-xs opacity-90 mb-1">{o.customer_name} · 📞 {o.customer_phone}</div>
+                <div className="text-[11px] opacity-70 mb-1">📍 {o.address || (o.lat ? `(${o.lat.toFixed(4)}, ${o.lng.toFixed(4)})` : 'لا عنوان')}</div>
+                <div className="text-[11px] opacity-70 mb-2">{o.items.map((i) => `${i.name} ×${i.qty}`).join(' · ')}</div>
+                {o.note && <div className="text-[11px] bg-yellow-500/10 border border-yellow-500/20 rounded px-2 py-1 mb-2">📝 {o.note}</div>}
+                <div className="flex gap-1 flex-wrap">
+                  {o.status === 'pending' && <button onClick={() => setStatus(o.id, 'accepted')} className="text-[11px] px-2 py-1 bg-blue-500/20 hover:bg-blue-500/40 rounded font-bold" data-testid={`accept-${o.id}`}>✓ قبول</button>}
+                  {o.status === 'accepted' && <button onClick={() => setStatus(o.id, 'preparing')} className="text-[11px] px-2 py-1 bg-orange-500/20 hover:bg-orange-500/40 rounded font-bold">👨‍🍳 تحضير</button>}
+                  {o.status === 'preparing' && <button onClick={() => setStatus(o.id, 'ready')} className="text-[11px] px-2 py-1 bg-purple-500/20 hover:bg-purple-500/40 rounded font-bold">📦 جاهز</button>}
+                  {['ready', 'accepted'].includes(o.status) && drivers.length > 0 && (
+                    <select onChange={(e) => setStatus(o.id, 'on_the_way', e.target.value)} className="text-[11px] px-2 py-1 bg-cyan-500/20 rounded font-bold" data-testid={`assign-driver-${o.id}`}>
+                      <option>🛵 عيّن سائق</option>
+                      {drivers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                    </select>
+                  )}
+                  {o.status === 'on_the_way' && <button onClick={() => setStatus(o.id, 'delivered')} className="text-[11px] px-2 py-1 bg-green-500/20 hover:bg-green-500/40 rounded font-bold">✅ تم التوصيل</button>}
+                  {!['delivered', 'cancelled'].includes(o.status) && <button onClick={() => setStatus(o.id, 'cancelled')} className="text-[11px] px-2 py-1 bg-red-500/20 hover:bg-red-500/40 rounded font-bold">❌ إلغاء</button>}
+                  {drv && <span className="text-[11px] opacity-70 self-center">🛵 {drv.name}</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ================================================================
+   DRIVERS TAB — manage delivery drivers
+   ================================================================ */
+function DriversTab({ token }) {
+  const [drivers, setDrivers] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ name: '', phone: '', password: '', vehicle: '', zone: '' });
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch(`${API}/api/websites/client/drivers`, { headers: authH(token) });
+      const d = await r.json();
+      setDrivers(d.drivers || []);
+    } catch (_) {}
+  }, [token]);
+  useEffect(() => { load(); }, [load]);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const r = await fetch(`${API}/api/websites/client/drivers`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...authH(token) },
+        body: JSON.stringify(form),
+      });
+      if (!r.ok) throw new Error((await r.json()).detail || 'فشل');
+      toast.success('✓ أُضيف السائق');
+      setForm({ name: '', phone: '', password: '', vehicle: '', zone: '' });
+      setShowForm(false); load();
+    } catch (e) { toast.error(e.message); }
+    finally { setBusy(false); }
+  };
+
+  const remove = async (id) => {
+    if (!window.confirm('حذف السائق؟')) return;
+    try {
+      await fetch(`${API}/api/websites/client/drivers/${id}`, { method: 'DELETE', headers: authH(token) });
+      toast.success('حُذف'); load();
+    } catch (_) {}
+  };
+
+  return (
+    <div data-testid="drivers-tab">
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-xs opacity-70">{drivers.length} سائق مسجّل</div>
+        {!showForm && <button onClick={() => setShowForm(true)} className="px-3 py-1.5 bg-gradient-to-r from-yellow-500 to-orange-500 text-black rounded-lg text-xs font-black" data-testid="add-driver-btn">+ إضافة سائق</button>}
+      </div>
+      {showForm && (
+        <form onSubmit={submit} className="bg-white/5 border border-yellow-500/30 rounded-xl p-3 mb-3 space-y-2" data-testid="driver-form">
+          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="اسم السائق" className="w-full px-3 py-2 bg-white/5 border border-white/15 rounded-lg text-sm" required data-testid="driver-name" />
+          <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="رقم الجوال" className="w-full px-3 py-2 bg-white/5 border border-white/15 rounded-lg text-sm" required data-testid="driver-phone" />
+          <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="كلمة مرور له" className="w-full px-3 py-2 bg-white/5 border border-white/15 rounded-lg text-sm" required data-testid="driver-password" />
+          <input value={form.vehicle} onChange={(e) => setForm({ ...form, vehicle: e.target.value })} placeholder="المركبة (دراجة/سيارة)" className="w-full px-3 py-2 bg-white/5 border border-white/15 rounded-lg text-sm" />
+          <input value={form.zone} onChange={(e) => setForm({ ...form, zone: e.target.value })} placeholder="منطقة التوصيل" className="w-full px-3 py-2 bg-white/5 border border-white/15 rounded-lg text-sm" />
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setShowForm(false)} className="flex-1 py-2 bg-white/10 rounded-lg text-xs font-bold">إلغاء</button>
+            <button type="submit" disabled={busy} className="flex-[2] py-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-black rounded-lg text-xs font-black disabled:opacity-50">✓ إضافة</button>
+          </div>
+        </form>
+      )}
+      {drivers.length === 0 && !showForm ? (
+        <div className="text-center py-10 bg-white/3 border border-dashed border-white/15 rounded-2xl">
+          <div className="text-4xl mb-2">🛵</div>
+          <div className="text-sm opacity-60">لا يوجد سائقون مسجّلون</div>
+          <div className="text-xs opacity-40 mt-1">أضف سائقاً ليظهر في خيارات تعيين الطلبات</div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {drivers.map((d) => (
+            <div key={d.id} className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-center gap-3" data-testid={`driver-${d.id}`}>
+              <div className="w-10 h-10 bg-yellow-500/20 rounded-full flex items-center justify-center text-xl">🛵</div>
+              <div className="flex-1">
+                <div className="font-bold text-sm">{d.name}</div>
+                <div className="text-xs opacity-70">📞 {d.phone}{d.vehicle ? ` · ${d.vehicle}` : ''}{d.zone ? ` · ${d.zone}` : ''}</div>
+              </div>
+              <button onClick={() => remove(d.id)} className="p-1.5 hover:bg-red-500/20 rounded-lg text-red-400"><X className="w-4 h-4" /></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ================================================================
+   CUSTOMERS TAB — site customer directory
+   ================================================================ */
+function CustomersTab({ token }) {
+  const [customers, setCustomers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch(`${API}/api/websites/client/customers`, { headers: authH(token) });
+        const d = await r.json();
+        setCustomers(d.customers || []);
+      } catch (_) {} finally { setLoading(false); }
+    })();
+  }, [token]);
+
+  return (
+    <div data-testid="customers-tab">
+      <div className="text-xs opacity-70 mb-3">{customers.length} عميل مسجّل</div>
+      {loading ? <div className="text-center py-10 opacity-60">...</div> : customers.length === 0 ? (
+        <div className="text-center py-10 bg-white/3 border border-dashed border-white/15 rounded-2xl">
+          <div className="text-4xl mb-2">👥</div>
+          <div className="text-sm opacity-60">لا عملاء مسجّلون بعد</div>
+          <div className="text-xs opacity-40 mt-1">عندما يُنشئ الزوار حسابات في موقعك ستظهر هنا</div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {customers.map((c) => (
+            <div key={c.id} className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-center gap-3" data-testid={`customer-${c.id}`}>
+              <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center font-black">{(c.name || '?').charAt(0)}</div>
+              <div className="flex-1">
+                <div className="font-bold text-sm">{c.name}</div>
+                <div className="text-xs opacity-70">📞 {c.phone}{c.email ? ` · ✉️ ${c.email}` : ''}</div>
+                <div className="text-[10px] opacity-50">مسجّل منذ {new Date(c.created_at).toLocaleDateString('ar-SA')}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ================================================================
    DASHBOARD — authenticated
    ================================================================ */
 function Dashboard({ slug, token, onLogout }) {
@@ -508,10 +727,13 @@ function Dashboard({ slug, token, onLogout }) {
         <div className="flex gap-1 mb-4 bg-white/3 rounded-xl p-1 overflow-x-auto" data-testid="dashboard-tabs">
           {[
             { id: 'overview', label: 'نظرة عامة', icon: BarChart3 },
-            { id: 'edit', label: 'تعديل المحتوى', icon: Edit3 },
+            { id: 'orders', label: 'الطلبات', icon: MessageSquare },
+            { id: 'customers', label: 'العملاء', icon: Users },
+            { id: 'drivers', label: 'السائقون', icon: ExternalLink },
+            { id: 'edit', label: 'المحتوى', icon: Edit3 },
             { id: 'messages', label: 'الرسائل', icon: MessageSquare },
-            { id: 'support', label: 'الدعم الفني', icon: RefreshCw },
-            { id: 'password', label: 'كلمة المرور', icon: Key },
+            { id: 'support', label: 'الدعم', icon: RefreshCw },
+            { id: 'password', label: 'الأمان', icon: Key },
           ].map((t) => (
             <button
               key={t.id}
@@ -551,6 +773,10 @@ function Dashboard({ slug, token, onLogout }) {
             <SectionsEditor project={project} token={token} onUpdated={loadAll} />
           </div>
         )}
+
+        {tab === 'orders' && <OrdersTab token={token} />}
+        {tab === 'customers' && <CustomersTab token={token} />}
+        {tab === 'drivers' && <DriversTab token={token} />}
 
         {tab === 'messages' && <MessagesTab token={token} />}
 

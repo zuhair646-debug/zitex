@@ -524,6 +524,163 @@ def _section_custom(d, theme) -> str:
     return f'<section class="zx-custom zx-custom-{layout}" id="custom-{_esc(d.get("id","sec"))}" data-hl="custom"><div class="container"><div class="zx-cc-head"><h2>{title}</h2>{("<p>"+subtitle+"</p>") if subtitle else ""}</div><div class="zx-cc-grid zx-cc-{layout}">{"".join(cards_html)}</div></div></section>'
 
 
+def _auth_and_commerce_overlay(slug) -> str:
+    """🆕 Ships a complete site-customer auth + cart + checkout overlay with geolocation.
+    Only injected on PUBLIC (approved, slugged) sites.
+    """
+    if not slug:
+        return ""
+    api_prefix = "/api/websites"  # relative — browser will hit same origin
+    return f"""<!-- ZX-COMMERCE-OVERLAY -->
+<button id="zx-auth-fab" data-hl="extra-auth" title="حساب">👤</button>
+<div id="zx-modal" class="zx-m-root" style="display:none"><div class="zx-m-box"><button id="zx-close" class="zx-m-x">×</button><div id="zx-panel"></div></div></div>
+<style>
+#zx-auth-fab{{position:fixed;top:16px;left:16px;z-index:95;width:46px;height:46px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;border:2px solid rgba(255,255,255,.2);cursor:pointer;font-size:20px;backdrop-filter:blur(12px);box-shadow:0 8px 24px rgba(0,0,0,.4)}}
+.zx-m-root{{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999;display:flex;align-items:center;justify-content:center;padding:14px;backdrop-filter:blur(4px)}}
+.zx-m-box{{background:#0e1128;color:#fff;border-radius:20px;width:min(500px,100%);max-height:92vh;overflow-y:auto;padding:22px;border:1px solid rgba(234,179,8,.3);font-family:Tajawal,Cairo,sans-serif;position:relative;direction:rtl}}
+.zx-m-x{{position:absolute;top:10px;left:10px;background:rgba(255,255,255,.1);border:0;color:#fff;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px}}
+.zx-m-box h3{{margin:0 0 14px;font-size:18px;color:#eab308}}
+.zx-m-box label{{font-size:11px;opacity:.7;display:block;margin-bottom:4px}}
+.zx-m-box input,.zx-m-box textarea{{width:100%;box-sizing:border-box;padding:10px 12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:10px;color:#fff;font-family:inherit;font-size:14px;margin-bottom:10px}}
+.zx-m-box button.zx-btn{{width:100%;padding:11px;background:linear-gradient(90deg,#eab308,#f97316);color:#000;border:0;border-radius:10px;font-weight:900;cursor:pointer;font-size:14px;margin-top:6px}}
+.zx-m-box button.zx-btn-sec{{width:100%;padding:10px;background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:10px;font-weight:700;cursor:pointer;font-size:13px;margin-top:6px}}
+.zx-tabs{{display:flex;gap:4px;background:rgba(255,255,255,.05);padding:4px;border-radius:10px;margin-bottom:14px}}
+.zx-tabs button{{flex:1;padding:8px;background:transparent;border:0;color:#fff;cursor:pointer;border-radius:7px;font-size:13px;font-weight:700}}
+.zx-tabs button.active{{background:#eab308;color:#000}}
+.zx-cart-item{{display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(255,255,255,.04);border-radius:10px;margin-bottom:6px;font-size:13px}}
+.zx-cart-item .zx-qty{{display:flex;align-items:center;gap:4px}}
+.zx-cart-item .zx-qty button{{width:24px;height:24px;background:rgba(255,255,255,.1);border:0;color:#fff;border-radius:6px;cursor:pointer;font-weight:900}}
+.zx-cart-empty{{text-align:center;padding:24px;opacity:.6}}
+.zx-err{{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#fca5a5;padding:8px 10px;border-radius:8px;font-size:12px;margin-bottom:8px}}
+.zx-ok{{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);color:#86efac;padding:8px 10px;border-radius:8px;font-size:12px;margin-bottom:8px}}
+.zx-loc-btn{{width:100%;padding:9px;background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.3);color:#93c5fd;border-radius:10px;font-weight:700;cursor:pointer;font-size:12.5px;margin-bottom:8px}}
+.zx-order-row{{padding:10px;background:rgba(255,255,255,.04);border-radius:10px;margin-bottom:6px;font-size:12.5px}}
+.zx-pill{{font-size:10px;padding:2px 8px;border-radius:99px;font-weight:900;display:inline-block}}
+.zx-pill-pending{{background:rgba(234,179,8,.2);color:#fde047}}
+.zx-pill-on_the_way{{background:rgba(59,130,246,.2);color:#93c5fd}}
+.zx-pill-delivered{{background:rgba(34,197,94,.2);color:#86efac}}
+.zx-pill-cancelled{{background:rgba(239,68,68,.2);color:#fca5a5}}
+</style>
+<script>
+(function(){{
+  var SLUG="{slug}",API="{api_prefix}";
+  var TK_KEY="zx_site_tk_"+SLUG,CART_KEY="zx_cart_"+SLUG;
+  var $=function(s){{return document.querySelector(s);}};
+  function tk(){{return localStorage.getItem(TK_KEY)||"";}}
+  function setTk(t){{if(t)localStorage.setItem(TK_KEY,t);else localStorage.removeItem(TK_KEY);}}
+  function cart(){{try{{return JSON.parse(localStorage.getItem(CART_KEY)||"[]")}}catch(e){{return []}}}}
+  function setCart(c){{localStorage.setItem(CART_KEY,JSON.stringify(c));updCartBadge();}}
+  function updCartBadge(){{var b=$(".zx-cart-count");if(!b)return;var n=cart().reduce(function(a,i){{return a+i.qty}},0);b.textContent=n;b.style.display=n>0?"flex":"none";}}
+  async function api(p,opt){{opt=opt||{{}};opt.headers=opt.headers||{{}};opt.headers["Content-Type"]="application/json";if(tk())opt.headers["Authorization"]="SiteToken "+tk();var r=await fetch(API+p,opt);var d=await r.json().catch(function(){{return{{}}}});if(!r.ok)throw new Error(d.detail||"فشل");return d;}}
+  function open_(html){{$("#zx-panel").innerHTML=html;$("#zx-modal").style.display="flex";}}
+  function close_(){{$("#zx-modal").style.display="none";}}
+  $("#zx-close").onclick=close_;
+  $("#zx-modal").onclick=function(e){{if(e.target.id==="zx-modal")close_();}};
+
+  // --- Cart behavior: any .zx-add-to-cart[data-name][data-price] or menu items/product cards auto-wire
+  function scanAddButtons(){{
+    document.querySelectorAll("[data-menu-item],[data-product-item]").forEach(function(el){{
+      if(el.__zxWired)return;el.__zxWired=1;
+      var name=el.getAttribute("data-name")||el.querySelector(".menu-name,.product-name,h3,h4")&&(el.querySelector(".menu-name,.product-name,h3,h4").textContent||"").trim();
+      var price=parseFloat(el.getAttribute("data-price")||(el.querySelector(".menu-price,.product-price")&&el.querySelector(".menu-price,.product-price").textContent.replace(/[^0-9.]/g,""))||"0");
+      var btn=document.createElement("button");btn.className="zx-btn";btn.style.marginTop="6px";btn.style.padding="6px 12px";btn.style.fontSize="12px";btn.textContent="+ أضف للسلة";
+      btn.onclick=function(e){{e.stopPropagation();addToCart({{name:name,price:price}});}};
+      el.appendChild(btn);
+    }});
+  }}
+  function addToCart(item){{
+    if(!tk()){{open_(renderAuth("login"));toastInPanel("سجّل دخولك أولاً لإتمام الطلب");return;}}
+    var c=cart();var ex=c.find(function(x){{return x.name===item.name}});
+    if(ex)ex.qty++;else c.push({{name:item.name,price:item.price,qty:1}});setCart(c);
+    toast("✓ أُضيف للسلة: "+item.name);
+  }}
+  // Cart-float click -> open cart
+  document.addEventListener("click",function(e){{
+    var cf=e.target.closest(".zx-cart-float");if(cf){{e.preventDefault();openCart();}}
+  }});
+  function toast(msg){{var t=document.createElement("div");t.textContent=msg;t.style.cssText="position:fixed;top:70px;left:50%;transform:translateX(-50%);background:#16a34a;color:#fff;padding:8px 16px;border-radius:99px;font-size:12px;font-weight:700;z-index:1000;box-shadow:0 10px 30px rgba(0,0,0,.4)";document.body.appendChild(t);setTimeout(function(){{t.remove()}},1800);}}
+  function toastInPanel(msg){{var d=document.createElement("div");d.className="zx-ok";d.textContent=msg;var p=$("#zx-panel");if(p)p.insertBefore(d,p.firstChild);}}
+  function openCart(){{var c=cart();if(!c.length){{open_('<h3>🛒 سلة التسوق</h3><div class="zx-cart-empty">السلة فارغة<br><span style="font-size:11px">أضف منتجات أولاً</span></div>');return;}}
+    var sub=c.reduce(function(a,i){{return a+(i.price*i.qty)}},0);
+    var rows=c.map(function(i,idx){{return '<div class="zx-cart-item"><div style="flex:1">'+i.name+' <span style="opacity:.6">· '+i.price+' ر.س</span></div><div class="zx-qty"><button onclick="window.zxMinus('+idx+')">−</button><span>'+i.qty+'</span><button onclick="window.zxPlus('+idx+')">+</button></div><button onclick="window.zxRemove('+idx+')" style="background:none;color:#ef4444;border:0;cursor:pointer;font-size:16px">🗑</button></div>'}}).join("");
+    open_('<h3>🛒 سلة التسوق</h3>'+rows+'<div style="padding:10px;text-align:left;font-weight:900;color:#eab308">الإجمالي: '+sub.toFixed(2)+' ر.س</div><button class="zx-btn" onclick="window.zxCheckout()">🏁 إتمام الطلب</button>');
+  }}
+  window.zxPlus=function(i){{var c=cart();c[i].qty++;setCart(c);openCart();}};
+  window.zxMinus=function(i){{var c=cart();if(c[i].qty>1)c[i].qty--;else c.splice(i,1);setCart(c);openCart();}};
+  window.zxRemove=function(i){{var c=cart();c.splice(i,1);setCart(c);openCart();}};
+  window.zxCheckout=function(){{
+    if(!tk()){{open_(renderAuth("login"));return;}}
+    open_('<h3>🏁 إتمام الطلب</h3>'+
+      '<label>عنوان التوصيل</label><input id="zx-ord-addr" placeholder="مثال: الرياض، حي النزهة، شارع..." />'+
+      '<button class="zx-loc-btn" onclick="window.zxGetLoc()">📍 استخدم موقعي الحالي</button>'+
+      '<div id="zx-ord-loc" style="font-size:11px;opacity:.7;margin-bottom:8px"></div>'+
+      '<label>ملاحظات (اختياري)</label><textarea id="zx-ord-note" rows="2" placeholder="مثال: بدون بصل"></textarea>'+
+      '<div id="zx-ord-err"></div>'+
+      '<button class="zx-btn" onclick="window.zxSubmitOrder()">✓ تأكيد الطلب</button>');
+  }};
+  window.zxGetLoc=function(){{
+    if(!navigator.geolocation){{$("#zx-ord-loc").textContent="متصفحك لا يدعم تحديد الموقع";return;}}
+    $("#zx-ord-loc").textContent="جاري تحديد موقعك...";
+    navigator.geolocation.getCurrentPosition(function(pos){{
+      window.__zxLat=pos.coords.latitude;window.__zxLng=pos.coords.longitude;
+      $("#zx-ord-loc").textContent="✓ تم تحديد موقعك ("+pos.coords.latitude.toFixed(4)+", "+pos.coords.longitude.toFixed(4)+")";
+    }},function(){{$("#zx-ord-loc").textContent="⚠️ لم نتمكن من تحديد موقعك — اكتب العنوان يدوياً";}});
+  }};
+  window.zxSubmitOrder=async function(){{
+    var addr=$("#zx-ord-addr").value.trim();var note=$("#zx-ord-note").value.trim();
+    if(!addr&&!window.__zxLat){{$("#zx-ord-err").innerHTML='<div class="zx-err">أدخل عنواناً أو استخدم موقعك</div>';return;}}
+    try{{
+      var res=await api("/public/"+SLUG+"/orders",{{method:"POST",body:JSON.stringify({{items:cart(),address:addr,lat:window.__zxLat,lng:window.__zxLng,note:note,delivery_fee:0}})}});
+      setCart([]);
+      open_('<h3>✅ تم استلام طلبك</h3><div class="zx-ok">رقم الطلب: '+res.order_id.slice(0,8)+'<br>الإجمالي: '+res.total+' ر.س<br>الحالة: قيد المراجعة</div><button class="zx-btn-sec" onclick="window.zxMyOrders()">📦 تتبّع طلباتي</button>');
+    }}catch(e){{$("#zx-ord-err").innerHTML='<div class="zx-err">'+e.message+'</div>';}}
+  }};
+  window.zxMyOrders=async function(){{
+    try{{var d=await api("/public/"+SLUG+"/orders/my");
+    if(!d.orders.length){{open_('<h3>📦 طلباتي</h3><div class="zx-cart-empty">لا طلبات بعد</div>');return;}}
+    var rows=d.orders.map(function(o){{return '<div class="zx-order-row"><div style="display:flex;justify-content:space-between"><b>#'+o.id.slice(0,8)+'</b><span class="zx-pill zx-pill-'+o.status+'">'+statusLabel(o.status)+'</span></div><div style="opacity:.7;margin-top:4px">'+o.items.length+' صنف · '+o.total+' ر.س</div><div style="opacity:.5;font-size:11px;margin-top:2px">'+new Date(o.at).toLocaleString("ar-SA")+'</div></div>'}}).join("");
+    open_('<h3>📦 طلباتي</h3>'+rows);}}catch(e){{open_('<h3>📦 طلباتي</h3><div class="zx-err">'+e.message+'</div>');}}
+  }};
+  function statusLabel(s){{return({{pending:"قيد المراجعة",accepted:"مقبول",preparing:"قيد التحضير",ready:"جاهز",on_the_way:"في الطريق",delivered:"تم التوصيل",cancelled:"ملغي"}})[s]||s;}}
+
+  // --- Auth rendering
+  function renderAuth(tab){{
+    var isReg=tab==="register";
+    return '<h3>'+(isReg?"✨ إنشاء حساب":"👤 تسجيل الدخول")+'</h3>'+
+      '<div class="zx-tabs"><button class="'+(isReg?"":"active")+'" onclick="window.zxTab(\\'login\\')">دخول</button><button class="'+(isReg?"active":"")+'" onclick="window.zxTab(\\'register\\')">حساب جديد</button></div>'+
+      (isReg?'<label>الاسم</label><input id="zx-au-name" />':"")+
+      '<label>رقم الجوال</label><input id="zx-au-phone" placeholder="05xxxxxxxx" />'+
+      (isReg?'<label>البريد (اختياري)</label><input id="zx-au-email" />':"")+
+      '<label>كلمة المرور</label><input id="zx-au-pwd" type="password" />'+
+      '<div id="zx-au-err"></div>'+
+      '<button class="zx-btn" onclick="window.zxAuthDo(\\''+(isReg?"register":"login")+'\\')">'+(isReg?"إنشاء":"دخول")+'</button>';
+  }}
+  window.zxTab=function(t){{open_(renderAuth(t));}};
+  window.zxAuthDo=async function(mode){{
+    try{{
+      var body={{phone:$("#zx-au-phone").value.trim(),password:$("#zx-au-pwd").value}};
+      if(mode==="register"){{body.name=$("#zx-au-name").value.trim();body.email=($("#zx-au-email")||{{}}).value||"";}}
+      var d=await api("/public/"+SLUG+"/auth/"+mode,{{method:"POST",body:JSON.stringify(body)}});
+      setTk(d.token);close_();toast("مرحباً "+d.customer.name);updAuthBadge();
+      if(cart().length)openCart();
+    }}catch(e){{$("#zx-au-err").innerHTML='<div class="zx-err">'+e.message+'</div>';}}
+  }};
+  function updAuthBadge(){{var b=$("#zx-auth-fab");b.textContent=tk()?"✓":"👤";b.style.background=tk()?"linear-gradient(135deg,#eab308,#f97316)":"rgba(0,0,0,.6)";b.style.color=tk()?"#000":"#fff";}}
+  $("#zx-auth-fab").onclick=function(){{
+    if(tk()){{open_('<h3>👤 حسابي</h3><button class="zx-btn-sec" onclick="window.zxMyOrders()">📦 طلباتي</button><button class="zx-btn-sec" onclick="window.zxLogout()">🚪 تسجيل خروج</button>');}}
+    else{{open_(renderAuth("login"));}}
+  }};
+  window.zxLogout=function(){{setTk("");updAuthBadge();close_();toast("تم تسجيل الخروج");}};
+
+  // init
+  scanAddButtons();updCartBadge();updAuthBadge();
+  setTimeout(scanAddButtons,500);
+  new MutationObserver(scanAddButtons).observe(document.body,{{childList:true,subtree:true}});
+}})();
+</script>
+<!-- /ZX-COMMERCE-OVERLAY -->"""
+
+
 def _floating_widgets(theme: Dict[str, Any]) -> str:
     extras = theme.get("extras", []) or []
     html = ""
@@ -1042,5 +1199,6 @@ def render_website_to_html(project: Dict[str, Any]) -> str:
 <body>
 {_floating_widgets(theme)}
 {''.join(body_parts)}
+{_auth_and_commerce_overlay(project.get('slug'))}
 </body>
 </html>"""

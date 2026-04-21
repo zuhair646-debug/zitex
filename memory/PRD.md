@@ -15,6 +15,44 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Feb 21, 2026 (PM) — COMPLETE COMMERCE STACK (site-customers + orders + drivers + geolocation)
+
+**What was added**:
+1. **Per-site customer auth**: Each approved site has its own user base (`project.site_customers[]`).
+   - POST `/public/{slug}/auth/register` `/login`, GET `/auth/me`
+   - Injected auth modal (🔼 top-left `#zx-auth-fab`) with tabs (login/register)
+   - Uses bcrypt + `SiteToken <session_token>` header
+2. **Full cart + checkout (in the site's HTML)**:
+   - Auto-wires `+ أضف للسلة` on any `[data-menu-item]` or `[data-product-item]` element
+   - Cart modal with qty controls
+   - Checkout with `navigator.geolocation` → stores `lat`/`lng` + address + note
+   - POST `/public/{slug}/orders` creates the order
+   - "📦 طلباتي" tracking view for the customer
+3. **Orders pipeline** (7 statuses): pending → accepted → preparing → ready → on_the_way → delivered (+ cancelled)
+   - Owner actions: PATCH `/client/orders/{id}` { status, driver_id }
+   - New `OrdersTab` in ClientDashboard with status filters
+4. **Drivers system**:
+   - POST/GET/DELETE `/client/drivers` — add/list/remove drivers (bcrypt-hashed)
+   - Driver auth: POST `/driver/login`, GET `/driver/{slug}/orders`, POST `/driver/{slug}/location`
+   - New `DriversTab` in ClientDashboard
+5. **Customers directory**: new `CustomersTab` showing all registered customers
+6. **Renderer**: `_auth_and_commerce_overlay(slug)` injects vanilla-JS overlay (zero frameworks, sandbox-safe) — only on approved slugged sites
+
+**Tested end-to-end via curl + screenshots**:
+- ✅ Customer registers → receives SiteToken
+- ✅ Order placed with 87 ر.س total (2 items + delivery fee) with geolocation
+- ✅ Client dashboard shows the order + customer + can assign driver
+- ✅ Owner sees auth FAB, cart FAB, book FAB — all functional in iframe
+
+New endpoints (13): /public/{slug}/auth/{register,login,me}, /public/{slug}/orders, /public/{slug}/orders/my, /client/orders, /client/orders/{id} (PATCH), /client/drivers (CRUD), /client/customers, /driver/login, /driver/{slug}/orders, /driver/{slug}/location
+
+**Demo accounts**:
+- Site customer: phone `0501122334` password `pass123` (أحمد الزهراني)
+- Driver: phone `0559988776` password `drv123` (فهد السائق)
+- Client dashboard: slug `cozy-cafe-demo` password `WKDWkG0d`
+
+
+
 ### 🆕 Feb 21, 2026 — FULL DELIVERY SYSTEM (4 major features)
 
 **1. Client Dashboard** (`/client/:slug`):

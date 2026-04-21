@@ -1099,6 +1099,253 @@ def register_routes(app, database, auth_dep):
                 "passed": sum(1 for c in checks if c["pass"]),
                 "total": len(checks)}
 
+    # ═══════════════════════════════════════════════════════════════
+    # 🆕 SITE CUSTOMERS + ORDERS + DRIVERS — full commerce stack per site
+    # ═══════════════════════════════════════════════════════════════
+    class SiteRegisterIn(BaseModel):
+        name: str
+        phone: str
+        password: str
+        email: Optional[str] = ""
+
+    class SiteLoginIn(BaseModel):
+        phone: str
+        password: str
+
+    class OrderItem(BaseModel):
+        name: str
+        price: float
+        qty: int = 1
+        note: Optional[str] = ""
+
+    class OrderCreateIn(BaseModel):
+        items: List[OrderItem]
+        address: Optional[str] = ""
+        lat: Optional[float] = None
+        lng: Optional[float] = None
+        note: Optional[str] = ""
+        delivery_fee: Optional[float] = 0
+
+    class DriverCreateIn(BaseModel):
+        name: str
+        phone: str
+        password: str
+        vehicle: Optional[str] = ""
+        zone: Optional[str] = ""
+
+    class OrderStatusIn(BaseModel):
+        status: str  # pending|accepted|preparing|ready|on_the_way|delivered|cancelled
+        driver_id: Optional[str] = None
+
+    # ---- customer auth (per-site) ----
+    async def _resolve_site_customer(slug: str, token: str) -> Dict[str, Any]:
+        if not token or not token.startswith("SiteToken "):
+            raise HTTPException(401, "غير مصرح")
+        tok = token.replace("SiteToken ", "", 1).strip()
+        p = await database.website_projects.find_one(
+            {"slug": slug, "site_customers.session_token": tok}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(401, "انتهت الجلسة")
+        cust = next((c for c in (p.get("site_customers") or []) if c.get("session_token") == tok), None)
+        if not cust:
+            raise HTTPException(401, "جلسة غير صحيحة")
+        return {"project": p, "customer": cust}
+
+    def _cust_safe(c: Dict[str, Any]) -> Dict[str, Any]:
+        return {k: v for k, v in c.items() if k not in ("password_hash", "session_token")}
+
+    @r.post("/public/{slug}/auth/register")
+    async def _site_register(slug: str, body: SiteRegisterIn):
+        p = await database.website_projects.find_one({"slug": slug, "status": "approved"}, {"_id": 0, "id": 1, "site_customers": 1})
+        if not p:
+            raise HTTPException(404, "الموقع غير متاح")
+        if any(c.get("phone") == body.phone for c in (p.get("site_customers") or [])):
+            raise HTTPException(400, "رقم الجوال مسجّل مسبقاً — سجّل دخولك بدلاً من ذلك")
+        cid = str(uuid.uuid4())
+        token = _rand_token(18)
+        cust = {
+            "id": cid, "name": body.name[:100], "phone": body.phone[:30],
+            "email": (body.email or "")[:200],
+            "password_hash": _hash_pwd(body.password),
+            "session_token": token, "created_at": _iso_now(),
+        }
+        await database.website_projects.update_one(
+            {"id": p["id"]}, {"$push": {"site_customers": cust}, "$set": {"updated_at": _iso_now()}}
+        )
+        return {"ok": True, "token": token, "customer": _cust_safe(cust)}
+
+    @r.post("/public/{slug}/auth/login")
+    async def _site_login(slug: str, body: SiteLoginIn):
+        p = await database.website_projects.find_one({"slug": slug, "status": "approved"}, {"_id": 0, "id": 1, "site_customers": 1})
+        if not p:
+            raise HTTPException(404, "الموقع غير متاح")
+        cust = next((c for c in (p.get("site_customers") or []) if c.get("phone") == body.phone), None)
+        if not cust or not _check_pwd(body.password, cust.get("password_hash", "")):
+            raise HTTPException(401, "بيانات دخول غير صحيحة")
+        token = _rand_token(18)
+        await database.website_projects.update_one(
+            {"id": p["id"], "site_customers.id": cust["id"]},
+            {"$set": {"site_customers.$.session_token": token, "site_customers.$.last_login": _iso_now()}}
+        )
+        return {"ok": True, "token": token, "customer": _cust_safe({**cust, "session_token": token})}
+
+    @r.get("/public/{slug}/auth/me")
+    async def _site_me(slug: str, authorization: str = _Header(None)):
+        data = await _resolve_site_customer(slug, authorization or "")
+        return _cust_safe(data["customer"])
+
+    # ---- orders (customer-side) ----
+    @r.post("/public/{slug}/orders")
+    async def _order_create(slug: str, body: OrderCreateIn, authorization: str = _Header(None)):
+        data = await _resolve_site_customer(slug, authorization or "")
+        total = sum((i.price or 0) * (i.qty or 1) for i in body.items) + float(body.delivery_fee or 0)
+        order = {
+            "id": str(uuid.uuid4()),
+            "at": _iso_now(),
+            "customer_id": data["customer"]["id"],
+            "customer_name": data["customer"]["name"],
+            "customer_phone": data["customer"]["phone"],
+            "items": [i.dict() for i in body.items],
+            "subtotal": sum((i.price or 0) * (i.qty or 1) for i in body.items),
+            "delivery_fee": float(body.delivery_fee or 0),
+            "total": total,
+            "address": (body.address or "")[:400],
+            "lat": body.lat, "lng": body.lng,
+            "note": (body.note or "")[:500],
+            "status": "pending",
+            "driver_id": None,
+        }
+        await database.website_projects.update_one(
+            {"id": data["project"]["id"]},
+            {"$push": {"orders": order}, "$set": {"updated_at": _iso_now()}}
+        )
+        return {"ok": True, "order_id": order["id"], "total": total, "status": "pending"}
+
+    @r.get("/public/{slug}/orders/my")
+    async def _order_list_my(slug: str, authorization: str = _Header(None)):
+        data = await _resolve_site_customer(slug, authorization or "")
+        cid = data["customer"]["id"]
+        orders = [o for o in (data["project"].get("orders") or []) if o.get("customer_id") == cid]
+        return {"orders": list(reversed(orders))}
+
+    # ---- orders (owner/client dashboard) ----
+    @r.get("/client/orders")
+    async def _client_orders(authorization: str = _Header(None), status: Optional[str] = None):
+        p = await _resolve_client_project(authorization or "")
+        orders = p.get("orders") or []
+        if status:
+            orders = [o for o in orders if o.get("status") == status]
+        return {"orders": list(reversed(orders)), "total": len(p.get("orders") or [])}
+
+    @r.patch("/client/orders/{order_id}")
+    async def _client_order_patch(order_id: str, body: OrderStatusIn, authorization: str = _Header(None)):
+        p = await _resolve_client_project(authorization or "")
+        update = {"orders.$.status": body.status, "updated_at": _iso_now()}
+        if body.driver_id is not None:
+            update["orders.$.driver_id"] = body.driver_id
+        res = await database.website_projects.update_one(
+            {"id": p["id"], "orders.id": order_id}, {"$set": update}
+        )
+        if res.matched_count == 0:
+            raise HTTPException(404, "Order not found")
+        return {"ok": True}
+
+    # ---- drivers (client dashboard) ----
+    @r.post("/client/drivers")
+    async def _driver_create(body: DriverCreateIn, authorization: str = _Header(None)):
+        p = await _resolve_client_project(authorization or "")
+        if any(d.get("phone") == body.phone for d in (p.get("drivers") or [])):
+            raise HTTPException(400, "رقم الجوال مستخدم مسبقاً")
+        driver = {
+            "id": str(uuid.uuid4()),
+            "name": body.name[:100], "phone": body.phone[:30],
+            "password_hash": _hash_pwd(body.password),
+            "vehicle": (body.vehicle or "")[:100],
+            "zone": (body.zone or "")[:100],
+            "active": True,
+            "lat": None, "lng": None,
+            "created_at": _iso_now(),
+        }
+        await database.website_projects.update_one(
+            {"id": p["id"]}, {"$push": {"drivers": driver}, "$set": {"updated_at": _iso_now()}}
+        )
+        # strip sensitive
+        return {"ok": True, "driver": {k: v for k, v in driver.items() if k != "password_hash"}}
+
+    @r.get("/client/drivers")
+    async def _drivers_list(authorization: str = _Header(None)):
+        p = await _resolve_client_project(authorization or "")
+        drivers = [{k: v for k, v in d.items() if k != "password_hash"} for d in (p.get("drivers") or [])]
+        return {"drivers": drivers}
+
+    @r.delete("/client/drivers/{driver_id}")
+    async def _driver_delete(driver_id: str, authorization: str = _Header(None)):
+        p = await _resolve_client_project(authorization or "")
+        await database.website_projects.update_one(
+            {"id": p["id"]}, {"$pull": {"drivers": {"id": driver_id}}, "$set": {"updated_at": _iso_now()}}
+        )
+        return {"ok": True}
+
+    @r.get("/client/customers")
+    async def _customers_list(authorization: str = _Header(None)):
+        p = await _resolve_client_project(authorization or "")
+        customers = [{k: v for k, v in c.items() if k not in ("password_hash", "session_token")} for c in (p.get("site_customers") or [])]
+        return {"customers": list(reversed(customers)), "total": len(customers)}
+
+    # ---- driver auth (simple) ----
+    class DriverLoginIn(BaseModel):
+        slug: str
+        phone: str
+        password: str
+
+    @r.post("/driver/login")
+    async def _driver_login(body: DriverLoginIn):
+        p = await database.website_projects.find_one({"slug": body.slug}, {"_id": 0, "id": 1, "drivers": 1, "name": 1, "slug": 1})
+        if not p:
+            raise HTTPException(404, "الموقع غير موجود")
+        drv = next((d for d in (p.get("drivers") or []) if d.get("phone") == body.phone), None)
+        if not drv or not _check_pwd(body.password, drv.get("password_hash", "")):
+            raise HTTPException(401, "بيانات دخول غير صحيحة")
+        token = _rand_token(20)
+        await database.website_projects.update_one(
+            {"id": p["id"], "drivers.id": drv["id"]},
+            {"$set": {"drivers.$.session_token": token, "drivers.$.last_login": _iso_now()}}
+        )
+        return {"ok": True, "token": token, "driver": {"id": drv["id"], "name": drv["name"]}, "site": p["name"]}
+
+    async def _resolve_driver(slug: str, token: str) -> Dict[str, Any]:
+        if not token or not token.startswith("DriverToken "):
+            raise HTTPException(401, "غير مصرح")
+        tok = token.replace("DriverToken ", "", 1).strip()
+        p = await database.website_projects.find_one(
+            {"slug": slug, "drivers.session_token": tok}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(401, "انتهت الجلسة")
+        drv = next((d for d in (p.get("drivers") or []) if d.get("session_token") == tok), None)
+        return {"project": p, "driver": drv}
+
+    class DriverLocationIn(BaseModel):
+        lat: float
+        lng: float
+
+    @r.get("/driver/{slug}/orders")
+    async def _driver_orders(slug: str, authorization: str = _Header(None)):
+        data = await _resolve_driver(slug, authorization or "")
+        drv_id = data["driver"]["id"]
+        orders = [o for o in (data["project"].get("orders") or []) if o.get("driver_id") == drv_id]
+        return {"orders": list(reversed(orders))}
+
+    @r.post("/driver/{slug}/location")
+    async def _driver_update_location(slug: str, body: DriverLocationIn, authorization: str = _Header(None)):
+        data = await _resolve_driver(slug, authorization or "")
+        await database.website_projects.update_one(
+            {"id": data["project"]["id"], "drivers.id": data["driver"]["id"]},
+            {"$set": {"drivers.$.lat": body.lat, "drivers.$.lng": body.lng, "drivers.$.last_ping": _iso_now()}}
+        )
+        return {"ok": True}
+
     app.include_router(r)
     return r
 
