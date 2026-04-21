@@ -93,6 +93,26 @@ async def _generate_unique_slug(database, base: str) -> str:
     return candidate
 
 
+def _hash_pwd(pwd: str) -> str:
+    import bcrypt as _b
+    return _b.hashpw(pwd.encode("utf-8"), _b.gensalt()).decode("utf-8")
+
+
+def _check_pwd(pwd: str, hashed: str) -> bool:
+    import bcrypt as _b
+    try:
+        return _b.checkpw(pwd.encode("utf-8"), hashed.encode("utf-8"))
+    except Exception:
+        return False
+
+
+def _rand_token(length: int = 28) -> str:
+    import secrets
+    return secrets.token_urlsafe(length)
+
+
+
+
 def register_routes(app, database, auth_dep):
     """Mount all /api/websites/* routes onto `app` with bound db + auth."""
     r = APIRouter(prefix="/api/websites", tags=["websites"])
@@ -648,6 +668,282 @@ def register_routes(app, database, auth_dep):
         if not p:
             raise HTTPException(404, "Project not found")
         return p
+
+    # ═══════════════════════════════════════════════════════════════
+    # 🆕 SHARE LINK — owner shares preview with end-client (no auth)
+    # ═══════════════════════════════════════════════════════════════
+    class ShareFeedbackIn(BaseModel):
+        feedback: str
+        rating: Optional[int] = None
+        email: Optional[str] = ""
+
+    class ContactMessageIn(BaseModel):
+        name: str
+        phone: Optional[str] = ""
+        email: Optional[str] = ""
+        message: str
+
+    @r.post("/projects/{project_id}/share")
+    async def _share_create(project_id: str, current_user: dict = Depends(auth_dep)):
+        from datetime import timedelta
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "Project not found")
+        token = _rand_token(20)
+        expires = (datetime.now(timezone.utc) + timedelta(days=14)).isoformat()
+        await database.website_projects.update_one(
+            {"id": project_id},
+            {"$set": {"share_token": token, "share_token_expires_at": expires, "updated_at": _iso_now()}},
+        )
+        return {"ok": True, "token": token, "url": f"/preview-share/{token}", "expires_at": expires}
+
+    @r.get("/share/{token}/info")
+    async def _share_info(token: str):
+        p = await database.website_projects.find_one({"share_token": token}, {"_id": 0, "name": 1, "slug": 1, "share_token_expires_at": 1, "id": 1, "approved_at": 1})
+        if not p:
+            raise HTTPException(404, "Share link not found")
+        exp = p.get("share_token_expires_at")
+        if exp and exp < _iso_now():
+            raise HTTPException(410, "Share link expired")
+        return p
+
+    @r.get("/share/{token}", response_class=HTMLResponse)
+    async def _share_view(token: str):
+        p = await database.website_projects.find_one({"share_token": token}, {"_id": 0})
+        if not p:
+            return HTMLResponse("<h1>الرابط غير صالح أو انتهت صلاحيته</h1>", status_code=404)
+        exp = p.get("share_token_expires_at")
+        if exp and exp < _iso_now():
+            return HTMLResponse("<h1>انتهت صلاحية الرابط</h1>", status_code=410)
+        html = render_website_to_html(p)
+        import html as _html_lib
+        safe_name = _html_lib.escape(p.get('name', '') or '')
+        # Inject a lightweight "review bar" at the top so the client can give feedback
+        bar = f"""<div id='zx-review-bar' style='position:fixed;top:0;left:0;right:0;z-index:9999;padding:10px 16px;background:linear-gradient(90deg,#1e293b,#0f172a);color:#fff;font-family:Tajawal,sans-serif;font-size:13px;box-shadow:0 4px 20px rgba(0,0,0,.5);border-bottom:2px solid #eab308;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px'>
+<span>🔍 <b>معاينة خاصة لمراجعتك</b> — {safe_name} · اعط ملاحظاتك لأصحاب المشروع</span>
+<span><button onclick=\"document.getElementById('zx-fb').style.display='flex'\" style='background:#eab308;color:#0f172a;border:0;padding:6px 14px;border-radius:20px;font-weight:900;cursor:pointer;font-size:12px'>✍️ اكتب ملاحظاتي</button></span></div>
+<div id='zx-fb' style='display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;background:#0f172a;color:#fff;padding:18px;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.6);width:min(92vw,480px);font-family:Tajawal,sans-serif;border:1px solid #eab308'>
+<div style='font-weight:900;margin-bottom:8px'>📝 ملاحظاتك على التصميم</div>
+<textarea id='zx-fb-text' style='width:100%;min-height:100px;background:#1e293b;color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:10px;font-family:inherit;font-size:13px;box-sizing:border-box' placeholder='اكتب تعليقك هنا...'></textarea>
+<input id='zx-fb-email' style='width:100%;background:#1e293b;color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:8px 10px;font-family:inherit;font-size:12px;box-sizing:border-box;margin-top:8px' placeholder='بريدك (اختياري)'/>
+<div style='display:flex;gap:8px;margin-top:10px'>
+<button onclick=\"document.getElementById('zx-fb').style.display='none'\" style='flex:1;background:rgba(255,255,255,.1);color:#fff;border:0;padding:8px;border-radius:8px;cursor:pointer;font-weight:700'>إلغاء</button>
+<button id='zx-fb-send' style='flex:2;background:#eab308;color:#0f172a;border:0;padding:8px;border-radius:8px;cursor:pointer;font-weight:900'>إرسال</button></div></div>
+<script>document.getElementById('zx-fb-send').addEventListener('click',async function(){{var t=document.getElementById('zx-fb-text').value.trim();if(!t)return;var e=document.getElementById('zx-fb-email').value.trim();this.disabled=true;this.textContent='جاري الإرسال...';try{{await fetch('/api/websites/share/{token}/feedback',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{feedback:t,email:e}})}});this.textContent='✅ تم — شكراً لك';setTimeout(()=>document.getElementById('zx-fb').style.display='none',1400);}}catch(e){{this.textContent='❌ فشل';this.disabled=false;}}}});</script>"""
+        html = html.replace("<body>", "<body style='padding-top:44px'>" + bar, 1)
+        return HTMLResponse(html)
+
+    @r.post("/share/{token}/feedback")
+    async def _share_feedback(token: str, body: ShareFeedbackIn):
+        p = await database.website_projects.find_one({"share_token": token}, {"_id": 0, "id": 1})
+        if not p:
+            raise HTTPException(404, "invalid token")
+        entry = {"id": str(uuid.uuid4()), "at": _iso_now(),
+                 "feedback": body.feedback[:2000], "email": (body.email or "")[:200],
+                 "rating": body.rating}
+        await database.website_projects.update_one(
+            {"id": p["id"]},
+            {"$push": {"feedback": entry}, "$set": {"updated_at": _iso_now()}}
+        )
+        return {"ok": True}
+
+    # Public contact form — stores a lead on the project
+    @r.post("/public/{slug}/contact")
+    async def _public_contact(slug: str, body: ContactMessageIn):
+        p = await database.website_projects.find_one({"slug": slug, "status": "approved"}, {"_id": 0, "id": 1})
+        if not p:
+            raise HTTPException(404, "not found")
+        msg = {"id": str(uuid.uuid4()), "at": _iso_now(),
+               "name": body.name[:100], "phone": (body.phone or "")[:50],
+               "email": (body.email or "")[:200], "message": body.message[:4000],
+               "read": False}
+        await database.website_projects.update_one(
+            {"id": p["id"]}, {"$push": {"messages": msg}, "$set": {"updated_at": _iso_now()}}
+        )
+        return {"ok": True}
+
+    # ═══════════════════════════════════════════════════════════════
+    # 🆕 CLIENT ACCESS — delivers the site to the end-client with their own panel
+    # ═══════════════════════════════════════════════════════════════
+    class ClientLoginIn(BaseModel):
+        slug: str
+        password: str
+
+    class ClientPasswordChangeIn(BaseModel):
+        old_password: str
+        new_password: str
+
+    class SectionPatchIn(BaseModel):
+        data: Optional[Dict[str, Any]] = None
+        visible: Optional[bool] = None
+        order: Optional[int] = None
+
+    async def _resolve_client_project(token: str) -> Dict[str, Any]:
+        if not token or not token.startswith("ClientToken "):
+            raise HTTPException(401, "غير مصرح")
+        tok = token.replace("ClientToken ", "", 1).strip()
+        p = await database.website_projects.find_one({"client_access.session_token": tok}, {"_id": 0})
+        if not p:
+            raise HTTPException(401, "انتهت الجلسة — سجّل دخول مرة أخرى")
+        return p
+
+    def _client_safe(p: Dict[str, Any]) -> Dict[str, Any]:
+        """Strip internal fields before returning to client."""
+        out = dict(p)
+        ca = dict(out.get("client_access") or {})
+        ca.pop("password_hash", None)
+        ca.pop("session_token", None)
+        out["client_access"] = ca
+        out.pop("user_id", None)
+        return out
+
+    from fastapi import Header as _Header
+
+    @r.get("/client/session")
+    async def _client_session(authorization: str = _Header(None)):
+        p = await _resolve_client_project(authorization or "")
+        return _client_safe(p)
+
+    @r.post("/projects/{project_id}/client-access")
+    async def _client_access_create(project_id: str, current_user: dict = Depends(auth_dep)):
+        """Enable client login for this project (resets the password)."""
+        import secrets, string
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "Project not found")
+        alphabet = string.ascii_letters + string.digits
+        temp_pwd = ''.join(secrets.choice(alphabet) for _ in range(8))
+        hashed = _hash_pwd(temp_pwd)
+        slug = p.get("slug")
+        if not slug:
+            slug = await _generate_unique_slug(database, p.get("name") or "site")
+        await database.website_projects.update_one(
+            {"id": project_id},
+            {"$set": {
+                "client_access": {"enabled": True, "password_hash": hashed, "created_at": _iso_now()},
+                "slug": slug,
+                "updated_at": _iso_now(),
+            }},
+        )
+        return {"ok": True, "slug": slug, "temp_password": temp_pwd, "login_url": f"/client/{slug}"}
+
+    @r.post("/client/login")
+    async def _client_login(body: ClientLoginIn):
+        p = await database.website_projects.find_one({"slug": body.slug}, {"_id": 0})
+        if not p or not (p.get("client_access") or {}).get("enabled"):
+            raise HTTPException(401, "بيانات دخول غير صحيحة")
+        if not _check_pwd(body.password, (p.get("client_access") or {}).get("password_hash", "")):
+            raise HTTPException(401, "كلمة المرور غير صحيحة")
+        token = _rand_token(24)
+        await database.website_projects.update_one(
+            {"id": p["id"]},
+            {"$set": {"client_access.session_token": token, "client_access.last_login": _iso_now()}},
+        )
+        return {"ok": True, "token": token, "slug": p.get("slug"), "name": p.get("name")}
+
+    @r.patch("/client/sections/{section_id}")
+    async def _client_patch_section(section_id: str, body: SectionPatchIn, authorization: str = _Header(None)):
+        p = await _resolve_client_project(authorization or "")
+        sections = list(p.get("sections") or [])
+        found = False
+        for i, s in enumerate(sections):
+            if s.get("id") == section_id:
+                if body.data is not None:
+                    s = {**s, "data": {**(s.get("data") or {}), **body.data}}
+                if body.visible is not None:
+                    s = {**s, "visible": body.visible}
+                if body.order is not None:
+                    s = {**s, "order": int(body.order)}
+                sections[i] = s
+                found = True
+                break
+        if not found:
+            raise HTTPException(404, "Section not found")
+        # Re-sort by order then rewrite consecutive order
+        sections.sort(key=lambda s: s.get("order", 0))
+        sections = [{**s, "order": i} for i, s in enumerate(sections)]
+        await database.website_projects.update_one(
+            {"id": p["id"]}, {"$set": {"sections": sections, "updated_at": _iso_now()}}
+        )
+        return {"ok": True}
+
+    @r.post("/client/change-password")
+    async def _client_change_password(body: ClientPasswordChangeIn, authorization: str = _Header(None)):
+        p = await _resolve_client_project(authorization or "")
+        if not _check_pwd(body.old_password, (p.get("client_access") or {}).get("password_hash", "")):
+            raise HTTPException(401, "كلمة المرور الحالية غير صحيحة")
+        if len(body.new_password) < 6:
+            raise HTTPException(400, "كلمة المرور الجديدة قصيرة (6 أحرف على الأقل)")
+        await database.website_projects.update_one(
+            {"id": p["id"]},
+            {"$set": {"client_access.password_hash": _hash_pwd(body.new_password),
+                      "client_access.password_changed_at": _iso_now()}},
+        )
+        return {"ok": True}
+
+    @r.get("/client/messages")
+    async def _client_messages(authorization: str = _Header(None)):
+        p = await _resolve_client_project(authorization or "")
+        return {"messages": list(reversed(p.get("messages") or [])), "total": len(p.get("messages") or [])}
+
+    @r.post("/client/messages/{message_id}/read")
+    async def _client_mark_read(message_id: str, authorization: str = _Header(None)):
+        p = await _resolve_client_project(authorization or "")
+        await database.website_projects.update_one(
+            {"id": p["id"], "messages.id": message_id}, {"$set": {"messages.$.read": True}}
+        )
+        return {"ok": True}
+
+    @r.get("/client/analytics")
+    async def _client_analytics(authorization: str = _Header(None)):
+        p = await _resolve_client_project(authorization or "")
+        return {
+            "visits": int(p.get("visits") or 0),
+            "messages_total": len(p.get("messages") or []),
+            "messages_unread": sum(1 for m in (p.get("messages") or []) if not m.get("read")),
+            "approved_at": p.get("approved_at"),
+            "sections_count": len(p.get("sections") or []),
+            "name": p.get("name"),
+            "slug": p.get("slug"),
+        }
+
+    @r.post("/client/logout")
+    async def _client_logout(authorization: str = _Header(None)):
+        p = await _resolve_client_project(authorization or "")
+        await database.website_projects.update_one(
+            {"id": p["id"]}, {"$unset": {"client_access.session_token": ""}}
+        )
+        return {"ok": True}
+
+    # ═══════════════════════════════════════════════════════════════
+    # 🆕 DELIVERY KIT — everything the owner needs to hand over
+    # ═══════════════════════════════════════════════════════════════
+    @r.get("/projects/{project_id}/delivery-kit")
+    async def _delivery_kit(project_id: str, current_user: dict = Depends(auth_dep)):
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "Project not found")
+        slug = p.get("slug")
+        return {
+            "project_id": project_id,
+            "name": p.get("name"),
+            "slug": slug,
+            "approved": p.get("status") == "approved",
+            "approved_at": p.get("approved_at"),
+            "public_url": f"/sites/{slug}" if slug else None,
+            "share_url": (f"/preview-share/{p['share_token']}" if p.get("share_token") else None),
+            "client_login_url": f"/client/{slug}" if slug and (p.get("client_access") or {}).get("enabled") else None,
+            "client_access_enabled": bool((p.get("client_access") or {}).get("enabled")),
+            "messages_count": len(p.get("messages") or []),
+            "feedback_count": len(p.get("feedback") or []),
+            "visits": int(p.get("visits") or 0),
+        }
 
     app.include_router(r)
     return r
