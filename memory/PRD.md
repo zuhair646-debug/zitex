@@ -15,6 +15,46 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Feb 21, 2026 — FULL DELIVERY SYSTEM (4 major features)
+
+**1. Client Dashboard** (`/client/:slug`):
+- JWT-lite auth via `client_access.session_token` + bcrypt password
+- 5 tabs: Overview / Edit Sections / Messages / Support Tickets / Password
+- Welcome Tour (6-step interactive onboarding)
+- Inline section content editing (PATCH `/client/sections/{id}`)
+- Messages inbox (from public `/contact` form)
+- Support ticket system with 5 categories
+
+**2. Curated Templates in Chat**:
+- New `POST /propose-designs` returns 4 diverse proposals (luxury/modern/warm/playful)
+- "💡 اقترح تصاميم" quick-chip in chat opens proposals panel inline
+- One-click apply via `POST /apply-proposal` (merges mood + layout)
+
+**3. Support Tickets**:
+- Client-side create/list/view tickets
+- Backend stores in `project.support_tickets` array
+- Category tags: general/bug/content/design/other
+
+**4. Quality Checks + Delivery Kit**:
+- `GET /quality-checks` runs 9 automated checks (hero, footer, contact, brand, sections depth, payment, features, approved, client access)
+- Returns score 0-100
+- Shown inside `DeliveryKitModal` + all delivery links (public, share, client dashboard, credentials, stats)
+
+**New backend endpoints** (14 total):
+- POST `/projects/{id}/share` + GET `/share/{token}` + POST `/share/{token}/feedback`
+- POST `/public/{slug}/contact`
+- POST `/projects/{id}/client-access` + POST `/client/login`
+- GET `/client/session` + PATCH `/client/sections/{id}` + POST `/client/change-password`
+- GET `/client/messages` + POST `/client/messages/{id}/read`
+- GET `/client/analytics` + POST `/client/logout`
+- POST `/client/support-tickets` + GET `/client/support-tickets`
+- POST `/projects/{id}/propose-designs` + POST `/projects/{id}/apply-proposal`
+- GET `/projects/{id}/quality-checks` + GET `/projects/{id}/delivery-kit`
+
+**Tested live demo**: https://ai-cinematic-hub-2.preview.emergentagent.com/sites/cozy-cafe-demo (public) · /client/cozy-cafe-demo (pwd: VvvK64BT) · QC score 100/100 · 2 contact messages received
+
+
+
 ### 🆕 Feb 19, 2026 — MOBILE PREVIEW + SMART EDITS (Dedup/Move/Remove) + LIVE SECTIONS
 
 **User requests addressed**:

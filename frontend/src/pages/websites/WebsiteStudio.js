@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import {
   Sparkles, Eye, Download, ArrowLeft, Plus, FolderOpen,
   Send, Trash2, X, Code2, Check, Maximize2, Minimize2,
-  MessageSquare, Monitor, RefreshCw,
+  MessageSquare, Monitor, RefreshCw, Copy, ExternalLink,
 } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -339,9 +339,57 @@ function InlineStepRenderer({ step, variants, loading, onAnswer, selected, setSe
 }
 
 /* ================================================================
+   PROPOSAL CARDS — 4 distinctive design proposals shown in-chat
+   ================================================================ */
+function ProposalCards({ proposals, onPick, onDismiss, loading }) {
+  if (loading) {
+    return (
+      <div className="mx-3 my-2 p-3 bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-xl text-center" data-testid="proposals-loading">
+        <div className="text-xs opacity-80 flex items-center justify-center gap-2"><RefreshCw className="w-3.5 h-3.5 animate-spin" /> جاري تجهيز 4 تصاميم متنوعة لك...</div>
+      </div>
+    );
+  }
+  if (!proposals || proposals.length === 0) return null;
+  return (
+    <div className="mx-3 my-2 p-3 bg-gradient-to-br from-purple-500/10 to-pink-500/5 border border-purple-500/30 rounded-xl" data-testid="proposals-cards">
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-xs font-black text-purple-200">💡 4 تصاميم متنوعة — اختر واحداً لتطبيقه فوراً</div>
+        <button onClick={onDismiss} className="p-0.5 hover:bg-white/10 rounded" data-testid="dismiss-proposals"><X className="w-3 h-3" /></button>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {proposals.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => onPick(p)}
+            className="group relative rounded-lg overflow-hidden border border-white/15 hover:border-purple-400 transition-all text-right"
+            data-testid={`proposal-${p.mood_id}`}
+            style={{ background: `linear-gradient(135deg, ${p.palette.primary}22, ${p.palette.accent}22)` }}
+          >
+            <div className="p-2.5">
+              <div className="flex items-center gap-1 mb-1.5">
+                <div className="w-3 h-3 rounded-full border border-white/30" style={{ background: p.palette.primary }} />
+                <div className="w-3 h-3 rounded-full border border-white/30" style={{ background: p.palette.accent }} />
+                <div className="w-3 h-3 rounded-full border border-white/30" style={{ background: p.palette.secondary }} />
+              </div>
+              <div className="text-xs font-black text-white">{p.name}</div>
+              <div className="text-[10px] opacity-60 truncate">{p.layout_name || p.tagline || p.mood_id}</div>
+              <div className="text-[10px] opacity-50 mt-1">خط: {p.font || '—'}</div>
+            </div>
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+              <span className="px-3 py-1 bg-white text-black rounded-full text-[10px] font-black">✓ تطبيق هذا</span>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
    QUICK ADD BAR — smart one-click chips under the chat input
    ================================================================ */
 const QUICK_ADD_CHIPS = [
+  { id: 'propose',       icon: '💡', label: 'اقترح تصاميم',  msg: '__PROPOSE_DESIGNS__', special: 'propose' },
   { id: 'stories',       icon: '🎬', label: 'حالات',        msg: 'أضف قسم حالات' },
   { id: 'banner',        icon: '📢', label: 'بنر',          msg: 'أضف بنر ترويجي' },
   { id: 'video',         icon: '🎥', label: 'فيديو',         msg: 'أضف قسم فيديو' },
@@ -384,7 +432,7 @@ function QuickAddBar({ onPick, loading }) {
 /* ================================================================
    CHAT COLUMN — messages + inline rich step + free input
    ================================================================ */
-function ChatColumn({ project, stepMeta, variants, loading, onSendText, onAnswerStep, onRequestCode, pending, onConfirm, onCancel }) {
+function ChatColumn({ project, stepMeta, variants, loading, onSendText, onAnswerStep, onRequestCode, pending, onConfirm, onCancel, proposals, proposalsLoading, onPickProposal, onDismissProposals }) {
   const [msg, setMsg] = useState('');
   const [selected, setSelected] = useState([]);
   const endRef = useRef(null);
@@ -489,6 +537,11 @@ function ChatColumn({ project, stepMeta, variants, loading, onSendText, onAnswer
             setSelected={setSelected}
           />
         </div>
+      )}
+
+      {/* 🆕 Proposals shown inline in chat */}
+      {(proposalsLoading || (proposals && proposals.length > 0)) && (
+        <ProposalCards proposals={proposals} onPick={onPickProposal} onDismiss={onDismissProposals} loading={proposalsLoading} />
       )}
 
       {/* 🆕 Quick Add Bar — always visible, one-click section add */}
@@ -632,6 +685,7 @@ function IndependenceModal({ onClose }) {
 function LibraryModal({ projects, onOpen, onDelete, onDuplicate, onApprove, onClose }) {
   const approved = projects.filter((p) => p.status === 'approved');
   const drafts = projects.filter((p) => p.status !== 'approved');
+  const [kitProject, setKitProject] = useState(null);
 
   const Card = ({ p, isApproved }) => {
     const copyPublic = () => {
@@ -658,8 +712,9 @@ function LibraryModal({ projects, onOpen, onDelete, onDuplicate, onApprove, onCl
         <button onClick={() => onDuplicate(p.id)} className="px-2 py-1.5 bg-white/10 hover:bg-white/20 rounded text-xs font-bold">📋 نسخ</button>
         {isApproved ? (
           <>
-            <button disabled className="px-2 py-1.5 bg-blue-500/10 text-blue-300 rounded text-xs font-bold opacity-60 cursor-not-allowed">📱 تطبيق جوال (قريباً)</button>
-            <button className="px-2 py-1.5 bg-purple-500/20 hover:bg-purple-500/40 rounded text-xs font-bold" onClick={() => toast.info('سيتم التواصل لتفعيل الدعم والصيانة')}>🛠️ دعم وصيانة</button>
+            <button onClick={() => setKitProject(p)} className="col-span-2 px-2 py-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-black rounded text-xs font-black flex items-center justify-center gap-1" data-testid={`delivery-kit-${p.id}`}>
+              📦 حزمة التسليم (مشاركة + تحكم العميل)
+            </button>
           </>
         ) : (
           <>
@@ -673,6 +728,7 @@ function LibraryModal({ projects, onOpen, onDelete, onDuplicate, onApprove, onCl
   };
 
   return (
+    <>
     <div className="fixed inset-0 bg-black/80 z-[55] flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-[#0e1128] rounded-2xl max-w-5xl w-full max-h-[85vh] overflow-y-auto border border-yellow-500/30 p-5" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
@@ -703,6 +759,140 @@ function LibraryModal({ projects, onOpen, onDelete, onDuplicate, onApprove, onCl
             )}
           </>
         )}
+      </div>
+    </div>
+    {kitProject && <DeliveryKitModal project={kitProject} onClose={() => setKitProject(null)} />}
+    </>
+  );
+}
+
+/* ================================================================
+   DELIVERY KIT — everything the owner needs to hand off the site
+   ================================================================ */
+function DeliveryKitModal({ project, onClose }) {
+  const [kit, setKit] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [credentials, setCredentials] = useState(null);
+  const [shareLink, setShareLink] = useState('');
+  const [qc, setQc] = useState(null);
+  const origin = window.location.origin;
+
+  const loadKit = useCallback(async () => {
+    try {
+      const r = await fetch(`${API}/api/websites/projects/${project.id}/delivery-kit`, { headers: authH() });
+      const d = await r.json();
+      setKit(d);
+      if (d.share_url) setShareLink(`${origin}/api/websites${d.share_url.replace('/preview-share', '/share')}`);
+    } catch (_) {}
+  }, [project.id, origin]);
+
+  const loadQC = useCallback(async () => {
+    try {
+      const r = await fetch(`${API}/api/websites/projects/${project.id}/quality-checks`, { headers: authH() });
+      const d = await r.json();
+      setQc(d);
+    } catch (_) {}
+  }, [project.id]);
+
+  useEffect(() => { loadKit(); loadQC(); }, [loadKit, loadQC]);
+
+  const createShare = async () => {
+    setBusy(true);
+    try {
+      const r = await fetch(`${API}/api/websites/projects/${project.id}/share`, { method: 'POST', headers: authH() });
+      const d = await r.json();
+      setShareLink(`${origin}/api/websites/share/${d.token}`);
+      toast.success('✨ رابط المشاركة جاهز');
+      loadKit();
+    } catch (_) { toast.error('فشل'); }
+    finally { setBusy(false); }
+  };
+
+  const createClientAccess = async () => {
+    setBusy(true);
+    try {
+      const r = await fetch(`${API}/api/websites/projects/${project.id}/client-access`, { method: 'POST', headers: authH() });
+      const d = await r.json();
+      setCredentials({ slug: d.slug, password: d.temp_password, url: `${origin}/client/${d.slug}` });
+      toast.success('✨ تم تفعيل لوحة تحكم العميل');
+      loadKit();
+    } catch (_) { toast.error('فشل'); }
+    finally { setBusy(false); }
+  };
+
+  const copy = (t) => { navigator.clipboard.writeText(t); toast.success('تم النسخ'); };
+  const publicUrl = kit?.public_url ? `${origin}${kit.public_url}` : '';
+
+  return (
+    <div className="fixed inset-0 bg-black/85 z-[60] flex items-center justify-center p-4" onClick={onClose} dir="rtl" data-testid="delivery-kit-modal">
+      <div className="bg-[#0e1128] rounded-2xl max-w-2xl w-full border border-yellow-500/30 p-5 md:p-6 max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between mb-4 gap-3">
+          <div>
+            <h2 className="text-lg font-bold mb-1 flex items-center gap-2">📦 حزمة التسليم — {project.name}</h2>
+            <p className="text-xs opacity-70">كل ما تحتاجه لتسليم الموقع لعميلك</p>
+          </div>
+          <button onClick={onClose} className="p-1 hover:bg-white/10 rounded shrink-0"><X className="w-5 h-5" /></button>
+        </div>
+
+        {/* 1) Public URL */}
+        <section className="mb-4 bg-gradient-to-br from-green-500/10 to-emerald-500/5 border border-green-500/30 rounded-xl p-4">
+          <div className="text-xs font-black text-green-300 mb-2">1️⃣ الرابط العام (موقع العميل)</div>
+          <div className="flex items-center gap-2 bg-black/30 rounded-lg px-3 py-2 mb-2">
+            <code className="flex-1 text-xs text-yellow-300 truncate" data-testid="kit-public-url">{publicUrl || '—'}</code>
+            {publicUrl && <><button onClick={() => copy(publicUrl)} className="p-1 hover:bg-white/10 rounded" data-testid="copy-public"><Copy className="w-4 h-4" /></button>
+            <a href={publicUrl} target="_blank" rel="noreferrer" className="p-1 hover:bg-white/10 rounded text-green-400"><ExternalLink className="w-4 h-4" /></a></>}
+          </div>
+          <div className="text-[11px] opacity-70">أرسل هذا الرابط لعملاء موقعك — هو الموقع النهائي.</div>
+        </section>
+
+        {/* 2) Share link for review */}
+        <section className="mb-4 bg-gradient-to-br from-blue-500/10 to-cyan-500/5 border border-blue-500/30 rounded-xl p-4">
+          <div className="text-xs font-black text-blue-300 mb-2">2️⃣ رابط المعاينة الخاصة (قبل الاعتماد)</div>
+          {shareLink ? (
+            <>
+              <div className="flex items-center gap-2 bg-black/30 rounded-lg px-3 py-2 mb-2">
+                <code className="flex-1 text-xs text-blue-300 truncate" data-testid="kit-share-url">{shareLink}</code>
+                <button onClick={() => copy(shareLink)} className="p-1 hover:bg-white/10 rounded" data-testid="copy-share"><Copy className="w-4 h-4" /></button>
+                <a href={shareLink} target="_blank" rel="noreferrer" className="p-1 hover:bg-white/10 rounded text-blue-400"><ExternalLink className="w-4 h-4" /></a>
+              </div>
+              <div className="text-[11px] opacity-70">ينتهي خلال 14 يوم. العميل يرى شريط "اكتب ملاحظاتي" ويرسلها لك.</div>
+            </>
+          ) : (
+            <button onClick={createShare} disabled={busy} className="w-full px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-400/30 rounded-lg text-xs font-bold disabled:opacity-50" data-testid="create-share-btn">
+              🔗 إنشاء رابط معاينة للعميل
+            </button>
+          )}
+        </section>
+
+        {/* 3) Client dashboard */}
+        <section className="mb-4 bg-gradient-to-br from-purple-500/10 to-pink-500/5 border border-purple-500/30 rounded-xl p-4">
+          <div className="text-xs font-black text-purple-300 mb-2">3️⃣ لوحة تحكم العميل (إدارة المحتوى والرسائل)</div>
+          {credentials || kit?.client_access_enabled ? (
+            <>
+              <div className="bg-black/30 rounded-lg p-3 mb-2 space-y-1.5">
+                <div className="flex items-center gap-2"><span className="text-[10px] opacity-60 w-14">الرابط:</span><code className="text-xs text-purple-300 flex-1 truncate">{credentials?.url || `${origin}/client/${kit?.slug}`}</code><button onClick={() => copy(credentials?.url || `${origin}/client/${kit?.slug}`)} className="p-1 hover:bg-white/10 rounded"><Copy className="w-3 h-3" /></button></div>
+                {credentials?.password && (
+                  <div className="flex items-center gap-2"><span className="text-[10px] opacity-60 w-14">الكلمة:</span><code className="text-xs text-yellow-300 font-mono flex-1">{credentials.password}</code><button onClick={() => copy(credentials.password)} className="p-1 hover:bg-white/10 rounded" data-testid="copy-password"><Copy className="w-3 h-3" /></button></div>
+                )}
+              </div>
+              <button onClick={createClientAccess} disabled={busy} className="text-[11px] underline opacity-70 hover:opacity-100" data-testid="regen-password">🔄 إعادة إصدار كلمة مرور</button>
+              {credentials?.password && <div className="text-[11px] text-yellow-400 mt-2">⚠️ احفظ كلمة المرور الآن — لن تظهر مرة أخرى.</div>}
+            </>
+          ) : (
+            <button onClick={createClientAccess} disabled={busy} className="w-full px-3 py-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-400/30 rounded-lg text-xs font-bold disabled:opacity-50" data-testid="create-client-access-btn">
+              🔑 تفعيل لوحة تحكم العميل (إنشاء حساب له)
+            </button>
+          )}
+        </section>
+
+        {/* 4) Stats */}
+        <section className="mb-3 grid grid-cols-3 gap-2 text-center">
+          <div className="bg-white/5 rounded-lg p-2.5"><div className="text-xl font-black text-yellow-400">{kit?.visits ?? 0}</div><div className="text-[10px] opacity-60">زيارة</div></div>
+          <div className="bg-white/5 rounded-lg p-2.5"><div className="text-xl font-black text-pink-400">{kit?.messages_count ?? 0}</div><div className="text-[10px] opacity-60">رسالة</div></div>
+          <div className="bg-white/5 rounded-lg p-2.5"><div className="text-xl font-black text-blue-400">{kit?.feedback_count ?? 0}</div><div className="text-[10px] opacity-60">ملاحظة</div></div>
+        </section>
+
+        <div className="text-[11px] opacity-60 text-center">جميع البيانات محفوظة تلقائياً في Zitex.</div>
       </div>
     </div>
   );
@@ -1290,6 +1480,8 @@ export default function WebsiteStudio({ user }) {
 
   const sendChat = async (message) => {
     if (!project?.id) return;
+    // 🆕 Intercept special marker for design proposals
+    if (message === '__PROPOSE_DESIGNS__') { fetchProposals(); return; }
     setChatLoading(true);
     try {
       const r = await fetch(`${API}/api/websites/projects/${project.id}/wizard/chat`, {
@@ -1391,6 +1583,38 @@ export default function WebsiteStudio({ user }) {
 
   // Logo generation — now opens a proper multi-step studio (no more window.prompt)
   const [logoStudioOpen, setLogoStudioOpen] = useState(false);
+  const [proposals, setProposals] = useState(null); // array of design proposals shown inline in chat
+  const [proposalsLoading, setProposalsLoading] = useState(false);
+
+  const fetchProposals = async () => {
+    if (!project?.id) { toast.info('ابدأ بإنشاء مشروع أولاً'); return; }
+    setProposalsLoading(true);
+    try {
+      const r = await fetch(`${API}/api/websites/projects/${project.id}/propose-designs`, { method: 'POST', headers: authH() });
+      const d = await r.json();
+      setProposals(d.proposals || []);
+      toast.success('🎨 4 تصاميم جاهزة للمعاينة');
+    } catch (_) { toast.error('فشل'); }
+    finally { setProposalsLoading(false); }
+  };
+
+  const applyProposal = async (p) => {
+    if (!project?.id) return;
+    try {
+      await fetch(`${API}/api/websites/projects/${project.id}/apply-proposal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authH() },
+        body: JSON.stringify({ mood_id: p.mood_id, layout_id: p.layout_id }),
+      });
+      // Reload project
+      const rr = await fetch(`${API}/api/websites/projects/${project.id}`, { headers: authH() });
+      const pr = await rr.json();
+      setProject(pr);
+      refreshPreview(pr);
+      toast.success(`✨ تم تطبيق "${p.name}"`);
+      setProposals(null);
+    } catch (_) { toast.error('فشل التطبيق'); }
+  };
   const openLogoStudio = () => {
     if (!project?.id) { toast.info('ابدأ بإنشاء مشروع أولاً'); return; }
     setLogoStudioOpen(true);
@@ -1519,6 +1743,10 @@ export default function WebsiteStudio({ user }) {
                   variants={variants}
                   loading={chatLoading}
                   onSendText={sendChat}
+                  proposals={proposals}
+                  proposalsLoading={proposalsLoading}
+                  onPickProposal={applyProposal}
+                  onDismissProposals={() => setProposals(null)}
                   onAnswerStep={(v) => previewAnswer(project?.wizard?.step, v)}
                   onRequestCode={() => setShowIndependence(true)}
                   pending={pending}

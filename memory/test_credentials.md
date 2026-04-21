@@ -1,11 +1,17 @@
 # Test Credentials
 
-## Owner Account
-- Email: owner@zitex.com
-- Password: owner123
-- Role: owner
+## Platform Owner (Admin)
+- URL: `/login`
+- Email: `owner@zitex.com`
+- Password: `owner123`
 
-## Test Design
-- ID: 72ae0823-d06f-40bd-a9a4-cff46817b04e
-- Name: قرية اختبار
-- 5 عناصر: قلعة، بيت، حقل قمح، حقل طين، شجرة
+## Demo Site — Cozy Cafe Demo (end-client dashboard)
+- Login URL: `/client/cozy-cafe-demo`
+- Password: `VvvK64BT`
+- Public URL: `/sites/cozy-cafe-demo`
+- Share URL: `/api/websites/share/05VuNbyO9McTmt9Z_Hz68CG4KH0`
+
+## Testing Notes
+- Client tokens are generated per-login, sent as `Authorization: ClientToken <token>` header
+- Share tokens expire in 14 days
+- Support tickets + messages + feedback persist in the `website_projects` collection

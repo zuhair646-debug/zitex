@@ -945,6 +945,160 @@ def register_routes(app, database, auth_dep):
             "visits": int(p.get("visits") or 0),
         }
 
+    @r.post("/projects/{project_id}/propose-designs")
+    async def _propose_designs(project_id: str, current_user: dict = Depends(auth_dep)):
+        """Return 4 curated, distinctive design proposals — shown in chat for the user to pick before applying.
+        Each proposal mixes a layout variant with a mood/palette to feel genuinely different.
+        """
+        from .variants import STYLE_VARIANTS
+        from .catalog import list_layouts
+        from .templates import TEMPLATES
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "Project not found")
+        template_id = p.get("template") or "blank"
+        layouts = list_layouts(template_id) or []
+
+        chosen_moods = ["luxury", "modern", "warm", "playful"]
+        proposals = []
+        for i, mood_id in enumerate(chosen_moods):
+            mood = next((v for v in STYLE_VARIANTS if v["id"] == mood_id), STYLE_VARIANTS[0])
+            layout = layouts[i % max(1, len(layouts))] if layouts else None
+            base_template = TEMPLATES.get(template_id) or TEMPLATES.get("blank") or {}
+            theme = {**(base_template.get("theme") or {}), **mood["theme_override"]}
+            if layout and layout.get("theme_hints"):
+                theme = {**theme, **layout["theme_hints"]}
+            proposals.append({
+                "id": f"{mood_id}-{i}",
+                "name": mood["name"],
+                "mood_id": mood_id,
+                "layout_id": layout.get("id") if layout else None,
+                "layout_name": layout.get("name") if layout else None,
+                "palette": {"primary": theme.get("primary"), "accent": theme.get("accent"), "secondary": theme.get("secondary"), "background": theme.get("background", "#0b0f1f")},
+                "font": theme.get("font"),
+                "tagline": layout.get("tagline") if layout else mood["name"],
+            })
+        return {"ok": True, "proposals": proposals, "template": template_id}
+
+    @r.post("/projects/{project_id}/apply-proposal")
+    async def _apply_proposal(project_id: str, body: dict, current_user: dict = Depends(auth_dep)):
+        """Apply a chosen proposal — merges mood theme + layout onto the project, preserving user content."""
+        from .variants import STYLE_VARIANTS
+        from .catalog import get_layout, list_layouts
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "Project not found")
+        mood_id = body.get("mood_id")
+        layout_id = body.get("layout_id")
+        template_id = p.get("template") or "blank"
+        mood = next((v for v in STYLE_VARIANTS if v["id"] == mood_id), None)
+        if not mood:
+            raise HTTPException(400, "invalid mood")
+        theme = dict(p.get("theme") or {})
+        theme.update(mood["theme_override"])
+        updates = {"theme": theme, "updated_at": _iso_now()}
+        has_layouts = bool(list_layouts(template_id))
+        if layout_id and has_layouts:
+            try:
+                lay = get_layout(template_id, layout_id)
+                updates["sections"] = [{**s, "id": s.get("id") or f"sec-{uuid.uuid4().hex[:8]}", "order": i} for i, s in enumerate(lay.get("sections") or [])]
+                lay_theme = lay.get("theme") or {}
+                theme.update(lay_theme)
+                theme.update(mood["theme_override"])
+                updates["theme"] = theme
+            except Exception:
+                pass
+        await database.website_projects.update_one({"id": project_id}, {"$set": updates})
+        return {"ok": True}
+
+    # ═══════════════════════════════════════════════════════════════
+    # 🆕 SUPPORT TICKETS — client can request maintenance (points-based)
+    # ═══════════════════════════════════════════════════════════════
+    class SupportTicketIn(BaseModel):
+        subject: str
+        description: str
+        category: Optional[str] = "general"  # general | bug | content | design | other
+
+    @r.post("/client/support-tickets")
+    async def _client_support_create(body: SupportTicketIn, authorization: str = _Header(None)):
+        p = await _resolve_client_project(authorization or "")
+        ticket = {
+            "id": str(uuid.uuid4()), "at": _iso_now(),
+            "subject": body.subject[:200], "description": body.description[:4000],
+            "category": body.category or "general",
+            "status": "open",
+        }
+        await database.website_projects.update_one(
+            {"id": p["id"]}, {"$push": {"support_tickets": ticket}, "$set": {"updated_at": _iso_now()}}
+        )
+        return {"ok": True, "ticket": ticket}
+
+    @r.get("/client/support-tickets")
+    async def _client_support_list(authorization: str = _Header(None)):
+        p = await _resolve_client_project(authorization or "")
+        tickets = list(reversed(p.get("support_tickets") or []))
+        return {"tickets": tickets, "total": len(tickets)}
+
+    # ═══════════════════════════════════════════════════════════════
+    # 🆕 QUALITY CHECKS — automated site health checks after creation
+    # ═══════════════════════════════════════════════════════════════
+    @r.get("/projects/{project_id}/quality-checks")
+    async def _quality_checks(project_id: str, current_user: dict = Depends(auth_dep)):
+        """Run automated quality checks on the project and report issues."""
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "Project not found")
+        checks = []
+        sections = p.get("sections") or []
+        theme = p.get("theme") or {}
+
+        # 1) Has hero
+        has_hero = any(s.get("type") == "hero" for s in sections)
+        checks.append({"id": "hero", "label": "قسم رئيسي (Hero)", "pass": has_hero,
+                       "msg": "موجود ✓" if has_hero else "⚠️ لا يوجد قسم رئيسي — يُنصح بإضافة Hero"})
+        # 2) Has contact/footer
+        has_footer = any(s.get("type") == "footer" for s in sections)
+        checks.append({"id": "footer", "label": "تذييل الصفحة", "pass": has_footer,
+                       "msg": "موجود ✓" if has_footer else "⚠️ لا يوجد فوتر"})
+        # 3) Has contact info
+        has_contact = any(s.get("type") in ("contact", "footer") for s in sections)
+        checks.append({"id": "contact", "label": "معلومات التواصل", "pass": has_contact,
+                       "msg": "متوفرة ✓" if has_contact else "⚠️ أضف قسم تواصل"})
+        # 4) Has logo or brand
+        has_brand = bool(theme.get("logo_url") or p.get("name"))
+        checks.append({"id": "brand", "label": "الهوية البصرية (لوقو/اسم)", "pass": has_brand,
+                       "msg": "مضبوطة ✓" if has_brand else "⚠️ أضف لوقو أو اسم نشاط"})
+        # 5) Sections count
+        sections_count = len([s for s in sections if s.get("visible", True)])
+        checks.append({"id": "sections_depth", "label": "عمق المحتوى", "pass": sections_count >= 4,
+                       "msg": f"{sections_count} أقسام ظاهرة" + (" ✓" if sections_count >= 4 else " — يُنصح بـ 4 أو أكثر")})
+        # 6) Has payment methods (for stores)
+        if theme.get("payment_methods"):
+            checks.append({"id": "payment", "label": "طرق الدفع", "pass": True, "msg": f"{len(theme['payment_methods'])} طريقة ✓"})
+        # 7) Features
+        has_features = bool(theme.get("extras"))
+        checks.append({"id": "features", "label": "ميزات تفاعلية (واتساب/سلة/حجز)", "pass": has_features,
+                       "msg": f"{len(theme.get('extras') or [])} ميزة" + (" ✓" if has_features else " — لم يُفعَّل")})
+        # 8) Approved?
+        approved = p.get("status") == "approved"
+        checks.append({"id": "approved", "label": "معتمد ومنشور", "pass": approved,
+                       "msg": "نعم — منشور على /sites/" + (p.get("slug") or "") if approved else "⚠️ غير معتمد — المشروع لا يزال مسودة"})
+        # 9) Client access
+        has_client = bool((p.get("client_access") or {}).get("enabled"))
+        checks.append({"id": "client_access", "label": "لوحة تحكم العميل", "pass": has_client,
+                       "msg": "مفعّلة ✓" if has_client else "— لم تُفعّل بعد"})
+
+        score = int(100 * sum(1 for c in checks if c["pass"]) / max(1, len(checks)))
+        return {"score": score, "checks": checks,
+                "passed": sum(1 for c in checks if c["pass"]),
+                "total": len(checks)}
+
     app.include_router(r)
     return r
 
