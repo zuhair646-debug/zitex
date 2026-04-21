@@ -29,6 +29,7 @@ import WebsiteStudio from '@/pages/websites/WebsiteStudio';
 import PublicSite from '@/pages/PublicSite';
 import AdminSites from '@/pages/websites/AdminSites';
 import ClientSiteDashboard from '@/pages/client/ClientDashboard';
+import DriverDashboardPage from '@/pages/driver/DriverDashboard';
 import '@/App.css';
 
 function App() {
@@ -100,6 +101,7 @@ function App() {
           <Route path="/websites" element={<ProtectedRoute><WebsiteStudio user={user} /></ProtectedRoute>} />
           <Route path="/sites/:slug" element={<PublicSite />} />
           <Route path="/client/:slug" element={<ClientSiteDashboard />} />
+          <Route path="/driver/:slug" element={<DriverDashboardPage />} />
           <Route path="/admin/sites" element={<ProtectedRoute adminOnly><AdminSites user={user} /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>

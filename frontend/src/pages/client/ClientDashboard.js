@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   LogIn, Eye, EyeOff, LogOut, ExternalLink, Users, MessageSquare, BarChart3,
-  Edit3, Save, X, RefreshCw, Check, Key, CheckCircle2, Copy, Lock,
+  Edit3, Save, X, RefreshCw, Check, Key, CheckCircle2, Copy, Lock, MapPin,
 } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -451,11 +451,15 @@ function OrdersTab({ token }) {
 
   const setStatus = async (id, status, driverId = null) => {
     try {
-      await fetch(`${API}/api/websites/client/orders/${id}`, {
+      const r = await fetch(`${API}/api/websites/client/orders/${id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authH(token) },
         body: JSON.stringify({ status, driver_id: driverId }),
       });
-      toast.success('تم التحديث'); load();
+      const d = await r.json();
+      toast.success('تم التحديث');
+      // 🆕 auto-open WhatsApp link if present
+      if (d.whatsapp_link) window.open(d.whatsapp_link, '_blank');
+      load();
     } catch (_) { toast.error('فشل'); }
   };
 
@@ -647,6 +651,88 @@ function CustomersTab({ token }) {
 }
 
 /* ================================================================
+   DELIVERY SETTINGS TAB
+   ================================================================ */
+function DeliverySettingsTab({ token, slug }) {
+  const [s, setS] = useState({ base_lat: '', base_lng: '', base_fee: 10, fee_per_km: 2, free_delivery_above: 200 });
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch(`${API}/api/websites/client/delivery-settings`, { headers: authH(token) });
+        const d = await r.json();
+        setS({ ...s, ...d });
+      } catch (_) {}
+    })();
+    // eslint-disable-next-line
+  }, [token]);
+
+  const useMyLoc = () => {
+    if (!navigator.geolocation) return toast.error('متصفحك لا يدعم تحديد الموقع');
+    navigator.geolocation.getCurrentPosition((p) => {
+      setS((prev) => ({ ...prev, base_lat: p.coords.latitude, base_lng: p.coords.longitude }));
+      toast.success('✓ تم تحديد موقع المتجر');
+    }, () => toast.error('فشل'));
+  };
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      await fetch(`${API}/api/websites/client/delivery-settings`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...authH(token) },
+        body: JSON.stringify({
+          base_lat: s.base_lat ? parseFloat(s.base_lat) : null,
+          base_lng: s.base_lng ? parseFloat(s.base_lng) : null,
+          base_fee: parseFloat(s.base_fee) || 0,
+          fee_per_km: parseFloat(s.fee_per_km) || 0,
+          free_delivery_above: parseFloat(s.free_delivery_above) || 0,
+        }),
+      });
+      toast.success('✓ تم الحفظ');
+    } catch (_) { toast.error('فشل'); }
+    finally { setBusy(false); }
+  };
+
+  const driverUrl = `${window.location.origin}/driver/${slug}`;
+
+  return (
+    <div className="space-y-4" data-testid="delivery-settings-tab">
+      <div className="bg-gradient-to-br from-cyan-500/10 to-blue-500/5 border border-cyan-500/30 rounded-xl p-4">
+        <h3 className="font-black text-cyan-300 mb-3">🛵 إعدادات التوصيل (احتساب تلقائي حسب المسافة)</h3>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-[11px] opacity-70 block mb-1">📍 موقع المتجر (lat)</label>
+            <input type="number" step="0.0001" value={s.base_lat || ''} onChange={(e) => setS({ ...s, base_lat: e.target.value })} className="w-full px-3 py-2 bg-white/5 border border-white/15 rounded text-sm" data-testid="base-lat" />
+          </div>
+          <div>
+            <label className="text-[11px] opacity-70 block mb-1">📍 موقع المتجر (lng)</label>
+            <input type="number" step="0.0001" value={s.base_lng || ''} onChange={(e) => setS({ ...s, base_lng: e.target.value })} className="w-full px-3 py-2 bg-white/5 border border-white/15 rounded text-sm" data-testid="base-lng" />
+          </div>
+        </div>
+        <button onClick={useMyLoc} className="w-full mt-2 py-1.5 bg-blue-500/20 hover:bg-blue-500/40 rounded-lg text-xs font-bold" data-testid="use-my-location">📍 استخدم موقعي الحالي</button>
+        <div className="grid grid-cols-3 gap-2 mt-3">
+          <div><label className="text-[11px] opacity-70 block mb-1">رسوم أساسية</label><input type="number" value={s.base_fee} onChange={(e) => setS({ ...s, base_fee: e.target.value })} className="w-full px-2 py-2 bg-white/5 border border-white/15 rounded text-sm" data-testid="base-fee" /></div>
+          <div><label className="text-[11px] opacity-70 block mb-1">لكل كم</label><input type="number" value={s.fee_per_km} onChange={(e) => setS({ ...s, fee_per_km: e.target.value })} className="w-full px-2 py-2 bg-white/5 border border-white/15 rounded text-sm" data-testid="fee-per-km" /></div>
+          <div><label className="text-[11px] opacity-70 block mb-1">مجاني فوق</label><input type="number" value={s.free_delivery_above} onChange={(e) => setS({ ...s, free_delivery_above: e.target.value })} className="w-full px-2 py-2 bg-white/5 border border-white/15 rounded text-sm" data-testid="free-above" /></div>
+        </div>
+        <div className="text-[10px] opacity-60 mt-2">مثال: رسوم أساسية 10 + 2 لكل كم، أو مجاني لو الطلب فوق 200 ر.س</div>
+        <button onClick={save} disabled={busy} className="w-full mt-3 py-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-black rounded-lg font-black text-sm" data-testid="save-delivery-settings">{busy ? '...' : '💾 حفظ الإعدادات'}</button>
+      </div>
+
+      <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/5 border border-purple-500/30 rounded-xl p-4">
+        <h3 className="font-black text-purple-300 mb-2">🔗 رابط لوحة السائقين</h3>
+        <div className="flex items-center gap-2 bg-black/30 rounded-lg px-3 py-2 mb-2">
+          <code className="flex-1 text-xs text-purple-300 truncate">{driverUrl}</code>
+          <button onClick={() => { navigator.clipboard.writeText(driverUrl); toast.success('نُسخ'); }} className="text-xs px-2 py-1 bg-white/10 hover:bg-white/20 rounded">نسخ</button>
+        </div>
+        <div className="text-[11px] opacity-70">شارك هذا الرابط مع سائقيك — يدخلون بأرقام جوالاتهم وكلمات مرورهم التي أنشأتها في تبويب "السائقون"</div>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
    DASHBOARD — authenticated
    ================================================================ */
 function Dashboard({ slug, token, onLogout }) {
@@ -730,6 +816,7 @@ function Dashboard({ slug, token, onLogout }) {
             { id: 'orders', label: 'الطلبات', icon: MessageSquare },
             { id: 'customers', label: 'العملاء', icon: Users },
             { id: 'drivers', label: 'السائقون', icon: ExternalLink },
+            { id: 'delivery', label: 'التوصيل', icon: MapPin },
             { id: 'edit', label: 'المحتوى', icon: Edit3 },
             { id: 'messages', label: 'الرسائل', icon: MessageSquare },
             { id: 'support', label: 'الدعم', icon: RefreshCw },
@@ -777,6 +864,7 @@ function Dashboard({ slug, token, onLogout }) {
         {tab === 'orders' && <OrdersTab token={token} />}
         {tab === 'customers' && <CustomersTab token={token} />}
         {tab === 'drivers' && <DriversTab token={token} />}
+        {tab === 'delivery' && <DeliverySettingsTab token={token} slug={slug} />}
 
         {tab === 'messages' && <MessagesTab token={token} />}
 

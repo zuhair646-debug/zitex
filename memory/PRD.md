@@ -15,6 +15,38 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Feb 21, 2026 (PM-2) — PROFESSIONAL POLISH (5 additions)
+
+**1. Driver Dashboard (`/driver/:slug`)**:
+- Phone+password login → DriverToken session
+- Assigned orders list with auto-refresh every 30s
+- "بدء مشاركة موقعي" toggle → pings GPS to backend every 30s
+- One-tap actions: 📞 call customer, 🗺 navigate in Google Maps
+- File: `/app/frontend/src/pages/driver/DriverDashboard.js`
+
+**2. Haversine Delivery Fee Calculator**:
+- New `_haversine_km()` + `delivery_settings` per project ({base_lat, base_lng, base_fee, fee_per_km, free_delivery_above})
+- Auto-applies when customer places order (lat/lng → km × fee_per_km + base)
+- Free delivery threshold supported
+- New `DeliverySettingsTab` in client dashboard with "use my location" button
+
+**3. WhatsApp Auto-Notifications**:
+- `PATCH /client/orders/{id}` now returns `whatsapp_link` (wa.me)
+- 6 status messages in Arabic (accepted/preparing/ready/on_the_way/delivered/cancelled)
+- Auto country-code normalization (05x → 966 5x)
+- Client dashboard auto-opens WhatsApp after status change
+
+**4. Owner Ticket Replies**:
+- `POST /admin/sites/{id}/tickets/{tid}/reply` for owner reply + status change
+
+**5. Tech Stack Info (`GET /tech-stack`)**:
+- Returns 8 tech layers with Arabic rationale + 4 competitor comparisons + 4 performance benefits
+- New `TechStackModal` accessible from owner studio top bar (🧩 التقنيات)
+
+**Tested**: ✅ All 6 new endpoints work via curl (haversine=5.73km → 32.19 ر.س, free above 200 ر.س, wa.me link generated, driver login + location update)
+
+
+
 ### 🆕 Feb 21, 2026 (PM) — COMPLETE COMMERCE STACK (site-customers + orders + drivers + geolocation)
 
 **What was added**:

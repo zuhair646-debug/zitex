@@ -1583,6 +1583,7 @@ export default function WebsiteStudio({ user }) {
 
   // Logo generation — now opens a proper multi-step studio (no more window.prompt)
   const [logoStudioOpen, setLogoStudioOpen] = useState(false);
+  const [techStackOpen, setTechStackOpen] = useState(false);
   const [proposals, setProposals] = useState(null); // array of design proposals shown inline in chat
   const [proposalsLoading, setProposalsLoading] = useState(false);
 
@@ -1681,6 +1682,10 @@ export default function WebsiteStudio({ user }) {
               <Sparkles className="w-4 h-4 text-purple-300" />
               <span className="hidden md:inline text-xs">اعمل لوقو</span>
             </button>
+            <button onClick={() => setTechStackOpen(true)} className="p-2 md:px-3 md:py-2 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 hover:from-cyan-500/30 hover:to-blue-500/30 border border-cyan-400/30 rounded-lg flex items-center gap-1.5" data-testid="tech-stack-btn" title="التقنيات المستخدمة">
+              <span className="text-base">🧩</span>
+              <span className="hidden md:inline text-xs">التقنيات</span>
+            </button>
             {project && project.status !== 'approved' && (
               <button onClick={() => approveProject(project.id)} className="p-2 md:px-3 md:py-2 bg-gradient-to-r from-green-500/30 to-emerald-500/30 hover:from-green-500/50 hover:to-emerald-500/50 border border-green-400/40 rounded-lg flex items-center gap-1.5" data-testid="approve-btn" title="اعتماد نهائي">
                 <Check className="w-4 h-4 text-green-300" /><span className="hidden md:inline text-xs font-bold">اعتماد</span>
@@ -1774,6 +1779,7 @@ export default function WebsiteStudio({ user }) {
       {showLibrary && <LibraryModal projects={projects} onOpen={openProject} onDelete={deleteProject} onDuplicate={duplicateProject} onApprove={approveProject} onClose={() => setShowLibrary(false)} />}
       {showIndependence && <IndependenceModal onClose={() => setShowIndependence(false)} />}
       {logoStudioOpen && <LogoStudioModal project={project} onClose={() => setLogoStudioOpen(false)} onApplied={onLogoApplied} />}
+      {techStackOpen && <TechStackModal onClose={() => setTechStackOpen(false)} />}
     </div>
   );
 }
