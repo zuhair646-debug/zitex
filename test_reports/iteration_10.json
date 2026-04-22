@@ -1,0 +1,105 @@
+{
+  "summary": "Comprehensive testing of Zitex P1 features completed: (1) Real-time WebSockets replacing polling for LiveMap and driver location pushes, (2) Multi-tenant payment gateways with Fernet-encrypted keys. All 19 backend tests passed (100%). Frontend tests verified Payment Gateways tab with 4 gateway cards and LiveMap tab with WebSocket connected status.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "A. WebSocket client feed: connect → receive {type:hello}. Ping 'ping' → receive {type:pong}",
+    "A. WebSocket client feed: Invalid token → connection rejected with code 4401",
+    "B. WebSocket driver feed: connect → receive hello. Send location → client WS receives {type:location}",
+    "C. WebSocket broadcast on HTTP: client WS receives {type:order_created} after POST /public/{slug}/orders",
+    "D. WebSocket broadcast on driver HTTP location: client receives {type:location} when driver uses POST /driver/{slug}/location",
+    "E. Multi-tenant payment gateway catalog: GET /api/websites/payment-gateways/catalog returns 4 providers (moyasar, tabby, tamara, cod)",
+    "F. Client gateway list: GET /api/websites/client/payment-gateways returns all 4 with enabled/configured/test_mode fields",
+    "G. Save Moyasar keys: PUT /api/websites/client/payment-gateways/moyasar → configured=true and MASKED preview (never full plaintext secret)",
+    "H. Test creds Moyasar: POST .../moyasar/test with fake keys → {ok:false, message containing 401}",
+    "H. Test creds COD: POST .../cod/test → {ok:true}",
+    "I. Disable & delete: DELETE /api/websites/client/payment-gateways/moyasar → configured:false",
+    "J. Public gateway visibility: GET /api/websites/public/{slug}/payment-gateways returns ONLY enabled providers + publishable_key (no secret)",
+    "K. Payment init COD: POST /api/websites/public/{slug}/payments/init with provider:'cod' → {ok:true, provider:'cod', status:'pending', redirect_url:null}",
+    "L. Payment init Moyasar with fake keys: returns 502 with Moyasar 401 error (proves tenant keys are injected)",
+    "M. Payment init provider not enabled: returns 400",
+    "N. Payment init order belongs to another customer: returns 403",
+    "O. Payment init unknown provider: returns 400",
+    "P. Generated site renders checkout with dynamic payment dropdown: HTML contains checkout markers",
+    "Q. Frontend: Client Dashboard → Payment tab renders PaymentGatewaysTab with 4 gateway cards (moyasar, cod, tabby, tamara)",
+    "Q. Frontend: LiveMap tab shows 'مباشر (WebSocket)' green badge when connected"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_websocket_payment.py",
+    "/app/backend/tests/test_websocket_realtime.py",
+    "/app/test_reports/pytest/websocket_payment_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_websocket_payment.py",
+    "/app/backend/tests/test_websocket_realtime.py"
+  ],
+  "success_rate": {
+    "backend": "100% (19/19 tests passed)",
+    "frontend": "100% (Payment Gateways tab + LiveMap WebSocket working)"
+  },
+  "test_credentials": {
+    "platform_owner": "owner@zitex.com / owner123",
+    "client_dashboard": "slug=cozy-cafe-demo password=WKDWkG0d",
+    "driver": "slug=cozy-cafe-demo phone=0559988776 password=drv123",
+    "site_customer": "slug=cozy-cafe-demo phone=0501122334 password=pass123"
+  },
+  "seed_data_creation": "Test orders created during payment init tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Two P1 features fully tested: (1) WebSockets - client and driver WS endpoints at /api/websites/ws/client/{slug}?token=<ClientToken> and /api/websites/ws/driver/{slug}?token=<DriverToken>. Client receives hello, pong, location, order_created, order_status events. Driver can push location via WS JSON {type:location, lat, lng}. (2) Multi-tenant Payment Gateways - 4 providers (moyasar, tabby, tamara, cod). Keys encrypted with Fernet. Client dashboard has PaymentGatewaysTab with data-testid='gateway-{provider}'. Public checkout uses /payments/init endpoint. Moyasar tested with fake keys returns 502 (proves real API call with tenant keys). COD works without keys.",
+  "features_verified": {
+    "websocket_client": {
+      "endpoint": "/api/websites/ws/client/{slug}?token=<ClientToken>",
+      "hello_message": "Working - receives {type:hello, data:{slug, role:client}}",
+      "ping_pong": "Working - send 'ping' text, receive {type:pong}",
+      "invalid_token": "Working - connection rejected with code 4401",
+      "broadcasts": "Working - receives order_created, order_status, location events"
+    },
+    "websocket_driver": {
+      "endpoint": "/api/websites/ws/driver/{slug}?token=<DriverToken>",
+      "hello_message": "Working - receives {type:hello, data:{slug, role:driver, driver_id}}",
+      "location_push": "Working - send {type:location, lat, lng} → broadcasts to clients",
+      "invalid_token": "Working - connection rejected with code 4401"
+    },
+    "payment_gateways": {
+      "catalog": "Working - returns 4 providers (moyasar, tabby, tamara, cod)",
+      "client_list": "Working - returns all 4 with enabled/configured/test_mode",
+      "save_keys": "Working - Fernet encryption, masked preview",
+      "test_credentials": "Working - Moyasar fake keys return 401, COD returns ok:true",
+      "delete_gateway": "Working - removes keys, configured:false",
+      "public_visibility": "Working - only enabled providers, no secrets exposed",
+      "payment_init_cod": "Working - returns ok:true, status:pending, redirect_url:null",
+      "payment_init_moyasar": "Working - fake keys return 502 (proves tenant keys injected)",
+      "payment_init_disabled": "Working - returns 400",
+      "payment_init_wrong_customer": "Working - returns 403",
+      "payment_init_unknown": "Working - returns 400"
+    },
+    "frontend_payment_tab": {
+      "tab_visible": "Working - 💳 الدفع tab in Client Dashboard",
+      "gateway_cards": "Working - 4 cards with data-testid='gateway-{moyasar,cod,tabby,tamara}'",
+      "masked_keys": "Working - shows t_fake•••••• format"
+    },
+    "frontend_livemap_tab": {
+      "tab_visible": "Working - خريطة حية tab in Client Dashboard",
+      "websocket_status": "Working - shows 'مباشر (WebSocket)' with green badge",
+      "map_iframe": "Working - OpenStreetMap embedded"
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": ["Moyasar: tested with fake keys — real Moyasar API returns 401. When user plugs in real Moyasar sandbox keys the full flow should work end-to-end."]
+  },
+  "websocket_urls": {
+    "client": "wss://ai-cinematic-hub-2.preview.emergentagent.com/api/websites/ws/client/{slug}?token=<ClientToken>",
+    "driver": "wss://ai-cinematic-hub-2.preview.emergentagent.com/api/websites/ws/driver/{slug}?token=<DriverToken>"
+  }
+}

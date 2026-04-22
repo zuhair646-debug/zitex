@@ -610,11 +610,14 @@ def _auth_and_commerce_overlay(slug) -> str:
   window.zxRemove=function(i){{var c=cart();c.splice(i,1);setCart(c);openCart();}};
   window.zxCheckout=function(){{
     if(!tk()){{open_(renderAuth("login"));return;}}
+    var gws=(window.__zxPayGateways||[]);
+    var payOpts=gws.length? gws.map(function(g){{return '<option value="'+g.id+'">'+g.name_ar+'</option>'}}).join("") : '<option value="cod">💵 الدفع عند الاستلام</option>';
     open_('<h3>🏁 إتمام الطلب</h3>'+
       '<label>عنوان التوصيل</label><input id="zx-ord-addr" placeholder="مثال: الرياض، حي النزهة، شارع..." />'+
       '<button class="zx-loc-btn" onclick="window.zxGetLoc()">📍 استخدم موقعي الحالي</button>'+
       '<div id="zx-ord-loc" style="font-size:11px;opacity:.7;margin-bottom:8px"></div>'+
       '<label>ملاحظات (اختياري)</label><textarea id="zx-ord-note" rows="2" placeholder="مثال: بدون بصل"></textarea>'+
+      '<label>💳 طريقة الدفع</label><select id="zx-ord-pay">'+payOpts+'</select>'+
       '<div id="zx-ord-err"></div>'+
       '<button class="zx-btn" onclick="window.zxSubmitOrder()">✓ تأكيد الطلب</button>');
   }};
@@ -634,6 +637,13 @@ def _auth_and_commerce_overlay(slug) -> str:
     try{{
       var res=await api("/public/"+SLUG+"/orders",{{method:"POST",body:JSON.stringify({{items:cart(),address:addr,lat:window.__zxLat,lng:window.__zxLng,note:note,coupon_code:window.__zxCoupon||"",redeem_points:pts,payment_method:pay}})}});
       setCart([]);window.__zxCoupon=null;
+      // If the chosen provider is a hosted gateway, redirect to payment page
+      if(pay && pay!=="cod"){{
+        try{{
+          var init=await api("/public/"+SLUG+"/payments/init",{{method:"POST",body:JSON.stringify({{order_id:res.order_id,provider:pay}})}});
+          if(init && init.redirect_url){{window.location.href=init.redirect_url;return;}}
+        }}catch(pe){{$("#zx-ord-err").innerHTML='<div class="zx-err">تم استلام طلبك ولكن تعذّر بدء الدفع: '+pe.message+'</div>';}}
+      }}
       var extra=res.points_earned?'<br>🎁 كسبت '+res.points_earned+' نقطة (رصيدك '+res.points_balance+')':'';
       open_('<h3>✅ تم استلام طلبك</h3><div class="zx-ok">رقم الطلب: '+res.order_id.slice(0,8)+'<br>الإجمالي: '+res.total+' ر.س'+(res.discount?'<br>🎁 وفّرت '+res.discount+' ر.س':'')+extra+'</div><button class="zx-btn-sec" onclick="window.zxMyOrders()">📦 تتبّع طلباتي</button>');
     }}catch(e){{$("#zx-ord-err").innerHTML='<div class="zx-err">'+e.message+'</div>';}}
@@ -679,6 +689,8 @@ def _auth_and_commerce_overlay(slug) -> str:
   scanAddButtons();updCartBadge();updAuthBadge();
   setTimeout(scanAddButtons,500);
   new MutationObserver(scanAddButtons).observe(document.body,{{childList:true,subtree:true}});
+  // Load available payment gateways for this site
+  (async function(){{try{{var pg=await api("/public/"+SLUG+"/payment-gateways");window.__zxPayGateways=(pg&&pg.gateways)||[];}}catch(_e){{window.__zxPayGateways=[];}}}})();
 }})();
 </script>
 <!-- /ZX-COMMERCE-OVERLAY -->"""

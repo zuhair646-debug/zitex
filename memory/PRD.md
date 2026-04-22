@@ -15,6 +15,62 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Feb 22, 2026 — MULTI-TENANT PAYMENT GATEWAYS (P1 — COMPLETE for Moyasar + COD)
+
+**Architecture**: Each tenant (website_project) stores its OWN payment provider keys encrypted at rest with Fernet. Every end-user checkout uses the tenant's keys → money settles directly to tenant's account. No intermediary/platform wallet.
+
+**Supported providers** (in `modules/websites/payment_gateways.py`):
+- **Moyasar** (Saudi, SAMA-licensed) — full integration: Mada, STC Pay, Apple Pay, Visa/Master. Hosted Invoice redirect flow.
+- **COD** (Cash on Delivery) — no keys; just enable toggle.
+- **Tabby** (BNPL) — key storage + UI only (activation flow pending).
+- **Tamara** (BNPL) — key storage + UI only (activation flow pending).
+
+**Security**:
+- Secret keys encrypted with Fernet key from `PAYMENT_KEYS_FERNET` env var.
+- Keys returned to frontend as masked previews (e.g., `••••••b12345`). Never plaintext after save.
+- Amount/currency always server-side from order.total — end-user cannot manipulate.
+- Server-side re-verification via `fetch_invoice()` in the callback before marking paid.
+- Per-tenant webhook path: `POST /api/websites/webhook/payments/{slug}/moyasar` — idempotent.
+
+**New backend endpoints** (all under `/api/websites`):
+- `GET /payment-gateways/catalog` (public) — list provider metadata
+- `GET /client/payment-gateways` (ClientToken) — list configured gateways with masked previews
+- `PUT /client/payment-gateways/{provider_id}` (ClientToken) — enable/disable + save keys
+- `DELETE /client/payment-gateways/{provider_id}` (ClientToken)
+- `POST /client/payment-gateways/{provider_id}/test` (ClientToken) — live credential validation against provider API
+- `GET /public/{slug}/payment-gateways` (public) — safe list of ENABLED gateways visible on checkout
+- `POST /public/{slug}/payments/init` (SiteToken) — create hosted invoice, return `redirect_url`
+- `GET /public/{slug}/payments/callback` — Moyasar success redirect; server-verifies via `fetch_invoice()`
+- `POST /webhook/payments/{slug}/moyasar` — webhook receiver
+
+**Frontend**:
+- New `PaymentGatewaysTab` in `ClientDashboard` (`/app/frontend/src/pages/client/ClientDashboard.js`) — per-provider cards with masked keys, enable toggle, methods checkboxes, Save + 🧪 Test buttons. Link to Moyasar dashboard for key acquisition.
+- Generated site (`renderer.py`):
+  - On page load fetches `/payment-gateways` → stores in `window.__zxPayGateways`.
+  - Checkout form now shows a payment-method `<select>` dynamically populated from the tenant's enabled gateways.
+  - On order submit: if chosen provider is hosted (e.g., Moyasar), calls `/payments/init` and `window.location.href=redirect_url`.
+  - For COD: remains client-side success card.
+
+**E2E verified (Apr 22, 2026)**:
+- Client dashboard "الدفع" tab renders all 4 providers ✅
+- Saved fake Moyasar keys → masked preview OK, `/test` correctly returned 401 ("المفتاح السري غير صحيح") ✅
+- Enabled COD; `GET /public/{slug}/payment-gateways` returned both ✅
+- `POST /payments/init` with `provider=cod` → order.payment={provider:cod, status:pending} ✅
+- `POST /payments/init` with `provider=moyasar` using fake keys → 401 from Moyasar (proves real tenant-key injection) ✅
+- Rendered HTML contains `zx-ord-pay` dropdown + `__zxPayGateways` + `/payments/init` fetch ✅
+
+**New env var**: `PAYMENT_KEYS_FERNET` (Fernet key) added to `/app/backend/.env`.
+
+**Files added**:
+- `/app/backend/modules/websites/payment_gateways.py` — provider classes + encryption
+
+**Files modified**:
+- `/app/backend/modules/websites/routes.py` — 9 new endpoints
+- `/app/backend/modules/websites/renderer.py` — checkout dropdown + init flow
+- `/app/frontend/src/pages/client/ClientDashboard.js` — PaymentGatewaysTab + nav tab "💳 الدفع"
+- `/app/backend/.env` — `PAYMENT_KEYS_FERNET`
+
+
 ### 🆕 Feb 22, 2026 — REAL-TIME WEBSOCKETS (P1 — COMPLETE)
 
 **What was added** (replaces 15–30 second HTTP polling with true realtime):

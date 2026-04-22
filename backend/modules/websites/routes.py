@@ -1,4 +1,5 @@
 """FastAPI routes for the Websites module — fully isolated."""
+import os
 import uuid
 import re
 import logging
@@ -24,6 +25,7 @@ from .wizard import (
     COLOR_VARIANT_MAP, RADIUS_MAP,
 )
 from .realtime import realtime
+from . import payment_gateways as pg
 
 logger = logging.getLogger(__name__)
 
@@ -1773,6 +1775,273 @@ def register_routes(app, database, auth_dep):
             "drivers": drivers,
             "orders": active_orders,
         }
+
+    # ═══════════════════════════════════════════════════════════════
+    # 🆕 MULTI-TENANT PAYMENT GATEWAYS (Moyasar / Tabby / Tamara / COD)
+    # Each tenant stores its own keys (encrypted). Checkout uses tenant-scoped keys.
+    # ═══════════════════════════════════════════════════════════════
+    @r.get("/payment-gateways/catalog")
+    async def _pg_catalog():
+        """Public catalog (no auth) — used by the client dashboard UI."""
+        return {"providers": pg.catalog_public()}
+
+    @r.get("/client/payment-gateways")
+    async def _client_pg_list(authorization: str = _Header(None)):
+        p = await _resolve_client_project(authorization or "")
+        stored = p.get("payment_gateways") or {}
+        return {
+            "gateways": [pg.safe_gateway_view(pid, stored.get(pid)) for pid in pg.PROVIDERS],
+        }
+
+    class GatewayUpdateIn(BaseModel):
+        enabled: Optional[bool] = None
+        publishable_key: Optional[str] = None
+        secret_key: Optional[str] = None
+        public_key: Optional[str] = None
+        api_token: Optional[str] = None
+        notification_token: Optional[str] = None
+        methods: Optional[List[str]] = None
+        test_mode: Optional[bool] = None
+
+    @r.put("/client/payment-gateways/{provider_id}")
+    async def _client_pg_update(provider_id: str, body: GatewayUpdateIn, authorization: str = _Header(None)):
+        if provider_id not in pg.PROVIDERS:
+            raise HTTPException(404, "مزود غير معروف")
+        p = await _resolve_client_project(authorization or "")
+        builder = pg.PATCH_BUILDERS[provider_id]
+        # Merge with existing so partial updates work
+        current = (p.get("payment_gateways") or {}).get(provider_id) or {}
+        new_patch = builder(body.model_dump(exclude_none=True))
+        merged = {**current, **new_patch}
+        await database.website_projects.update_one(
+            {"id": p["id"]},
+            {"$set": {f"payment_gateways.{provider_id}": merged, "updated_at": _iso_now()}},
+        )
+        return {"ok": True, "gateway": pg.safe_gateway_view(provider_id, merged)}
+
+    @r.delete("/client/payment-gateways/{provider_id}")
+    async def _client_pg_delete(provider_id: str, authorization: str = _Header(None)):
+        if provider_id not in pg.PROVIDERS:
+            raise HTTPException(404, "مزود غير معروف")
+        p = await _resolve_client_project(authorization or "")
+        await database.website_projects.update_one(
+            {"id": p["id"]},
+            {"$unset": {f"payment_gateways.{provider_id}": ""}, "$set": {"updated_at": _iso_now()}},
+        )
+        return {"ok": True}
+
+    @r.post("/client/payment-gateways/{provider_id}/test")
+    async def _client_pg_test(provider_id: str, authorization: str = _Header(None)):
+        """Validate stored credentials by hitting the provider's API."""
+        if provider_id not in pg.PROVIDERS:
+            raise HTTPException(404, "مزود غير معروف")
+        p = await _resolve_client_project(authorization or "")
+        gw = (p.get("payment_gateways") or {}).get(provider_id) or {}
+        if provider_id == "moyasar":
+            prov = pg.load_moyasar(gw)
+            if not prov:
+                return {"ok": False, "message": "لم يتم إعداد مفاتيح Moyasar بعد"}
+            ok, msg = await prov.test()
+            return {"ok": ok, "message": msg}
+        if provider_id == "cod":
+            return {"ok": True, "message": "الدفع عند الاستلام لا يحتاج مفاتيح — فقط فعّله"}
+        if provider_id in ("tabby", "tamara"):
+            return {"ok": bool(gw.get("enabled")), "message": "تم حفظ المفاتيح (دعم الاختبار قيد الإضافة)"}
+        return {"ok": False, "message": "غير مدعوم"}
+
+    # ---- Public checkout init (tenant-scoped) ----
+    class PaymentInitIn(BaseModel):
+        order_id: str
+        provider: str  # moyasar | cod | tabby | tamara
+
+    @r.get("/public/{slug}/payment-gateways")
+    async def _public_pg_list(slug: str):
+        """Frontend-visible gateway list for a given site (only enabled & safe fields)."""
+        proj = await database.website_projects.find_one(
+            {"slug": slug}, {"_id": 0, "payment_gateways": 1}
+        )
+        if not proj:
+            raise HTTPException(404, "الموقع غير موجود")
+        stored = proj.get("payment_gateways") or {}
+        visible = []
+        for pid, meta in pg.PROVIDERS.items():
+            raw = stored.get(pid) or {}
+            if not raw.get("enabled"):
+                continue
+            if pid == "cod":
+                visible.append({"id": "cod", "name_ar": meta["name_ar"], "methods": ["cod"]})
+            elif pid == "moyasar":
+                if not (raw.get("publishable_key") and raw.get("secret_key_enc")):
+                    continue
+                visible.append({
+                    "id": "moyasar",
+                    "name_ar": meta["name_ar"],
+                    "methods": raw.get("methods") or meta["supports_methods"],
+                    "publishable_key": raw.get("publishable_key"),  # pk_ is safe for browser
+                })
+        return {"gateways": visible}
+
+    @r.post("/public/{slug}/payments/init")
+    async def _public_payment_init(slug: str, body: PaymentInitIn, authorization: str = _Header(None)):
+        data = await _resolve_site_customer(slug, authorization or "")
+        proj = data["project"]
+        order = next((o for o in (proj.get("orders") or []) if o.get("id") == body.order_id), None)
+        if not order:
+            raise HTTPException(404, "الطلب غير موجود")
+        # Must belong to the logged-in customer
+        if order.get("customer_id") != data["customer"]["id"]:
+            raise HTTPException(403, "غير مصرح")
+        amount_sar = float(order.get("total") or 0)
+        if amount_sar <= 0:
+            raise HTTPException(400, "مبلغ غير صحيح")
+
+        stored = proj.get("payment_gateways") or {}
+        gw = stored.get(body.provider) or {}
+        if not gw.get("enabled"):
+            raise HTTPException(400, "هذه الطريقة غير مفعلة في هذا المتجر")
+
+        if body.provider == "cod":
+            await database.website_projects.update_one(
+                {"id": proj["id"], "orders.id": body.order_id},
+                {"$set": {"orders.$.payment": {"provider": "cod", "status": "pending"}}},
+            )
+            return {"ok": True, "provider": "cod", "status": "pending",
+                    "message": "طلبك سيُدفَع نقداً عند الاستلام", "redirect_url": None}
+
+        if body.provider == "moyasar":
+            prov = pg.load_moyasar(gw)
+            if not prov:
+                raise HTTPException(400, "مفاتيح Moyasar غير مُعدّة")
+            base = os.environ.get("BACKEND_URL", "").rstrip("/")
+            callback = f"{base}/api/websites/public/{slug}/payments/callback?order_id={body.order_id}"
+            try:
+                inv = await prov.create_invoice(
+                    amount_sar=amount_sar,
+                    description=f"طلب #{body.order_id[:8]} — {proj.get('name','')}",
+                    callback_url=callback,
+                    methods=gw.get("methods") or ["creditcard", "mada", "applepay", "stcpay"],
+                    metadata={"order_id": body.order_id, "slug": slug, "customer_id": data["customer"]["id"]},
+                )
+            except pg.PaymentError as e:
+                raise HTTPException(502, str(e))
+            await database.website_projects.update_one(
+                {"id": proj["id"], "orders.id": body.order_id},
+                {"$set": {"orders.$.payment": {
+                    "provider": "moyasar",
+                    "invoice_id": inv["invoice_id"],
+                    "status": "initiated",
+                    "amount_sar": amount_sar,
+                }}},
+            )
+            return {"ok": True, "provider": "moyasar", "redirect_url": inv["url"],
+                    "invoice_id": inv["invoice_id"], "status": "initiated"}
+
+        raise HTTPException(400, "بوابة غير مدعومة بعد")
+
+    @r.get("/public/{slug}/payments/callback")
+    async def _public_payment_callback(slug: str, order_id: str, id: Optional[str] = None, status: Optional[str] = None):
+        """Moyasar redirects here after customer completes payment.
+
+        We verify server-side by fetching the invoice/payment, then update the order.
+        Returns a simple Arabic HTML page redirecting back to the site.
+        """
+        proj = await database.website_projects.find_one({"slug": slug}, {"_id": 0})
+        if not proj:
+            raise HTTPException(404, "الموقع غير موجود")
+        order = next((o for o in (proj.get("orders") or []) if o.get("id") == order_id), None)
+        if not order:
+            raise HTTPException(404, "الطلب غير موجود")
+        pay = order.get("payment") or {}
+        verified_status = "pending"
+        if pay.get("provider") == "moyasar" and pay.get("invoice_id"):
+            prov = pg.load_moyasar((proj.get("payment_gateways") or {}).get("moyasar"))
+            if prov:
+                try:
+                    inv = await prov.fetch_invoice(pay["invoice_id"])
+                    # Check if amount matches server-side expected
+                    paid_halalas = inv.get("amount", 0)
+                    expected_halalas = int(round(float(pay.get("amount_sar") or order.get("total") or 0) * 100))
+                    mstatus = inv.get("status")  # paid | initiated | expired | failed
+                    if mstatus == "paid" and paid_halalas == expected_halalas:
+                        verified_status = "paid"
+                    elif mstatus in ("expired", "failed", "canceled"):
+                        verified_status = mstatus
+                except pg.PaymentError as e:
+                    logger.warning(f"callback fetch failed: {e}")
+        # Persist (idempotent)
+        if pay.get("status") != "paid":
+            await database.website_projects.update_one(
+                {"id": proj["id"], "orders.id": order_id},
+                {"$set": {
+                    "orders.$.payment.status": verified_status,
+                    "orders.$.payment.verified_at": _iso_now(),
+                    "updated_at": _iso_now(),
+                }},
+            )
+            try:
+                await realtime.broadcast_all(slug, "order_status", {
+                    "order_id": order_id, "status": order.get("status"),
+                    "payment_status": verified_status,
+                })
+            except Exception:
+                pass
+        # Arabic HTML success/failure page
+        success = verified_status == "paid"
+        color = "#16a34a" if success else "#dc2626"
+        icon = "✅" if success else "❌"
+        title = "تم الدفع بنجاح" if success else "لم يكتمل الدفع"
+        body = ("شكراً لك! تم استلام طلبك وسيتم تجهيزه قريباً."
+                if success else "يمكنك المحاولة مجدداً من صفحة طلباتك.")
+        html = f"""<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<style>body{{margin:0;font-family:-apple-system,Tahoma,sans-serif;background:#0b0f1f;color:#fff;
+display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}}
+.card{{max-width:420px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);
+border-radius:24px;padding:40px;text-align:center}}.icon{{font-size:72px;margin-bottom:12px}}
+h1{{margin:0 0 12px;color:{color}}}p{{opacity:.75;line-height:1.7}}
+a{{display:inline-block;margin-top:24px;padding:12px 24px;background:linear-gradient(90deg,#FFD700,#FFA500);
+color:#000;text-decoration:none;border-radius:12px;font-weight:900}}</style></head><body>
+<div class="card"><div class="icon">{icon}</div><h1>{title}</h1><p>{body}</p>
+<a href="/sites/{slug}">العودة للمتجر</a></div></body></html>"""
+        return HTMLResponse(content=html)
+
+    @r.post("/webhook/payments/{slug}/moyasar")
+    async def _webhook_moyasar(slug: str, payload: Dict[str, Any]):
+        """Moyasar webhook (optional) — idempotent update of order status.
+
+        Moyasar does not sign webhooks by default the same way as Stripe; we rely
+        on re-fetching the invoice to verify the event payload.
+        """
+        order_id = (payload.get("data") or {}).get("metadata", {}).get("order_id") or payload.get("metadata", {}).get("order_id")
+        if not order_id:
+            return {"received": True, "note": "no order_id in metadata"}
+        proj = await database.website_projects.find_one({"slug": slug}, {"_id": 0})
+        if not proj:
+            return {"received": True, "note": "unknown slug"}
+        order = next((o for o in (proj.get("orders") or []) if o.get("id") == order_id), None)
+        if not order:
+            return {"received": True, "note": "order not found"}
+        pay = order.get("payment") or {}
+        if pay.get("provider") != "moyasar" or not pay.get("invoice_id"):
+            return {"received": True, "note": "no moyasar invoice"}
+        prov = pg.load_moyasar((proj.get("payment_gateways") or {}).get("moyasar"))
+        if not prov:
+            return {"received": True, "note": "no credentials"}
+        try:
+            inv = await prov.fetch_invoice(pay["invoice_id"])
+        except pg.PaymentError:
+            return {"received": True, "note": "fetch failed"}
+        new_status = inv.get("status", "initiated")
+        if pay.get("status") != "paid":
+            await database.website_projects.update_one(
+                {"id": proj["id"], "orders.id": order_id},
+                {"$set": {
+                    "orders.$.payment.status": new_status,
+                    "orders.$.payment.verified_at": _iso_now(),
+                }},
+            )
+        return {"received": True, "status": new_status}
 
     # ═══════════════════════════════════════════════════════════════
     # 🆕 PWA MANIFEST + PAYMENT METHODS CATALOG

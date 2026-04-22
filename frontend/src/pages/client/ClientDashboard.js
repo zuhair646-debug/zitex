@@ -827,8 +827,199 @@ function CouponsTab({ token }) {
 /* ================================================================
    LOYALTY SETTINGS TAB
    ================================================================ */
-function LoyaltyTab({ token }) {
-  const [s, setS] = useState({ enabled: true, welcome_bonus: 50, points_per_sar: 1, redeem_rate: 0.1, referral_bonus: 100 });
+/* ================================================================
+   PAYMENT GATEWAYS TAB — each tenant inputs its own provider keys
+   ================================================================ */
+function PaymentGatewaysTab({ token }) {
+  const [gateways, setGateways] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState(null);
+  const [draft, setDraft] = useState({}); // per-provider form state
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`${API}/api/websites/client/payment-gateways`, { headers: authH(token) });
+      const d = await r.json();
+      setGateways(d.gateways || []);
+    } catch (_) { toast.error('فشل تحميل بوابات الدفع'); }
+    finally { setLoading(false); }
+  }, [token]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const setField = (pid, k, v) => setDraft((p) => ({ ...p, [pid]: { ...(p[pid] || {}), [k]: v } }));
+
+  const save = async (pid, extra = {}) => {
+    setBusyId(pid);
+    try {
+      const body = { ...(draft[pid] || {}), ...extra };
+      const r = await fetch(`${API}/api/websites/client/payment-gateways/${pid}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...authH(token) },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) throw new Error('failed');
+      toast.success('✓ تم الحفظ');
+      setDraft((p) => { const n = { ...p }; delete n[pid]; return n; });
+      await load();
+    } catch (_) { toast.error('فشل الحفظ'); }
+    finally { setBusyId(null); }
+  };
+
+  const testCreds = async (pid) => {
+    setBusyId(pid + '-test');
+    try {
+      const r = await fetch(`${API}/api/websites/client/payment-gateways/${pid}/test`, {
+        method: 'POST', headers: authH(token),
+      });
+      const d = await r.json();
+      if (d.ok) toast.success(d.message); else toast.error(d.message);
+    } catch (_) { toast.error('فشل الاختبار'); }
+    finally { setBusyId(null); }
+  };
+
+  if (loading) return <div className="text-center py-10 opacity-60">...</div>;
+
+  return (
+    <div className="space-y-4" data-testid="payment-gateways-tab">
+      <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/5 border border-blue-500/30 rounded-xl p-4">
+        <h3 className="font-black text-blue-300 mb-1">💳 بوابات الدفع الخاصة بك</h3>
+        <p className="text-xs opacity-70">أدخل مفاتيح بوابات الدفع الخاصة بك هنا — ستُشفَّر قبل الحفظ. جميع المدفوعات تذهب مباشرة إلى حسابك.</p>
+      </div>
+
+      {gateways.map((g) => (
+        <div key={g.id} className={`rounded-xl border p-4 ${g.enabled ? 'bg-green-500/5 border-green-500/30' : 'bg-white/3 border-white/10'}`} data-testid={`gateway-${g.id}`}>
+          <div className="flex items-start justify-between mb-3 gap-2">
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <h4 className="font-black text-base">{g.name_ar}</h4>
+                {g.coming_soon && <span className="text-[10px] bg-yellow-500/20 text-yellow-300 px-2 py-0.5 rounded-full">قريباً</span>}
+                {g.configured && g.enabled && <span className="text-[10px] bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full">مفعّل</span>}
+              </div>
+              <div className="text-[11px] opacity-60 mt-1">{(g.methods || []).join(' · ')}</div>
+            </div>
+            <label className="flex items-center gap-1.5 cursor-pointer text-xs">
+              <input type="checkbox" checked={!!g.enabled} disabled={busyId === g.id}
+                onChange={(e) => save(g.id, { enabled: e.target.checked })}
+                data-testid={`gateway-${g.id}-toggle`} />
+              <span className="opacity-75">{g.enabled ? 'مفعّل' : 'إيقاف'}</span>
+            </label>
+          </div>
+
+          {/* Provider-specific fields */}
+          {g.id === 'moyasar' && (
+            <div className="space-y-2">
+              <div>
+                <label className="text-[11px] opacity-70 block mb-1">Publishable Key (pk_test_...)</label>
+                <input type="text"
+                  placeholder={g.publishable_key_preview || 'pk_test_...'}
+                  value={(draft[g.id] || {}).publishable_key || ''}
+                  onChange={(e) => setField(g.id, 'publishable_key', e.target.value)}
+                  className="w-full px-3 py-2 bg-white/5 border border-white/15 rounded text-sm font-mono"
+                  data-testid="moyasar-pk" />
+              </div>
+              <div>
+                <label className="text-[11px] opacity-70 block mb-1">Secret Key (sk_test_...)</label>
+                <input type="password"
+                  placeholder={g.secret_key_preview || 'sk_test_...'}
+                  value={(draft[g.id] || {}).secret_key || ''}
+                  onChange={(e) => setField(g.id, 'secret_key', e.target.value)}
+                  className="w-full px-3 py-2 bg-white/5 border border-white/15 rounded text-sm font-mono"
+                  data-testid="moyasar-sk" />
+                <div className="text-[10px] opacity-50 mt-1">
+                  <a href="https://dashboard.moyasar.com" target="_blank" rel="noreferrer" className="text-blue-400 underline">احصل على المفاتيح من Moyasar Dashboard</a>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 text-[11px]">
+                {['mada', 'creditcard', 'applepay', 'stcpay'].map((m) => (
+                  <label key={m} className="flex items-center gap-1 bg-white/5 px-2 py-1 rounded cursor-pointer">
+                    <input type="checkbox"
+                      checked={((draft[g.id] || {}).methods || g.methods || []).includes(m)}
+                      onChange={(e) => {
+                        const cur = (draft[g.id] || {}).methods || g.methods || [];
+                        const next = e.target.checked ? [...new Set([...cur, m])] : cur.filter((x) => x !== m);
+                        setField(g.id, 'methods', next);
+                      }} />
+                    {m === 'mada' ? 'مدى' : m === 'creditcard' ? 'فيزا/ماستر' : m === 'applepay' ? 'Apple Pay' : 'STC Pay'}
+                  </label>
+                ))}
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => save(g.id)} disabled={busyId === g.id}
+                  className="flex-1 py-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-black rounded-lg font-black text-xs disabled:opacity-50"
+                  data-testid="moyasar-save">{busyId === g.id ? '...' : '💾 حفظ المفاتيح'}</button>
+                {g.configured && (
+                  <button onClick={() => testCreds(g.id)} disabled={busyId}
+                    className="px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-lg font-bold text-xs"
+                    data-testid="moyasar-test">{busyId === g.id + '-test' ? '...' : '🧪 اختبار'}</button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {g.id === 'tabby' && (
+            <div className="space-y-2 opacity-80">
+              <div>
+                <label className="text-[11px] opacity-70 block mb-1">Public Key (pk_test_...)</label>
+                <input type="text" placeholder={g.public_key_preview || 'pk_test_...'}
+                  value={(draft[g.id] || {}).public_key || ''}
+                  onChange={(e) => setField(g.id, 'public_key', e.target.value)}
+                  className="w-full px-3 py-2 bg-white/5 border border-white/15 rounded text-sm font-mono" />
+              </div>
+              <div>
+                <label className="text-[11px] opacity-70 block mb-1">Secret Key</label>
+                <input type="password" placeholder={g.secret_key_preview || 'sk_...'}
+                  value={(draft[g.id] || {}).secret_key || ''}
+                  onChange={(e) => setField(g.id, 'secret_key', e.target.value)}
+                  className="w-full px-3 py-2 bg-white/5 border border-white/15 rounded text-sm font-mono" />
+              </div>
+              <button onClick={() => save(g.id)} disabled={busyId === g.id}
+                className="w-full py-2 bg-white/10 hover:bg-white/15 rounded-lg font-bold text-xs">
+                💾 حفظ (الربط الكامل قيد الإضافة)
+              </button>
+            </div>
+          )}
+
+          {g.id === 'tamara' && (
+            <div className="space-y-2 opacity-80">
+              <div>
+                <label className="text-[11px] opacity-70 block mb-1">API Token</label>
+                <input type="password" placeholder={g.api_token_preview || 'tkn_...'}
+                  value={(draft[g.id] || {}).api_token || ''}
+                  onChange={(e) => setField(g.id, 'api_token', e.target.value)}
+                  className="w-full px-3 py-2 bg-white/5 border border-white/15 rounded text-sm font-mono" />
+              </div>
+              <div>
+                <label className="text-[11px] opacity-70 block mb-1">Notification Token</label>
+                <input type="password" placeholder={g.notification_token_preview || '...'}
+                  value={(draft[g.id] || {}).notification_token || ''}
+                  onChange={(e) => setField(g.id, 'notification_token', e.target.value)}
+                  className="w-full px-3 py-2 bg-white/5 border border-white/15 rounded text-sm font-mono" />
+              </div>
+              <button onClick={() => save(g.id)} disabled={busyId === g.id}
+                className="w-full py-2 bg-white/10 hover:bg-white/15 rounded-lg font-bold text-xs">
+                💾 حفظ (الربط الكامل قيد الإضافة)
+              </button>
+            </div>
+          )}
+
+          {g.id === 'cod' && (
+            <div className="text-xs opacity-70">
+              لا يحتاج مفاتيح. فعّل فقط الزر أعلاه ليُعرض كخيار "الدفع عند الاستلام" للعملاء.
+            </div>
+          )}
+        </div>
+      ))}
+
+      <div className="text-[11px] opacity-50 text-center pt-2">
+        المفاتيح السرية تُشفَّر قبل الحفظ ولا تُعرض أبداً كاملة.
+      </div>
+    </div>
+  );
+}
+
+function LoyaltyTab({ token }) {  const [s, setS] = useState({ enabled: true, welcome_bonus: 50, points_per_sar: 1, redeem_rate: 0.1, referral_bonus: 100 });
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     fetch(`${API}/api/websites/client/loyalty-settings`, { headers: authH(token) }).then((r) => r.json()).then((d) => setS((p) => ({ ...p, ...d })));
@@ -1075,6 +1266,7 @@ function Dashboard({ slug, token, onLogout }) {
             { id: 'customers', label: 'العملاء', icon: Users },
             { id: 'drivers', label: 'السائقون', icon: ExternalLink },
             { id: 'delivery', label: 'التوصيل', icon: MapPin },
+            { id: 'payments', label: '💳 الدفع', icon: Key },
             { id: 'coupons', label: '🎟️ كوبونات', icon: Key },
             { id: 'loyalty', label: '🎁 النقاط', icon: CheckCircle2 },
             { id: 'edit', label: 'المحتوى', icon: Edit3 },
@@ -1126,6 +1318,7 @@ function Dashboard({ slug, token, onLogout }) {
         {tab === 'customers' && <CustomersTab token={token} />}
         {tab === 'drivers' && <DriversTab token={token} />}
         {tab === 'delivery' && <DeliverySettingsTab token={token} slug={slug} />}
+        {tab === 'payments' && <PaymentGatewaysTab token={token} />}
         {tab === 'coupons' && <CouponsTab token={token} />}
         {tab === 'loyalty' && <LoyaltyTab token={token} />}
 
