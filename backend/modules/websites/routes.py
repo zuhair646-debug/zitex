@@ -4,7 +4,7 @@ import re
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
@@ -23,6 +23,7 @@ from .wizard import (
     get_chips_for_step, next_step_id, apply_answer, steps_metadata,
     COLOR_VARIANT_MAP, RADIUS_MAP,
 )
+from .realtime import realtime
 
 logger = logging.getLogger(__name__)
 
@@ -1278,6 +1279,18 @@ def register_routes(app, database, auth_dep):
             {"id": data["project"]["id"], "site_customers.id": data["customer"]["id"]},
             {"$set": {"site_customers.$.points": new_pts}}
         )
+        # 🛰️ broadcast new order to client dashboard & drivers
+        try:
+            await realtime.broadcast_all(slug, "order_created", {
+                "order_id": order["id"],
+                "customer": data["customer"].get("name") or "",
+                "total": order["total"],
+                "status": order["status"],
+                "lat": order.get("lat"), "lng": order.get("lng"),
+                "at": order["created_at"],
+            })
+        except Exception as _re:
+            logger.debug(f"ws broadcast failed: {_re}")
         return {"ok": True, "order_id": order["id"], "total": order["total"],
                 "delivery_fee": fee, "distance_km": km, "discount": round(discount + redeem_discount, 2),
                 "points_earned": earned_points, "points_balance": new_pts, "status": "pending"}
@@ -1315,6 +1328,15 @@ def register_routes(app, database, auth_dep):
         if order and order.get("customer_phone") and body.status in _ORDER_STATUS_MSGS:
             msg = f"طلبك رقم #{order_id[:8]} في {p.get('name','موقعنا')}\n{_ORDER_STATUS_MSGS[body.status]}"
             wa = _wa_link(order["customer_phone"], msg)
+        # 🛰️ broadcast status/assignment change
+        try:
+            await realtime.broadcast_all(p["slug"], "order_status", {
+                "order_id": order_id,
+                "status": body.status,
+                "driver_id": body.driver_id,
+            })
+        except Exception as _re:
+            logger.debug(f"ws broadcast failed: {_re}")
         return {"ok": True, "whatsapp_link": wa}
 
     # ---- drivers (client dashboard) ----
@@ -1410,7 +1432,108 @@ def register_routes(app, database, auth_dep):
             {"id": data["project"]["id"], "drivers.id": data["driver"]["id"]},
             {"$set": {"drivers.$.lat": body.lat, "drivers.$.lng": body.lng, "drivers.$.last_ping": _iso_now()}}
         )
+        # 🛰️ broadcast live location to client dashboard
+        try:
+            await realtime.broadcast_to_clients(slug, "location", {
+                "driver_id": data["driver"]["id"],
+                "driver_name": data["driver"].get("name"),
+                "lat": body.lat, "lng": body.lng,
+                "at": _iso_now(),
+            })
+        except Exception as _re:
+            logger.debug(f"ws broadcast failed: {_re}")
         return {"ok": True}
+
+    # ═══════════════════════════════════════════════════════════════
+    # 🛰️ WEBSOCKET LIVE-MAP ENDPOINTS (replaces polling)
+    # ═══════════════════════════════════════════════════════════════
+    async def _validate_client_token(slug: str, token: str) -> bool:
+        if not token:
+            return False
+        p = await database.website_projects.find_one(
+            {"slug": slug, "client_access.session_token": token},
+            {"_id": 0, "id": 1},
+        )
+        return bool(p)
+
+    async def _validate_driver_token(slug: str, token: str) -> Optional[Dict[str, Any]]:
+        if not token:
+            return None
+        p = await database.website_projects.find_one(
+            {"slug": slug, "drivers.session_token": token},
+            {"_id": 0},
+        )
+        if not p:
+            return None
+        drv = next((d for d in (p.get("drivers") or []) if d.get("session_token") == token), None)
+        return {"project": p, "driver": drv} if drv else None
+
+    @r.websocket("/ws/client/{slug}")
+    async def _ws_client(ws: WebSocket, slug: str, token: str = ""):
+        """Live feed for client dashboard. Auth via ?token=<ClientToken>."""
+        if not await _validate_client_token(slug, token):
+            await ws.close(code=4401)
+            return
+        await realtime.connect("client", slug, ws)
+        try:
+            await ws.send_json({"type": "hello", "data": {"slug": slug, "role": "client"}})
+            while True:
+                # We don't require incoming messages, but read to detect disconnect.
+                msg = await ws.receive_text()
+                if msg == "ping":
+                    await ws.send_json({"type": "pong", "data": {}})
+        except WebSocketDisconnect:
+            pass
+        except Exception as e:
+            logger.debug(f"ws client error: {e}")
+        finally:
+            await realtime.disconnect("client", slug, ws)
+
+    @r.websocket("/ws/driver/{slug}")
+    async def _ws_driver(ws: WebSocket, slug: str, token: str = ""):
+        """Driver connection. Auth via ?token=<DriverToken>.
+
+        Driver may send location updates via:
+            {"type": "location", "lat": ..., "lng": ...}
+        """
+        info = await _validate_driver_token(slug, token)
+        if not info:
+            await ws.close(code=4401)
+            return
+        driver = info["driver"]
+        await realtime.connect("driver", slug, ws)
+        try:
+            await ws.send_json({"type": "hello", "data": {
+                "slug": slug, "role": "driver", "driver_id": driver["id"],
+            }})
+            while True:
+                raw = await ws.receive_json()
+                mtype = (raw or {}).get("type")
+                if mtype == "location":
+                    lat = raw.get("lat"); lng = raw.get("lng")
+                    if isinstance(lat, (int, float)) and isinstance(lng, (int, float)):
+                        await database.website_projects.update_one(
+                            {"id": info["project"]["id"], "drivers.id": driver["id"]},
+                            {"$set": {
+                                "drivers.$.lat": float(lat),
+                                "drivers.$.lng": float(lng),
+                                "drivers.$.last_ping": _iso_now(),
+                            }}
+                        )
+                        await realtime.broadcast_to_clients(slug, "location", {
+                            "driver_id": driver["id"],
+                            "driver_name": driver.get("name"),
+                            "lat": float(lat), "lng": float(lng),
+                            "at": _iso_now(),
+                        })
+                elif mtype == "ping":
+                    await ws.send_json({"type": "pong", "data": {}})
+        except WebSocketDisconnect:
+            pass
+        except Exception as e:
+            logger.debug(f"ws driver error: {e}")
+        finally:
+            await realtime.disconnect("driver", slug, ws)
 
     # ═══════════════════════════════════════════════════════════════
     # 🆕 HAVERSINE DISTANCE + AUTO DELIVERY FEE + WHATSAPP LINKS

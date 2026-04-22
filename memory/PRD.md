@@ -15,6 +15,38 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Feb 22, 2026 — REAL-TIME WEBSOCKETS (P1 — COMPLETE)
+
+**What was added** (replaces 15–30 second HTTP polling with true realtime):
+
+1. **New file** `/app/backend/modules/websites/realtime.py` — `RealtimeManager` singleton with two connection pools per slug: `client` (dashboard viewers) and `driver` (drivers). Broadcast methods: `broadcast_to_clients`, `broadcast_to_drivers`, `broadcast_all`. Auto-cleans dead sockets.
+
+2. **Two WebSocket endpoints** in `modules/websites/routes.py`:
+   - `WS /api/websites/ws/client/{slug}?token=<ClientToken>` — rejects invalid tokens with HTTP 4401, sends `hello` on connect, accepts `ping` for keepalive.
+   - `WS /api/websites/ws/driver/{slug}?token=<DriverToken>` — drivers may push `{"type": "location", "lat": ..., "lng": ...}` through the same socket; server persists and rebroadcasts to client dashboard in <100ms.
+
+3. **Broadcasts plugged into existing HTTP mutations** (backward-compatible):
+   - `POST /public/{slug}/orders` → broadcasts `order_created` to clients+drivers
+   - `PATCH /client/orders/{id}` → broadcasts `order_status` with driver assignment
+   - `POST /driver/{slug}/location` → broadcasts `location` to clients
+
+4. **Frontend**:
+   - `ClientDashboard.js` `LiveMapTab`: uses `WebSocket(wss://.../api/websites/ws/client/...)` with auto-reconnect (3s backoff) + ping every 25s. Initial HTTP fetch only; all subsequent updates arrive via WS. Shows green "🟢 مباشر (WebSocket)" badge when online.
+   - `DriverDashboard.js`: WebSocket connection for instant order assignment updates. Location push cadence tightened from 30s → 10s (WS is cheap). Graceful fallback to HTTP POST if WS is offline.
+
+**E2E verified**:
+- Python WebSocket client: `hello` handshake + `location` push from driver → received by client in real-time + `ping/pong` keepalive + bad token rejected with InvalidStatus 403 ✅
+- Client dashboard UI: "مباشر (WebSocket)" badge visible, map loaded successfully ✅
+
+**Files added**:
+- `/app/backend/modules/websites/realtime.py`
+
+**Files modified**:
+- `/app/backend/modules/websites/routes.py` (WS endpoints + broadcast hooks)
+- `/app/frontend/src/pages/client/ClientDashboard.js` (LiveMapTab WS)
+- `/app/frontend/src/pages/driver/DriverDashboard.js` (driver WS + faster location pings)
+
+
 ### 🆕 Feb 22, 2026 — STRIPE SUBSCRIPTION GATE (P0 — COMPLETE)
 
 **What was added** (monetization barrier before Website Studio):

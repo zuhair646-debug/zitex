@@ -55,6 +55,8 @@ function DriverPanel({ slug, token, info, onLogout }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [locTracking, setLocTracking] = useState(false);
+  const [wsOnline, setWsOnline] = useState(false);
+  const wsRef = React.useRef(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -65,25 +67,77 @@ function DriverPanel({ slug, token, info, onLogout }) {
       setOrders(d.orders || []);
     } catch (_) {} finally { setLoading(false); }
   }, [slug, token, onLogout]);
-  useEffect(() => { load(); const id = setInterval(load, 30000); return () => clearInterval(id); }, [load]);
+  useEffect(() => { load(); const id = setInterval(load, 60000); return () => clearInterval(id); }, [load]);
+
+  // WebSocket connection (real-time order assignments + low-overhead location pushing)
+  useEffect(() => {
+    if (!slug || !token) return undefined;
+    const wsUrl = `${API.replace(/^http/, 'ws')}/api/websites/ws/driver/${slug}?token=${encodeURIComponent(token)}`;
+    let closedByUs = false;
+    let retryTimer = null;
+    let pingTimer = null;
+    const connect = () => {
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+      ws.onopen = () => {
+        setWsOnline(true);
+        pingTimer = setInterval(() => { try { ws.send(JSON.stringify({ type: 'ping' })); } catch (_) {} }, 25000);
+      };
+      ws.onmessage = (e) => {
+        try {
+          const evt = JSON.parse(e.data);
+          if (evt.type === 'order_created' || evt.type === 'order_status') {
+            // An order changed — reload list (cheap)
+            load();
+          }
+        } catch (_) {}
+      };
+      ws.onclose = () => {
+        setWsOnline(false);
+        if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+        if (!closedByUs) retryTimer = setTimeout(connect, 3000);
+      };
+      ws.onerror = () => { try { ws.close(); } catch (_) {} };
+    };
+    connect();
+    return () => {
+      closedByUs = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      if (pingTimer) clearInterval(pingTimer);
+      if (wsRef.current) { try { wsRef.current.close(); } catch (_) {} }
+    };
+  }, [slug, token, load]);
+
+  const sendLocWs = useCallback((lat, lng) => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === 1) {
+      try { ws.send(JSON.stringify({ type: 'location', lat, lng })); return true; } catch (_) {}
+    }
+    return false;
+  }, []);
 
   const sendLoc = useCallback(() => {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(async (p) => {
-      try {
-        await fetch(`${API}/api/websites/driver/${slug}/location`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...authH(token) },
-          body: JSON.stringify({ lat: p.coords.latitude, lng: p.coords.longitude }),
-        });
-      } catch (_) {}
+      const { latitude: lat, longitude: lng } = p.coords;
+      // Prefer WebSocket (instant, low overhead); fall back to HTTP if WS is down.
+      if (!sendLocWs(lat, lng)) {
+        try {
+          await fetch(`${API}/api/websites/driver/${slug}/location`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authH(token) },
+            body: JSON.stringify({ lat, lng }),
+          });
+        } catch (_) {}
+      }
     }, () => {}, { timeout: 8000 });
-  }, [slug, token]);
+  }, [slug, token, sendLocWs]);
 
   useEffect(() => {
     if (!locTracking) return;
     sendLoc();
-    const id = setInterval(sendLoc, 30000);
+    // Faster cadence now that WS is ~free: every 10s for smoother tracking
+    const id = setInterval(sendLoc, 10000);
     return () => clearInterval(id);
   }, [locTracking, sendLoc]);
 
@@ -95,7 +149,11 @@ function DriverPanel({ slug, token, info, onLogout }) {
         <div className="w-9 h-9 bg-yellow-500 text-black rounded-xl flex items-center justify-center text-lg">🛵</div>
         <div className="flex-1 min-w-0">
           <div className="text-sm font-bold truncate">{info?.driver?.name || 'السائق'}</div>
-          <div className="text-[11px] opacity-60">{info?.site || slug}</div>
+          <div className="text-[11px] opacity-60 flex items-center gap-1.5">
+            <span>{info?.site || slug}</span>
+            <span className={`inline-block w-1.5 h-1.5 rounded-full ${wsOnline ? 'bg-green-400 animate-pulse' : 'bg-yellow-400'}`} data-testid="driver-ws-dot"></span>
+            <span className="text-[10px]">{wsOnline ? 'مباشر' : 'غير متصل'}</span>
+          </div>
         </div>
         <button onClick={() => setLocTracking((v) => !v)} className={`text-[11px] px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 ${locTracking ? 'bg-green-500 text-black' : 'bg-white/10 hover:bg-white/20'}`} data-testid="toggle-location">
           <MapPin className="w-3.5 h-3.5" />{locTracking ? 'موقعي نشط' : 'بدء مشاركة موقعي'}

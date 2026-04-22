@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
@@ -860,21 +860,86 @@ function LoyaltyTab({ token }) {
 }
 
 /* ================================================================
-   LIVE MAP TAB — drivers + active orders on OpenStreetMap
+   LIVE MAP TAB — drivers + active orders on OpenStreetMap (WebSocket)
    ================================================================ */
-function LiveMapTab({ token }) {
+function LiveMapTab({ token, slug }) {
   const [data, setData] = useState(null);
-  const load = useCallback(async () => {
+  const [wsOnline, setWsOnline] = useState(false);
+  const wsRef = useRef(null);
+
+  const loadInitial = useCallback(async () => {
     try {
       const r = await fetch(`${API}/api/websites/client/live-map`, { headers: authH(token) });
       setData(await r.json());
     } catch (_) {}
   }, [token]);
-  useEffect(() => { load(); const id = setInterval(load, 15000); return () => clearInterval(id); }, [load]);
+
+  // Apply an incoming realtime event to state
+  const applyEvent = useCallback((evt) => {
+    if (!evt || !evt.type) return;
+    setData((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, drivers: [...(prev.drivers || [])], orders: [...(prev.orders || [])] };
+      if (evt.type === 'location') {
+        const d = evt.data || {};
+        const idx = next.drivers.findIndex((x) => x.id === d.driver_id);
+        if (idx >= 0) {
+          next.drivers[idx] = { ...next.drivers[idx], lat: d.lat, lng: d.lng };
+        } else {
+          next.drivers.push({ id: d.driver_id, name: d.driver_name, lat: d.lat, lng: d.lng });
+        }
+      } else if (evt.type === 'order_created') {
+        const d = evt.data || {};
+        if (!next.orders.find((o) => o.id === d.order_id)) {
+          next.orders.unshift({ id: d.order_id, customer: d.customer, total: d.total, lat: d.lat, lng: d.lng, status: d.status });
+        }
+      } else if (evt.type === 'order_status') {
+        const d = evt.data || {};
+        const idx = next.orders.findIndex((o) => o.id === d.order_id);
+        if (idx >= 0) next.orders[idx] = { ...next.orders[idx], status: d.status, driver_id: d.driver_id };
+      }
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    loadInitial();
+    if (!slug || !token) return undefined;
+    const wsUrl = `${API.replace(/^http/, 'ws')}/api/websites/ws/client/${slug}?token=${encodeURIComponent(token)}`;
+    let closedByUs = false;
+    let retryTimer = null;
+    let pingTimer = null;
+
+    const connect = () => {
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+      ws.onopen = () => {
+        setWsOnline(true);
+        pingTimer = setInterval(() => { try { ws.send('ping'); } catch (_) {} }, 25000);
+      };
+      ws.onmessage = (e) => {
+        try { applyEvent(JSON.parse(e.data)); } catch (_) {}
+      };
+      ws.onclose = () => {
+        setWsOnline(false);
+        if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+        if (!closedByUs) {
+          retryTimer = setTimeout(connect, 3000);
+        }
+      };
+      ws.onerror = () => { try { ws.close(); } catch (_) {} };
+    };
+    connect();
+    return () => {
+      closedByUs = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      if (pingTimer) clearInterval(pingTimer);
+      if (wsRef.current) { try { wsRef.current.close(); } catch (_) {} }
+    };
+  }, [slug, token, loadInitial, applyEvent]);
 
   if (!data) return <div className="text-center py-10 opacity-60">...</div>;
 
-  // Use OSM with markers overlay
   const center = data.base?.lat ? `${data.base.lat},${data.base.lng}` : (data.drivers[0] ? `${data.drivers[0].lat},${data.drivers[0].lng}` : '24.7136,46.6753');
   const [lat, lng] = center.split(',').map(parseFloat);
   const bbox = `${lng - 0.08}%2C${lat - 0.06}%2C${lng + 0.08}%2C${lat + 0.06}`;
@@ -886,6 +951,12 @@ function LiveMapTab({ token }) {
 
   return (
     <div data-testid="livemap-tab" className="space-y-3">
+      <div className="flex items-center justify-between text-[11px]">
+        <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full ${wsOnline ? 'bg-green-500/20 text-green-300' : 'bg-yellow-500/20 text-yellow-300'}`} data-testid="ws-status">
+          <span className={`w-1.5 h-1.5 rounded-full ${wsOnline ? 'bg-green-400 animate-pulse' : 'bg-yellow-400'}`}></span>
+          {wsOnline ? 'مباشر (WebSocket)' : 'إعادة الاتصال...'}
+        </span>
+      </div>
       <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden" style={{ aspectRatio: '16/9' }}>
         <iframe src={osm} className="w-full h-full" title="live-map" style={{ border: 0 }} data-testid="live-map-iframe" />
       </div>
@@ -913,7 +984,7 @@ function LiveMapTab({ token }) {
           </div>
         )) : <div className="opacity-60">لا طلبات قيد التنفيذ</div>}
       </div>
-      <div className="text-[10px] opacity-50 text-center">تحديث تلقائي كل 15 ثانية</div>
+      <div className="text-[10px] opacity-50 text-center">تحديثات فورية عبر WebSocket — لا حاجة لتحديث الصفحة</div>
     </div>
   );
 }
@@ -1051,7 +1122,7 @@ function Dashboard({ slug, token, onLogout }) {
         )}
 
         {tab === 'orders' && <OrdersTab token={token} />}
-        {tab === 'livemap' && <LiveMapTab token={token} />}
+        {tab === 'livemap' && <LiveMapTab token={token} slug={slug} />}
         {tab === 'customers' && <CustomersTab token={token} />}
         {tab === 'drivers' && <DriversTab token={token} />}
         {tab === 'delivery' && <DeliverySettingsTab token={token} slug={slug} />}
