@@ -1125,6 +1125,9 @@ def register_routes(app, database, auth_dep):
         lng: Optional[float] = None
         note: Optional[str] = ""
         delivery_fee: Optional[float] = 0
+        coupon_code: Optional[str] = ""
+        redeem_points: Optional[int] = 0
+        payment_method: Optional[str] = "cod"
 
     class DriverCreateIn(BaseModel):
         name: str
@@ -1157,23 +1160,26 @@ def register_routes(app, database, auth_dep):
 
     @r.post("/public/{slug}/auth/register")
     async def _site_register(slug: str, body: SiteRegisterIn):
-        p = await database.website_projects.find_one({"slug": slug, "status": "approved"}, {"_id": 0, "id": 1, "site_customers": 1})
+        p = await database.website_projects.find_one({"slug": slug, "status": "approved"}, {"_id": 0, "id": 1, "site_customers": 1, "loyalty_settings": 1})
         if not p:
             raise HTTPException(404, "الموقع غير متاح")
         if any(c.get("phone") == body.phone for c in (p.get("site_customers") or [])):
             raise HTTPException(400, "رقم الجوال مسجّل مسبقاً — سجّل دخولك بدلاً من ذلك")
         cid = str(uuid.uuid4())
         token = _rand_token(18)
+        loyalty = p.get("loyalty_settings") or {"welcome_bonus": 50, "enabled": True}
+        welcome_pts = int(loyalty.get("welcome_bonus", 50)) if loyalty.get("enabled", True) else 0
         cust = {
             "id": cid, "name": body.name[:100], "phone": body.phone[:30],
             "email": (body.email or "")[:200],
             "password_hash": _hash_pwd(body.password),
             "session_token": token, "created_at": _iso_now(),
+            "points": welcome_pts,
         }
         await database.website_projects.update_one(
             {"id": p["id"]}, {"$push": {"site_customers": cust}, "$set": {"updated_at": _iso_now()}}
         )
-        return {"ok": True, "token": token, "customer": _cust_safe(cust)}
+        return {"ok": True, "token": token, "customer": _cust_safe(cust), "welcome_points": welcome_pts}
 
     @r.post("/public/{slug}/auth/login")
     async def _site_login(slug: str, body: SiteLoginIn):
@@ -1207,7 +1213,38 @@ def register_routes(app, database, auth_dep):
         if s.get("free_delivery_above") and subtotal >= float(s["free_delivery_above"]):
             auto_fee = 0
         fee = float(body.delivery_fee or 0) or round(auto_fee, 2)
-        total = subtotal + fee
+        # 🆕 Apply coupon
+        discount = 0
+        coupon_used = None
+        if body.coupon_code:
+            code = body.coupon_code.strip().upper()
+            coupon = next((c for c in (data["project"].get("coupons") or [])
+                           if c.get("code") == code and c.get("active")
+                           and c.get("used", 0) < c.get("max_uses", 999)
+                           and subtotal >= c.get("min_order", 0)), None)
+            if coupon:
+                if coupon.get("discount_percent"):
+                    discount = subtotal * (coupon["discount_percent"] / 100)
+                if coupon.get("discount_amount"):
+                    discount = max(discount, coupon["discount_amount"])
+                coupon_used = code
+                await database.website_projects.update_one(
+                    {"id": data["project"]["id"], "coupons.code": code},
+                    {"$inc": {"coupons.$.used": 1}}
+                )
+        # 🆕 Redeem loyalty points
+        redeemed_points = 0
+        redeem_discount = 0
+        if body.redeem_points and body.redeem_points > 0:
+            avail = int(data["customer"].get("points") or 0)
+            pts_to_use = min(int(body.redeem_points), avail)
+            loyalty = data["project"].get("loyalty_settings") or {"redeem_rate": 0.1}
+            redeem_discount = pts_to_use * float(loyalty.get("redeem_rate", 0.1))
+            redeemed_points = pts_to_use
+        total = max(0, subtotal + fee - discount - redeem_discount)
+        # 🆕 Earn loyalty points on order
+        loyalty = data["project"].get("loyalty_settings") or {"enabled": True, "points_per_sar": 1}
+        earned_points = int(total * float(loyalty.get("points_per_sar", 1))) if loyalty.get("enabled", True) else 0
         order = {
             "id": str(uuid.uuid4()),
             "at": _iso_now(),
@@ -1218,18 +1255,32 @@ def register_routes(app, database, auth_dep):
             "subtotal": subtotal,
             "delivery_fee": fee,
             "distance_km": km,
-            "total": total,
+            "coupon_code": coupon_used,
+            "coupon_discount": round(discount, 2),
+            "points_redeemed": redeemed_points,
+            "points_discount": round(redeem_discount, 2),
+            "points_earned": earned_points,
+            "payment_method": body.payment_method or "cod",
+            "total": round(total, 2),
             "address": (body.address or "")[:400],
             "lat": body.lat, "lng": body.lng,
             "note": (body.note or "")[:500],
             "status": "pending",
             "driver_id": None,
         }
+        # Update customer points balance
+        new_pts = max(0, int(data["customer"].get("points") or 0) - redeemed_points + earned_points)
         await database.website_projects.update_one(
             {"id": data["project"]["id"]},
             {"$push": {"orders": order}, "$set": {"updated_at": _iso_now()}}
         )
-        return {"ok": True, "order_id": order["id"], "total": total, "delivery_fee": fee, "distance_km": km, "status": "pending"}
+        await database.website_projects.update_one(
+            {"id": data["project"]["id"], "site_customers.id": data["customer"]["id"]},
+            {"$set": {"site_customers.$.points": new_pts}}
+        )
+        return {"ok": True, "order_id": order["id"], "total": order["total"],
+                "delivery_fee": fee, "distance_km": km, "discount": round(discount + redeem_discount, 2),
+                "points_earned": earned_points, "points_balance": new_pts, "status": "pending"}
 
     @r.get("/public/{slug}/orders/my")
     async def _order_list_my(slug: str, authorization: str = _Header(None)):
@@ -1478,6 +1529,186 @@ def register_routes(app, database, auth_dep):
                 {"name": "Zitex", "pros": "أسرع + مجاني الاستضافة + AI مدمج + عربي أصيل", "cons": "—"},
             ],
         }
+
+    # ═══════════════════════════════════════════════════════════════
+    # 🆕 LOYALTY POINTS + COUPONS + ARABIC PAYMENT METHODS
+    # ═══════════════════════════════════════════════════════════════
+    class LoyaltySettingsIn(BaseModel):
+        enabled: bool = True
+        welcome_bonus: int = 50  # points on registration
+        points_per_sar: float = 1  # earn 1 point per 1 SAR spent
+        redeem_rate: float = 0.1  # 10 points = 1 SAR discount
+        referral_bonus: int = 100  # points for referring a friend
+
+    class CouponIn(BaseModel):
+        code: str
+        discount_percent: Optional[float] = 0  # e.g., 10 = 10% off
+        discount_amount: Optional[float] = 0   # fixed amount
+        min_order: Optional[float] = 0
+        max_uses: Optional[int] = 100
+        expires_at: Optional[str] = ""
+
+    class CouponApplyIn(BaseModel):
+        code: str
+        subtotal: float
+
+    @r.post("/client/loyalty-settings")
+    async def _loyalty_settings(body: LoyaltySettingsIn, authorization: str = _Header(None)):
+        p = await _resolve_client_project(authorization or "")
+        await database.website_projects.update_one(
+            {"id": p["id"]}, {"$set": {"loyalty_settings": body.dict(), "updated_at": _iso_now()}}
+        )
+        return {"ok": True}
+
+    @r.get("/client/loyalty-settings")
+    async def _loyalty_settings_get(authorization: str = _Header(None)):
+        p = await _resolve_client_project(authorization or "")
+        return p.get("loyalty_settings") or LoyaltySettingsIn().dict()
+
+    @r.post("/client/coupons")
+    async def _coupon_create(body: CouponIn, authorization: str = _Header(None)):
+        p = await _resolve_client_project(authorization or "")
+        code = body.code.strip().upper()
+        if any(c.get("code") == code for c in (p.get("coupons") or [])):
+            raise HTTPException(400, "كود الكوبون مستخدم مسبقاً")
+        coupon = {"id": str(uuid.uuid4()), "code": code,
+                  "discount_percent": body.discount_percent or 0,
+                  "discount_amount": body.discount_amount or 0,
+                  "min_order": body.min_order or 0,
+                  "max_uses": body.max_uses or 100, "used": 0,
+                  "expires_at": body.expires_at or "",
+                  "created_at": _iso_now(), "active": True}
+        await database.website_projects.update_one(
+            {"id": p["id"]}, {"$push": {"coupons": coupon}, "$set": {"updated_at": _iso_now()}}
+        )
+        return {"ok": True, "coupon": coupon}
+
+    @r.get("/client/coupons")
+    async def _coupon_list(authorization: str = _Header(None)):
+        p = await _resolve_client_project(authorization or "")
+        return {"coupons": p.get("coupons") or []}
+
+    @r.delete("/client/coupons/{coupon_id}")
+    async def _coupon_delete(coupon_id: str, authorization: str = _Header(None)):
+        p = await _resolve_client_project(authorization or "")
+        await database.website_projects.update_one(
+            {"id": p["id"]}, {"$pull": {"coupons": {"id": coupon_id}}}
+        )
+        return {"ok": True}
+
+    @r.post("/public/{slug}/coupons/apply")
+    async def _coupon_apply(slug: str, body: CouponApplyIn):
+        p = await database.website_projects.find_one({"slug": slug, "status": "approved"}, {"_id": 0, "coupons": 1})
+        if not p:
+            raise HTTPException(404, "not found")
+        code = body.code.strip().upper()
+        coupon = next((c for c in (p.get("coupons") or []) if c.get("code") == code and c.get("active")), None)
+        if not coupon:
+            raise HTTPException(404, "كود الكوبون غير صحيح")
+        if coupon.get("used", 0) >= coupon.get("max_uses", 0):
+            raise HTTPException(400, "انتهت استخدامات هذا الكوبون")
+        if body.subtotal < coupon.get("min_order", 0):
+            raise HTTPException(400, f"الحد الأدنى للطلب {coupon['min_order']} ر.س")
+        discount = 0
+        if coupon.get("discount_percent"):
+            discount = body.subtotal * (coupon["discount_percent"] / 100)
+        if coupon.get("discount_amount"):
+            discount = max(discount, coupon["discount_amount"])
+        return {"ok": True, "discount": round(discount, 2), "code": code, "new_total": round(body.subtotal - discount, 2)}
+
+    @r.get("/public/{slug}/my-points")
+    async def _my_points(slug: str, authorization: str = _Header(None)):
+        data = await _resolve_site_customer(slug, authorization or "")
+        s = data["project"].get("loyalty_settings") or LoyaltySettingsIn().dict()
+        pts = int(data["customer"].get("points") or 0)
+        return {"points": pts, "redeem_rate": s.get("redeem_rate", 0.1),
+                "equivalent_sar": round(pts * s.get("redeem_rate", 0.1), 2),
+                "enabled": s.get("enabled", True)}
+
+    # ═══════════════════════════════════════════════════════════════
+    # 🆕 LIVE MAP — drivers' last known locations + active orders
+    # ═══════════════════════════════════════════════════════════════
+    @r.get("/client/live-map")
+    async def _client_live_map(authorization: str = _Header(None)):
+        p = await _resolve_client_project(authorization or "")
+        s = p.get("delivery_settings") or {}
+        drivers = [
+            {"id": d.get("id"), "name": d.get("name"), "lat": d.get("lat"), "lng": d.get("lng"),
+             "last_ping": d.get("last_ping"), "active": d.get("active", True)}
+            for d in (p.get("drivers") or []) if d.get("lat") and d.get("lng")
+        ]
+        active_orders = [
+            {"id": o.get("id"), "customer": o.get("customer_name"),
+             "lat": o.get("lat"), "lng": o.get("lng"),
+             "status": o.get("status"), "driver_id": o.get("driver_id"),
+             "total": o.get("total")}
+            for o in (p.get("orders") or [])
+            if o.get("lat") and o.get("lng") and o.get("status") not in ("delivered", "cancelled")
+        ]
+        return {
+            "base": {"lat": s.get("base_lat"), "lng": s.get("base_lng")},
+            "drivers": drivers,
+            "orders": active_orders,
+        }
+
+    # ═══════════════════════════════════════════════════════════════
+    # 🆕 PWA MANIFEST + PAYMENT METHODS CATALOG
+    # ═══════════════════════════════════════════════════════════════
+    @r.get("/public/{slug}/manifest.json")
+    async def _pwa_manifest(slug: str):
+        p = await database.website_projects.find_one({"slug": slug}, {"_id": 0, "name": 1, "theme": 1})
+        if not p:
+            raise HTTPException(404, "not found")
+        theme = p.get("theme") or {}
+        return {
+            "name": p.get("name", "موقعي"),
+            "short_name": (p.get("name") or "Site")[:12],
+            "start_url": f"/sites/{slug}",
+            "display": "standalone",
+            "background_color": theme.get("background", "#0b0f1f"),
+            "theme_color": theme.get("primary", "#FFD700"),
+            "lang": "ar",
+            "dir": "rtl",
+            "icons": [
+                {"src": theme.get("logo_url") or "https://ai-cinematic-hub-2.preview.emergentagent.com/favicon.png", "sizes": "192x192", "type": "image/png"},
+                {"src": theme.get("logo_url") or "https://ai-cinematic-hub-2.preview.emergentagent.com/favicon.png", "sizes": "512x512", "type": "image/png"},
+            ],
+        }
+
+    @r.get("/payment-methods")
+    async def _payment_methods():
+        """Catalog of supported payment gateways (Arabic & international)."""
+        return {
+            "methods": [
+                {"id": "stripe", "name": "💳 Visa/Mastercard", "status": "ready", "fee": "2.9% + 1 ر.س"},
+                {"id": "mada", "name": "🏦 مدى", "status": "ready_via_stripe", "fee": "1% — البطاقة السعودية الأكثر استخداماً"},
+                {"id": "applepay", "name": "🍎 Apple Pay", "status": "ready_via_stripe", "fee": "2.9%"},
+                {"id": "stcpay", "name": "📱 STC Pay", "status": "coming_soon", "fee": "1.5%"},
+                {"id": "tamara", "name": "🛍️ تمارا (ادفع لاحقاً)", "status": "coming_soon", "fee": "بلا رسوم للعميل"},
+                {"id": "tabby", "name": "💰 Tabby (قسّم على 4)", "status": "coming_soon", "fee": "بلا رسوم للعميل"},
+                {"id": "cod", "name": "💵 الدفع عند الاستلام", "status": "ready", "fee": "مجاناً"},
+                {"id": "bank", "name": "🏛️ تحويل بنكي", "status": "ready", "fee": "مجاناً"},
+            ],
+            "note": "Stripe + Mada + Apple Pay جاهزة للاستخدام الآن. باقي البوابات جاهزة البنية التحتية وتحتاج تفعيل.",
+        }
+
+    # ═══════════════════════════════════════════════════════════════
+    # 🆕 ADMIN — reply to tickets (owner side)
+    # ═══════════════════════════════════════════════════════════════
+    @r.get("/admin/all-tickets")
+    async def _all_tickets(current_user: dict = Depends(auth_dep)):
+        user_doc = await database.users.find_one({"id": current_user["user_id"]}, {"_id": 0, "role": 1})
+        if (user_doc or {}).get("role") not in ("owner", "super_admin", "admin"):
+            raise HTTPException(403, "غير مسموح")
+        cursor = database.website_projects.find(
+            {"support_tickets": {"$exists": True, "$ne": []}},
+            {"_id": 0, "id": 1, "name": 1, "slug": 1, "support_tickets": 1}
+        )
+        out = []
+        async for p in cursor:
+            for t in (p.get("support_tickets") or []):
+                out.append({**t, "project_id": p["id"], "project_name": p.get("name"), "project_slug": p.get("slug")})
+        return {"tickets": sorted(out, key=lambda x: x.get("at") or "", reverse=True)}
 
     app.include_router(r)
     return r

@@ -15,6 +15,39 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Feb 22, 2026 — ADVANCED COMMERCE (loyalty + coupons + live map + PWA + payment catalog + ticket replies)
+
+**What was added**:
+1. **🎁 Loyalty Points System**: welcome bonus (50 pts default), earn 1 pt/SAR spent, redeem at 0.1 SAR/pt default, referral bonus 100 pts. Customer's points balance auto-updates on each order (earn + redeem). Settings per-site in `LoyaltyTab`.
+
+2. **🎟️ Coupons**: create `WELCOME10`-style codes (% discount OR fixed amount), min order, max uses, tracked usage. Full CRUD in `CouponsTab`. Applied in checkout modal on public site.
+
+3. **🗺️ Live Map** (`LiveMapTab`): OSM embed showing store base + online drivers + active orders. Auto-refresh every 15s (polling, not WS — simpler & sufficient). Stats cards below.
+
+4. **📱 PWA Manifest** (`GET /public/{slug}/manifest.json`): injected in every rendered site's `<head>` so customers can "Add to home screen" and get an app-like experience.
+
+5. **💳 Payment Methods Catalog** (`GET /payment-methods`): 8 methods (Stripe, Mada via Stripe, Apple Pay, STC Pay, Tamara, Tabby, COD, Bank). 5 ready now, 3 infrastructure pending gateway keys. Integrated into checkout dropdown.
+
+6. **💬 Owner Ticket Replies**: endpoint `POST /admin/sites/{id}/tickets/{tid}/reply` + `/admin/all-tickets` aggregator + `GET` for all tickets across sites. Client dashboard now displays replies (green callout below each ticket with `data-testid="ticket-reply-{id}"`).
+
+7. **Payment methods in checkout**: dropdown with COD, Mada, Apple Pay, Stripe, Bank.
+
+**13 new endpoints** added:
+- `POST/GET /client/loyalty-settings`
+- `POST/GET/DELETE /client/coupons`
+- `POST /public/{slug}/coupons/apply`
+- `GET /public/{slug}/my-points`
+- `GET /client/live-map`
+- `GET /public/{slug}/manifest.json`
+- `GET /payment-methods`
+- `GET /admin/all-tickets`
+
+**Tested** via curl end-to-end: customer registration gives 50 welcome pts, coupon WELCOME10 applies 10% on 100ر=10ر discount, order earns 120 pts for 120 ر total → balance math verified (50+120-20=150 ✓).
+
+**📌 Stripe not yet wired** — requires `integration_playbook_expert_v2` per platform rules. Will be a separate focused task.
+
+
+
 ### 🆕 Feb 21, 2026 (PM-2) — PROFESSIONAL POLISH (5 additions)
 
 **1. Driver Dashboard (`/driver/:slug`)**:

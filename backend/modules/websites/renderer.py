@@ -628,11 +628,14 @@ def _auth_and_commerce_overlay(slug) -> str:
   }};
   window.zxSubmitOrder=async function(){{
     var addr=$("#zx-ord-addr").value.trim();var note=$("#zx-ord-note").value.trim();
+    var pay=($("#zx-ord-pay")||{{}}).value||"cod";
+    var pts=parseInt(($("#zx-ord-pts")||{{}}).value||"0")||0;
     if(!addr&&!window.__zxLat){{$("#zx-ord-err").innerHTML='<div class="zx-err">أدخل عنواناً أو استخدم موقعك</div>';return;}}
     try{{
-      var res=await api("/public/"+SLUG+"/orders",{{method:"POST",body:JSON.stringify({{items:cart(),address:addr,lat:window.__zxLat,lng:window.__zxLng,note:note,delivery_fee:0}})}});
-      setCart([]);
-      open_('<h3>✅ تم استلام طلبك</h3><div class="zx-ok">رقم الطلب: '+res.order_id.slice(0,8)+'<br>الإجمالي: '+res.total+' ر.س<br>الحالة: قيد المراجعة</div><button class="zx-btn-sec" onclick="window.zxMyOrders()">📦 تتبّع طلباتي</button>');
+      var res=await api("/public/"+SLUG+"/orders",{{method:"POST",body:JSON.stringify({{items:cart(),address:addr,lat:window.__zxLat,lng:window.__zxLng,note:note,coupon_code:window.__zxCoupon||"",redeem_points:pts,payment_method:pay}})}});
+      setCart([]);window.__zxCoupon=null;
+      var extra=res.points_earned?'<br>🎁 كسبت '+res.points_earned+' نقطة (رصيدك '+res.points_balance+')':'';
+      open_('<h3>✅ تم استلام طلبك</h3><div class="zx-ok">رقم الطلب: '+res.order_id.slice(0,8)+'<br>الإجمالي: '+res.total+' ر.س'+(res.discount?'<br>🎁 وفّرت '+res.discount+' ر.س':'')+extra+'</div><button class="zx-btn-sec" onclick="window.zxMyOrders()">📦 تتبّع طلباتي</button>');
     }}catch(e){{$("#zx-ord-err").innerHTML='<div class="zx-err">'+e.message+'</div>';}}
   }};
   window.zxMyOrders=async function(){{
@@ -1193,6 +1196,7 @@ def render_website_to_html(project: Dict[str, Any]) -> str:
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>{title}</title>
 <link href="https://fonts.googleapis.com/css2?family={theme.get('font','Tajawal').replace(' ','+')}:wght@400;700;900&display=swap" rel="stylesheet">
+{f'<link rel="manifest" href="/api/websites/public/{project.get("slug")}/manifest.json"><meta name="theme-color" content="{theme.get("primary","#FFD700")}"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">' if project.get("slug") else ""}
 <style>{_base_css(theme)}</style>
 <style>{theme.get('custom_css','')}</style>
 </head>

@@ -414,11 +414,18 @@ function SupportTab({ token }) {
               <div className="flex items-center justify-between gap-2">
                 <div className="font-bold text-sm">{t.subject}</div>
                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${t.status === 'open' ? 'bg-yellow-500/20 text-yellow-300' : 'bg-green-500/20 text-green-300'}`}>
-                  {t.status === 'open' ? '⏳ قيد المراجعة' : '✓ منتهي'}
+                  {t.status === 'open' ? (t.reply ? '💬 تم الرد' : '⏳ قيد المراجعة') : '✓ منتهي'}
                 </span>
               </div>
               <div className="text-xs opacity-80 mt-1 whitespace-pre-wrap">{t.description}</div>
               <div className="text-[10px] opacity-50 mt-1">{new Date(t.at).toLocaleString('ar-SA')} · {t.category}</div>
+              {t.reply && (
+                <div className="mt-2 p-2 bg-green-500/10 border border-green-500/30 rounded-lg" data-testid={`ticket-reply-${t.id}`}>
+                  <div className="text-[10px] font-bold text-green-300 mb-1">💬 رد المالك:</div>
+                  <div className="text-xs whitespace-pre-wrap">{t.reply}</div>
+                  {t.replied_at && <div className="text-[9px] opacity-50 mt-1">{new Date(t.replied_at).toLocaleString('ar-SA')}</div>}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -733,6 +740,185 @@ function DeliverySettingsTab({ token, slug }) {
 }
 
 /* ================================================================
+   COUPONS TAB
+   ================================================================ */
+function CouponsTab({ token }) {
+  const [coupons, setCoupons] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ code: '', discount_percent: 10, discount_amount: 0, min_order: 0, max_uses: 100 });
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch(`${API}/api/websites/client/coupons`, { headers: authH(token) });
+      const d = await r.json();
+      setCoupons(d.coupons || []);
+    } catch (_) {}
+  }, [token]);
+  useEffect(() => { load(); }, [load]);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const r = await fetch(`${API}/api/websites/client/coupons`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...authH(token) },
+        body: JSON.stringify(form),
+      });
+      if (!r.ok) throw new Error((await r.json()).detail || 'فشل');
+      toast.success('✓ أُنشئ الكوبون');
+      setForm({ code: '', discount_percent: 10, discount_amount: 0, min_order: 0, max_uses: 100 });
+      setShowForm(false); load();
+    } catch (e) { toast.error(e.message); }
+    finally { setBusy(false); }
+  };
+
+  const remove = async (id) => {
+    if (!window.confirm('حذف الكوبون؟')) return;
+    await fetch(`${API}/api/websites/client/coupons/${id}`, { method: 'DELETE', headers: authH(token) });
+    load();
+  };
+
+  return (
+    <div data-testid="coupons-tab">
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-xs opacity-70">{coupons.length} كوبون نشط</div>
+        {!showForm && <button onClick={() => setShowForm(true)} className="px-3 py-1.5 bg-gradient-to-r from-yellow-500 to-orange-500 text-black rounded-lg text-xs font-black" data-testid="new-coupon-btn">+ كوبون جديد</button>}
+      </div>
+      {showForm && (
+        <form onSubmit={submit} className="bg-white/5 border border-yellow-500/30 rounded-xl p-3 mb-3 space-y-2">
+          <input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} placeholder="كود الكوبون (مثال: WELCOME10)" className="w-full px-3 py-2 bg-white/5 border border-white/15 rounded text-sm uppercase" required data-testid="coupon-code" />
+          <div className="grid grid-cols-2 gap-2">
+            <div><label className="text-[10px] opacity-60">خصم %</label><input type="number" value={form.discount_percent} onChange={(e) => setForm({ ...form, discount_percent: +e.target.value })} className="w-full px-2 py-1.5 bg-white/5 border border-white/15 rounded text-sm" /></div>
+            <div><label className="text-[10px] opacity-60">أو مبلغ ثابت</label><input type="number" value={form.discount_amount} onChange={(e) => setForm({ ...form, discount_amount: +e.target.value })} className="w-full px-2 py-1.5 bg-white/5 border border-white/15 rounded text-sm" /></div>
+            <div><label className="text-[10px] opacity-60">الحد الأدنى</label><input type="number" value={form.min_order} onChange={(e) => setForm({ ...form, min_order: +e.target.value })} className="w-full px-2 py-1.5 bg-white/5 border border-white/15 rounded text-sm" /></div>
+            <div><label className="text-[10px] opacity-60">الحد الأقصى للاستخدام</label><input type="number" value={form.max_uses} onChange={(e) => setForm({ ...form, max_uses: +e.target.value })} className="w-full px-2 py-1.5 bg-white/5 border border-white/15 rounded text-sm" /></div>
+          </div>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setShowForm(false)} className="flex-1 py-2 bg-white/10 rounded text-xs font-bold">إلغاء</button>
+            <button type="submit" disabled={busy} className="flex-[2] py-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-black rounded text-xs font-black">✓ إنشاء</button>
+          </div>
+        </form>
+      )}
+      {coupons.length === 0 && !showForm ? (
+        <div className="text-center py-10 bg-white/3 border border-dashed border-white/15 rounded-2xl">
+          <div className="text-4xl mb-2">🎟️</div>
+          <div className="text-sm opacity-60">لا كوبونات بعد</div>
+          <div className="text-xs opacity-40 mt-1">أنشئ كوبون لزيادة مبيعاتك</div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {coupons.map((c) => (
+            <div key={c.id} className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-center gap-3">
+              <div className="px-3 py-1.5 bg-yellow-500/20 text-yellow-300 rounded-lg font-black text-sm font-mono">{c.code}</div>
+              <div className="flex-1 text-xs">
+                <div className="font-bold">{c.discount_percent ? `خصم ${c.discount_percent}%` : `${c.discount_amount} ر.س خصم`}{c.min_order ? ` · حد أدنى ${c.min_order}` : ''}</div>
+                <div className="opacity-60">{c.used}/{c.max_uses} استُخدم</div>
+              </div>
+              <button onClick={() => remove(c.id)} className="p-1.5 hover:bg-red-500/20 rounded text-red-400"><X className="w-4 h-4" /></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ================================================================
+   LOYALTY SETTINGS TAB
+   ================================================================ */
+function LoyaltyTab({ token }) {
+  const [s, setS] = useState({ enabled: true, welcome_bonus: 50, points_per_sar: 1, redeem_rate: 0.1, referral_bonus: 100 });
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    fetch(`${API}/api/websites/client/loyalty-settings`, { headers: authH(token) }).then((r) => r.json()).then((d) => setS((p) => ({ ...p, ...d })));
+  }, [token]);
+  const save = async () => {
+    setBusy(true);
+    try {
+      await fetch(`${API}/api/websites/client/loyalty-settings`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authH(token) }, body: JSON.stringify(s) });
+      toast.success('✓ تم الحفظ');
+    } catch (_) { toast.error('فشل'); } finally { setBusy(false); }
+  };
+  return (
+    <div className="bg-gradient-to-br from-pink-500/10 to-purple-500/5 border border-pink-500/30 rounded-xl p-4" data-testid="loyalty-tab">
+      <h3 className="font-black text-pink-300 mb-3">🎁 نظام نقاط الولاء</h3>
+      <label className="flex items-center gap-2 mb-3 cursor-pointer">
+        <input type="checkbox" checked={s.enabled} onChange={(e) => setS({ ...s, enabled: e.target.checked })} className="w-4 h-4" />
+        <span className="text-sm">تفعيل نظام النقاط</span>
+      </label>
+      <div className="grid grid-cols-2 gap-2">
+        <div><label className="text-[11px] opacity-70 block mb-1">🎁 نقاط ترحيبية</label><input type="number" value={s.welcome_bonus} onChange={(e) => setS({ ...s, welcome_bonus: +e.target.value })} className="w-full px-3 py-2 bg-white/5 border border-white/15 rounded text-sm" data-testid="welcome-bonus" /></div>
+        <div><label className="text-[11px] opacity-70 block mb-1">⭐ نقاط لكل 1 ر.س</label><input type="number" step="0.1" value={s.points_per_sar} onChange={(e) => setS({ ...s, points_per_sar: +e.target.value })} className="w-full px-3 py-2 bg-white/5 border border-white/15 rounded text-sm" /></div>
+        <div><label className="text-[11px] opacity-70 block mb-1">💱 قيمة النقطة (ر.س)</label><input type="number" step="0.01" value={s.redeem_rate} onChange={(e) => setS({ ...s, redeem_rate: +e.target.value })} className="w-full px-3 py-2 bg-white/5 border border-white/15 rounded text-sm" /></div>
+        <div><label className="text-[11px] opacity-70 block mb-1">👥 نقاط الإحالة</label><input type="number" value={s.referral_bonus} onChange={(e) => setS({ ...s, referral_bonus: +e.target.value })} className="w-full px-3 py-2 bg-white/5 border border-white/15 rounded text-sm" /></div>
+      </div>
+      <div className="text-[11px] opacity-60 mt-2">مثال: 10 نقاط = 1 ر.س خصم عند الطلب التالي</div>
+      <button onClick={save} disabled={busy} className="w-full mt-3 py-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-black rounded-lg font-black text-sm" data-testid="save-loyalty">{busy ? '...' : '💾 حفظ'}</button>
+    </div>
+  );
+}
+
+/* ================================================================
+   LIVE MAP TAB — drivers + active orders on OpenStreetMap
+   ================================================================ */
+function LiveMapTab({ token }) {
+  const [data, setData] = useState(null);
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch(`${API}/api/websites/client/live-map`, { headers: authH(token) });
+      setData(await r.json());
+    } catch (_) {}
+  }, [token]);
+  useEffect(() => { load(); const id = setInterval(load, 15000); return () => clearInterval(id); }, [load]);
+
+  if (!data) return <div className="text-center py-10 opacity-60">...</div>;
+
+  // Use OSM with markers overlay
+  const center = data.base?.lat ? `${data.base.lat},${data.base.lng}` : (data.drivers[0] ? `${data.drivers[0].lat},${data.drivers[0].lng}` : '24.7136,46.6753');
+  const [lat, lng] = center.split(',').map(parseFloat);
+  const bbox = `${lng - 0.08}%2C${lat - 0.06}%2C${lng + 0.08}%2C${lat + 0.06}`;
+  const markers = [];
+  if (data.base?.lat) markers.push(`${data.base.lat},${data.base.lng}`);
+  data.drivers.forEach((d) => markers.push(`${d.lat},${d.lng}`));
+  data.orders.forEach((o) => markers.push(`${o.lat},${o.lng}`));
+  const osm = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik${markers.length ? `&marker=${markers[0]}` : ''}`;
+
+  return (
+    <div data-testid="livemap-tab" className="space-y-3">
+      <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden" style={{ aspectRatio: '16/9' }}>
+        <iframe src={osm} className="w-full h-full" title="live-map" style={{ border: 0 }} data-testid="live-map-iframe" />
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-center text-xs">
+        <div className="bg-white/5 rounded-lg p-2"><div className="text-lg font-black text-yellow-400">1</div><div className="opacity-60">المتجر</div></div>
+        <div className="bg-white/5 rounded-lg p-2"><div className="text-lg font-black text-cyan-400">{data.drivers.length}</div><div className="opacity-60">سائق نشط</div></div>
+        <div className="bg-white/5 rounded-lg p-2"><div className="text-lg font-black text-pink-400">{data.orders.length}</div><div className="opacity-60">طلب قيد التنفيذ</div></div>
+      </div>
+      <div className="bg-white/3 border border-white/10 rounded-xl p-3 text-xs">
+        <div className="font-black mb-2">🛵 السائقون:</div>
+        {data.drivers.length ? data.drivers.map((d) => (
+          <div key={d.id} className="flex items-center gap-2 py-1">
+            <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+            <span className="font-bold">{d.name}</span>
+            <span className="opacity-60 text-[11px]">({d.lat?.toFixed(3)}, {d.lng?.toFixed(3)})</span>
+          </div>
+        )) : <div className="opacity-60">لا سائق يشارك موقعه حالياً</div>}
+      </div>
+      <div className="bg-white/3 border border-white/10 rounded-xl p-3 text-xs">
+        <div className="font-black mb-2">📦 طلبات فعّالة:</div>
+        {data.orders.length ? data.orders.map((o) => (
+          <div key={o.id} className="flex items-center justify-between py-1">
+            <span><b>{o.customer}</b> · #{o.id.slice(0, 6)}</span>
+            <span className="text-yellow-400 font-bold">{o.total} ر.س</span>
+          </div>
+        )) : <div className="opacity-60">لا طلبات قيد التنفيذ</div>}
+      </div>
+      <div className="text-[10px] opacity-50 text-center">تحديث تلقائي كل 15 ثانية</div>
+    </div>
+  );
+}
+
+/* ================================================================
    DASHBOARD — authenticated
    ================================================================ */
 function Dashboard({ slug, token, onLogout }) {
@@ -814,9 +1000,12 @@ function Dashboard({ slug, token, onLogout }) {
           {[
             { id: 'overview', label: 'نظرة عامة', icon: BarChart3 },
             { id: 'orders', label: 'الطلبات', icon: MessageSquare },
+            { id: 'livemap', label: '🗺️ خريطة حية', icon: MapPin },
             { id: 'customers', label: 'العملاء', icon: Users },
             { id: 'drivers', label: 'السائقون', icon: ExternalLink },
             { id: 'delivery', label: 'التوصيل', icon: MapPin },
+            { id: 'coupons', label: '🎟️ كوبونات', icon: Key },
+            { id: 'loyalty', label: '🎁 النقاط', icon: CheckCircle2 },
             { id: 'edit', label: 'المحتوى', icon: Edit3 },
             { id: 'messages', label: 'الرسائل', icon: MessageSquare },
             { id: 'support', label: 'الدعم', icon: RefreshCw },
@@ -862,9 +1051,12 @@ function Dashboard({ slug, token, onLogout }) {
         )}
 
         {tab === 'orders' && <OrdersTab token={token} />}
+        {tab === 'livemap' && <LiveMapTab token={token} />}
         {tab === 'customers' && <CustomersTab token={token} />}
         {tab === 'drivers' && <DriversTab token={token} />}
         {tab === 'delivery' && <DeliverySettingsTab token={token} slug={slug} />}
+        {tab === 'coupons' && <CouponsTab token={token} />}
+        {tab === 'loyalty' && <LoyaltyTab token={token} />}
 
         {tab === 'messages' && <MessagesTab token={token} />}
 
