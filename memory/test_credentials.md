@@ -30,3 +30,17 @@
 - Client auth: `Authorization: ClientToken <token>` (from `/client/login`)
 - Site-customer auth: `Authorization: SiteToken <token>` (from `/public/{slug}/auth/*`)
 - Driver auth: `Authorization: DriverToken <token>` (from `/driver/login`)
+
+## Stripe Subscription Gate Test User (Website Studio paywall)
+- Email: `gatetest@zitex.com`
+- Password: `test123`
+- Role: client (non-owner — hits paywall)
+- Has active `studio_monthly` subscription (paid via Stripe test card 4242 4242 4242 4242, 12/34, 123, ZIP 12345)
+- Owner bypasses the gate automatically (no payment required)
+
+## Stripe Test Card
+- Number: `4242 4242 4242 4242`
+- Expiry: any future date (e.g., `12/34`)
+- CVC: any 3 digits (e.g., `123`)
+- ZIP: any (e.g., `12345`)
+

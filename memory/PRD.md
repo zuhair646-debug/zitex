@@ -15,6 +15,58 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Feb 22, 2026 — STRIPE SUBSCRIPTION GATE (P0 — COMPLETE)
+
+**What was added** (monetization barrier before Website Studio):
+
+1. **New backend module** `/app/backend/modules/billing/` — self-contained Stripe integration using `emergentintegrations.payments.stripe.checkout` SDK.
+
+2. **Fixed server-side package** `studio_monthly` @ **$50.00 USD / 30 days** (frontend cannot manipulate amount — price is defined only in `PACKAGES` dict in `routes.py`).
+
+3. **New endpoints** (all under `/api/billing`):
+   - `GET /billing/packages` (public catalog)
+   - `GET /billing/subscription` (JWT-auth) — returns `{active, bypass, expires_at, package_id}`. **Owner/admin bypass**: users with role ∈ {owner, super_admin, admin} or `is_owner=True` bypass the gate.
+   - `POST /billing/checkout` (JWT-auth) — creates Stripe Checkout Session. Takes `{package_id, origin_url}`; backend constructs `success_url={origin}/billing/success?session_id={CHECKOUT_SESSION_ID}` + `cancel_url={origin}/billing/cancel`.
+   - `GET /billing/status/{session_id}` (JWT-auth, ownership-checked) — polls Stripe; on first `paid` status, inserts into `studio_subscriptions` (idempotent — won't duplicate on repeated polls).
+   - `POST /webhook/stripe` (no auth; Stripe-Signature verified) — webhook handler also idempotent. Path matches playbook requirement.
+
+4. **New MongoDB collections**:
+   - `payment_transactions` — every checkout session (initiated → paid/expired).
+   - `studio_subscriptions` — active subscription records with `expires_at` for 30-day access window.
+
+5. **Frontend SubscriptionGate** (`/app/frontend/src/pages/billing/SubscriptionGate.js`):
+   - Wraps `/websites` route in `App.js`.
+   - Queries `/billing/subscription` on mount; if `active:true` renders children, else renders a beautiful Arabic RTL paywall with feature bullets and a single "اشترك الآن" CTA that calls `/billing/checkout` and redirects to `data.url`.
+   - Shows test card hint in test mode.
+
+6. **Success/cancel pages**:
+   - `/billing/success` polls `/billing/status/{sid}` up to 8 times @ 2.5s intervals. On `paid`, shows success card with "ابدأ البناء الآن" button.
+   - `/billing/cancel` shows friendly retry option.
+
+**E2E verified** (Apr 22, 2026):
+- Owner → bypass, studio loads directly. ✅
+- Non-owner client `gatetest@zitex.com` → gate shown, Stripe redirect OK at US$50.00, card 4242… accepted, success page polled & confirmed, studio unlocked. ✅
+- `studio_subscriptions` collection: exactly 1 doc after 1 successful payment (idempotency). ✅
+
+**Environment**:
+- `STRIPE_API_KEY=sk_test_emergent` added to `/app/backend/.env`.
+- No user-supplied key required — uses Emergent-provided Stripe test key.
+
+**Files added**:
+- `/app/backend/modules/billing/__init__.py`
+- `/app/backend/modules/billing/routes.py`
+- `/app/frontend/src/pages/billing/SubscriptionGate.js`
+- `/app/frontend/src/pages/billing/BillingSuccess.js`
+- `/app/frontend/src/pages/billing/BillingCancel.js`
+
+**Files modified**:
+- `/app/backend/server.py` (register billing module)
+- `/app/backend/.env` (STRIPE_API_KEY)
+- `/app/frontend/src/App.js` (wrap /websites with gate, add billing routes)
+- `/app/memory/test_credentials.md` (added gatetest user + Stripe test card docs)
+
+
+
 ### 🆕 Feb 22, 2026 — ADVANCED COMMERCE (loyalty + coupons + live map + PWA + payment catalog + ticket replies)
 
 **What was added**:

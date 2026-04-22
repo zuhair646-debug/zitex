@@ -2900,6 +2900,14 @@ try:
 except Exception as _we:
     logging.getLogger(__name__).error(f"Failed to register websites module: {_we}", exc_info=True)
 
+# ============== BILLING MODULE (Stripe subscription gate) ==============
+try:
+    from modules.billing import register_routes as register_billing_routes
+    register_billing_routes(app, db, get_current_user)
+    logging.getLogger(__name__).info("Billing module registered")
+except Exception as _be:
+    logging.getLogger(__name__).error(f"Failed to register billing module: {_be}", exc_info=True)
+
 # ============== VISUAL DESIGNER APIS ==============
 class DesignElement(BaseModel):
     id: str

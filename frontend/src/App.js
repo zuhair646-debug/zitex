@@ -30,6 +30,9 @@ import PublicSite from '@/pages/PublicSite';
 import AdminSites from '@/pages/websites/AdminSites';
 import ClientSiteDashboard from '@/pages/client/ClientDashboard';
 import DriverDashboardPage from '@/pages/driver/DriverDashboard';
+import SubscriptionGate from '@/pages/billing/SubscriptionGate';
+import BillingSuccess from '@/pages/billing/BillingSuccess';
+import BillingCancel from '@/pages/billing/BillingCancel';
 import '@/App.css';
 
 function App() {
@@ -98,7 +101,9 @@ function App() {
           <Route path="/chat" element={<ProtectedRoute><AIChat user={user} /></ProtectedRoute>} />
           <Route path="/projects" element={<ProtectedRoute><ProjectsPage user={user} /></ProtectedRoute>} />
           <Route path="/designer" element={<ProtectedRoute><VisualDesigner user={user} /></ProtectedRoute>} />
-          <Route path="/websites" element={<ProtectedRoute><WebsiteStudio user={user} /></ProtectedRoute>} />
+          <Route path="/websites" element={<ProtectedRoute><SubscriptionGate><WebsiteStudio user={user} /></SubscriptionGate></ProtectedRoute>} />
+          <Route path="/billing/success" element={<ProtectedRoute><BillingSuccess /></ProtectedRoute>} />
+          <Route path="/billing/cancel" element={<ProtectedRoute><BillingCancel /></ProtectedRoute>} />
           <Route path="/sites/:slug" element={<PublicSite />} />
           <Route path="/client/:slug" element={<ClientSiteDashboard />} />
           <Route path="/driver/:slug" element={<DriverDashboardPage />} />
