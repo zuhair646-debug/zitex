@@ -248,6 +248,27 @@ def register_routes(app, database, auth_dep):
         if is_blank:
             wiz["step"] = "brief"
         d["wizard"] = wiz
+        # 🆕 Vertical mapping: category_id → vertical_id + seed sample data
+        from . import verticals as _vx
+        _category_to_vertical = {
+            "restaurant": "restaurant", "coffee": "restaurant",
+            "barber": "salon",
+            "pets": "pets",
+            "clinic": "medical",
+            "store": "ecommerce",
+            "gym": "gym",
+            "academy": "academy",
+            "realestate": "realestate",
+            "stocks": "stocks",
+        }
+        vid = _category_to_vertical.get(category_id)
+        if vid:
+            d["vertical"] = vid
+            v_def = _vx.get_vertical(vid) or {}
+            if v_def.get("sample_services") and not d.get("services"):
+                d["services"] = [{**s, "created_at": now} for s in v_def["sample_services"]]
+            if v_def.get("sample_products") and not d.get("products"):
+                d["products"] = [{**s, "created_at": now} for s in v_def["sample_products"]]
         if is_blank:
             greet = "✨ ممتاز! اخترت قالباً مخصّصاً. صف لي نشاطك بحرّية (مثل: 'متجر قطط' أو 'عيادة أسنان حديثة') وسأبني لك تصميماً ابتكارياً فوراً."
         else:
@@ -846,7 +867,8 @@ def register_routes(app, database, auth_dep):
             {"id": p["id"]},
             {"$set": {"client_access.session_token": token, "client_access.last_login": _iso_now()}},
         )
-        return {"ok": True, "token": token, "slug": p.get("slug"), "name": p.get("name")}
+        return {"ok": True, "token": token, "slug": p.get("slug"), "name": p.get("name"),
+                "vertical": p.get("vertical")}
 
     @r.patch("/client/sections/{section_id}")
     async def _client_patch_section(section_id: str, body: SectionPatchIn, authorization: str = _Header(None)):
@@ -2101,6 +2123,12 @@ color:#000;text-decoration:none;border-radius:12px;font-weight:900}}</style></he
             for t in (p.get("support_tickets") or []):
                 out.append({**t, "project_id": p["id"], "project_name": p.get("name"), "project_slug": p.get("slug")})
         return {"tickets": sorted(out, key=lambda x: x.get("at") or "", reverse=True)}
+
+    # ═══════════════════════════════════════════════════════════════
+    # 🆕 VERTICAL ENGINES — bookings / products / portfolio (simulation)
+    # ═══════════════════════════════════════════════════════════════
+    from .engines import register_engines as _reg_engines
+    _reg_engines(r, database, _resolve_client_project, _resolve_site_customer, realtime)
 
     app.include_router(r)
     return r

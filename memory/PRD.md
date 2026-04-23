@@ -15,6 +15,75 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Feb 23, 2026 — VERTICALS SYSTEM (P0 — FOUNDATION COMPLETE)
+
+**الهدف**: كل فئة موقع متخصصة فعلاً بـwizard مختلف + أقسام مميزة + نموذج بيانات خاص + تبويبات لوحة تحكم مختلفة. لا قوالب عامة.
+
+**9 Verticals متاحة** (`/app/backend/modules/websites/verticals.py`):
+| Icon | id | الاسم | الميزات |
+|---|---|---|---|
+| 🍽️ | restaurant | مطاعم ومقاهي | orders |
+| 💈 | salon | صالونات وحلاقة | bookings, services |
+| 🐱 | pets | خدمات الحيوانات | bookings, services, pet_registry |
+| 🛒 | ecommerce | تجارة إلكترونية | products, orders |
+| 📈 | stocks | استثمار ذكي (محاكاة) | portfolio, ai_trading |
+| 🏥 | medical | عيادات طبية | bookings, services, branches |
+| 🏋️ | gym | صالات رياضية | bookings, services, memberships |
+| 🎓 | academy | أكاديميات | courses, enrollments |
+| 🏠 | realestate | عقارات | listings, mortgage_calculator |
+
+كل vertical لديه: `wizard_questions` فريدة، `sample_services`/`sample_products` للتهيئة التلقائية، `dashboard_tabs` مخصصة، `sample_sections` للعرض.
+
+**3 محركات عامة قابلة لإعادة الاستخدام** (`modules/websites/engines.py`):
+
+1. **Booking Engine** (للصالون/الحيوانات/الطبي/الجيم):
+   - Services CRUD: `GET/POST/PUT/DELETE /api/websites/client/services`
+   - Staff CRUD: `GET/POST/DELETE /api/websites/client/staff`
+   - Client bookings: `GET /client/bookings?status=`, `PATCH /client/bookings/{id}` (confirm/in_progress/completed/cancelled)
+   - Public availability: `GET /public/{slug}/availability?service_id=&date=&staff_id=` → returns 26 time slots 9 ص - 10 م
+   - Public booking: `POST /public/{slug}/bookings` — يمنع double-booking بـ409 إذا كان الوقت محجوز
+   - WebSocket broadcast: `booking_created` و `booking_status`
+
+2. **Product Engine** (للتجارة الإلكترونية):
+   - Products CRUD: `GET/POST/PUT/DELETE /api/websites/client/products` (مع stock + variants + category)
+   - Public catalog: `GET /public/{slug}/products?category=&q=` — فلترة + بحث + قائمة categories تلقائية
+
+3. **Portfolio Engine** (للأسهم — محاكاة فقط):
+   - Market quotes: `GET /market/quotes?symbols=` — 10 رموز من Tadawul + NASDAQ + Crypto بأسعار تتحرك كل 5 دقائق (deterministic walk)
+   - Customer portfolio: `GET /public/{slug}/portfolio/me` — رصيد ابتدائي 50,000 ر.س، positions مع PnL محسوب
+   - Trading: `POST /public/{slug}/portfolio/trade` `{symbol, side:buy|sell, qty}` — يحدّث avg_price + balance + trades log؛ يرفض الشراء برصيد غير كاف والبيع أكثر من المملوك
+
+**Auto-seeding**: عند إنشاء مشروع بـ `category=barber` مثلاً، النظام يربط تلقائياً `vertical=salon` ويُحمّل 3 خدمات نموذجية فوراً.
+
+**Client Dashboard — تبويبات مشروطة**:
+- صالون/حيوانات/طبي/جيم → **المواعيد** + **الخدمات** (بدل "الطلبات")
+- تجارة إلكترونية → **المنتجات** + "الطلبات" (هجين)
+- مطعم → "الطلبات" + "السائقون" + "التوصيل" (كما هو)
+- الأسهم → (تبويبات محفظة قادمة في تحسين لاحق)
+
+**Frontend components جديدة** في `ClientDashboard.js`:
+- `BookingsTab`: عرض + فلترة حسب الحالة + أزرار التحكم (تأكيد/بدء/إنهاء/إلغاء)
+- `ServicesTab`: إضافة خدمة (اسم + سعر + مدة) + حذف
+- `ProductsTab`: إضافة منتج (اسم + سعر + مخزون + فئة) + تنبيه "⚠️" عند مخزون ≤ 5 + حذف
+
+**E2E verified (Apr 23, 2026)**:
+- ✅ 9 verticals في `/verticals`
+- ✅ إنشاء خدمة + موظف + متاح 26 slot لليوم التالي
+- ✅ حجز ناجح + رفض double-book بـ409
+- ✅ إنشاء منتج + فلترة categories تلقائية
+- ✅ Portfolio: شراء 10 Apple بـ$189.82، رصيد 48,101.80، رفض شراء أكبر من الرصيد
+- ✅ تبديل `vertical=salon` في DB → التبويبات تتحول تلقائياً (المواعيد/الخدمات ظهرت، الطلبات/السائقون اختفت)
+- ✅ كل endpoints المطعم القديمة لا تزال تعمل 200 OK (لا regression)
+
+**Files added**:
+- `/app/backend/modules/websites/verticals.py` — 9 verticals متعددة الإعدادات
+- `/app/backend/modules/websites/engines.py` — booking + product + portfolio
+
+**Files modified**:
+- `/app/backend/modules/websites/routes.py` — هوك التسجيل + auto-seed عند إنشاء المشروع + vertical في client/login
+- `/app/frontend/src/pages/client/ClientDashboard.js` — 3 tabs جديدة + شرطية التبويبات
+
+
 ### 🆕 Feb 22, 2026 — MULTI-TENANT PAYMENT GATEWAYS (P1 — COMPLETE for Moyasar + COD)
 
 **Architecture**: Each tenant (website_project) stores its OWN payment provider keys encrypted at rest with Fernet. Every end-user checkout uses the tenant's keys → money settles directly to tenant's account. No intermediary/platform wallet.

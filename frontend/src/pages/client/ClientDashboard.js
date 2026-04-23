@@ -1019,6 +1019,222 @@ function PaymentGatewaysTab({ token }) {
   );
 }
 
+/* ================================================================
+   BOOKINGS TAB — appointments (salon, pets, medical, gym)
+   ================================================================ */
+function BookingsTab({ token }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const q = filter ? `?status=${filter}` : '';
+      const r = await fetch(`${API}/api/websites/client/bookings${q}`, { headers: authH(token) });
+      setData(await r.json());
+    } catch (_) {} finally { setLoading(false); }
+  }, [token, filter]);
+  useEffect(() => { load(); const id = setInterval(load, 20000); return () => clearInterval(id); }, [load]);
+
+  const setStatus = async (id, status) => {
+    try {
+      await fetch(`${API}/api/websites/client/bookings/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authH(token) },
+        body: JSON.stringify({ status }),
+      });
+      toast.success('تم التحديث');
+      load();
+    } catch (_) { toast.error('فشل'); }
+  };
+
+  if (loading && !data) return <div className="text-center py-10 opacity-60">...</div>;
+  const STATUS_LABEL = {
+    pending: '⏳ قيد الانتظار', confirmed: '✅ مؤكد', in_progress: '🚀 قيد التنفيذ',
+    completed: '✓ مكتمل', cancelled: '❌ ملغي', no_show: '👻 لم يحضر',
+  };
+  return (
+    <div data-testid="bookings-tab" className="space-y-3">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h3 className="font-black text-base">📅 المواعيد ({data?.total || 0})</h3>
+        <select value={filter} onChange={(e) => setFilter(e.target.value)}
+          className="px-3 py-1.5 bg-white/5 border border-white/15 rounded-lg text-xs"
+          data-testid="booking-filter">
+          <option value="">كل الحالات</option>
+          {Object.entries(STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+      </div>
+      {(data?.bookings || []).length === 0 ? (
+        <div className="text-center py-12 opacity-60">لا مواعيد بعد</div>
+      ) : (
+        <div className="space-y-2">
+          {data.bookings.map((b) => (
+            <div key={b.id} className="bg-white/3 border border-white/10 rounded-xl p-3 text-sm" data-testid={`booking-${b.id}`}>
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <div className="flex-1">
+                  <div className="font-bold">{b.service_name}</div>
+                  <div className="text-xs opacity-70">{b.customer_name} · {b.customer_phone}</div>
+                  <div className="text-[11px] opacity-60 mt-1">
+                    🕐 {new Date(b.slot_iso).toLocaleString('ar-SA')} · {b.duration_min} د · {b.price} ر.س
+                  </div>
+                  {b.notes && <div className="text-[11px] mt-1 bg-white/5 p-1.5 rounded">📝 {b.notes}</div>}
+                </div>
+                <div className="text-[11px]">{STATUS_LABEL[b.status] || b.status}</div>
+              </div>
+              <div className="flex flex-wrap gap-1 text-[10px]">
+                {b.status === 'pending' && <button onClick={() => setStatus(b.id, 'confirmed')} className="px-2 py-1 bg-green-500/20 hover:bg-green-500/30 rounded font-bold">✅ تأكيد</button>}
+                {['pending', 'confirmed'].includes(b.status) && <button onClick={() => setStatus(b.id, 'in_progress')} className="px-2 py-1 bg-blue-500/20 hover:bg-blue-500/30 rounded font-bold">🚀 بدء</button>}
+                {b.status === 'in_progress' && <button onClick={() => setStatus(b.id, 'completed')} className="px-2 py-1 bg-yellow-500/20 hover:bg-yellow-500/30 rounded font-bold">✓ إنهاء</button>}
+                {!['completed', 'cancelled'].includes(b.status) && <button onClick={() => setStatus(b.id, 'cancelled')} className="px-2 py-1 bg-red-500/20 hover:bg-red-500/30 rounded font-bold">❌ إلغاء</button>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ================================================================
+   SERVICES TAB — manage price list (salon, pets, medical, gym)
+   ================================================================ */
+function ServicesTab({ token }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({ name: '', price: '', duration_min: 30 });
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`${API}/api/websites/client/services`, { headers: authH(token) });
+      setItems((await r.json()).services || []);
+    } catch (_) {} finally { setLoading(false); }
+  }, [token]);
+  useEffect(() => { load(); }, [load]);
+
+  const add = async () => {
+    if (!form.name || !form.price) { toast.error('الاسم والسعر مطلوبان'); return; }
+    try {
+      await fetch(`${API}/api/websites/client/services`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...authH(token) },
+        body: JSON.stringify({ name: form.name, price: parseFloat(form.price), duration_min: parseInt(form.duration_min) || 30 }),
+      });
+      toast.success('أُضيفت الخدمة');
+      setForm({ name: '', price: '', duration_min: 30 });
+      load();
+    } catch (_) { toast.error('فشل'); }
+  };
+
+  const del = async (id) => {
+    if (!window.confirm('حذف؟')) return;
+    await fetch(`${API}/api/websites/client/services/${id}`, { method: 'DELETE', headers: authH(token) });
+    toast.success('تم الحذف');
+    load();
+  };
+
+  if (loading) return <div className="text-center py-10 opacity-60">...</div>;
+  return (
+    <div data-testid="services-tab" className="space-y-3">
+      <div className="bg-white/3 border border-white/10 rounded-xl p-3 space-y-2">
+        <h3 className="font-black text-sm mb-2">➕ إضافة خدمة</h3>
+        <input placeholder="اسم الخدمة" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
+          className="w-full px-3 py-2 bg-white/5 border border-white/15 rounded text-sm" data-testid="svc-name" />
+        <div className="grid grid-cols-2 gap-2">
+          <input type="number" placeholder="السعر (ر.س)" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })}
+            className="px-3 py-2 bg-white/5 border border-white/15 rounded text-sm" data-testid="svc-price" />
+          <input type="number" placeholder="المدة (دقيقة)" value={form.duration_min} onChange={(e) => setForm({ ...form, duration_min: e.target.value })}
+            className="px-3 py-2 bg-white/5 border border-white/15 rounded text-sm" data-testid="svc-duration" />
+        </div>
+        <button onClick={add} className="w-full py-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-black rounded font-black text-sm" data-testid="svc-add">إضافة</button>
+      </div>
+      <div className="space-y-2">
+        {items.length === 0 && <div className="text-center py-8 opacity-60 text-sm">لا خدمات بعد</div>}
+        {items.map((s) => (
+          <div key={s.id} className="flex items-center gap-2 bg-white/3 border border-white/10 rounded-xl p-3 text-sm" data-testid={`svc-${s.id}`}>
+            <div className="flex-1">
+              <div className="font-bold">{s.name}</div>
+              <div className="text-[11px] opacity-60">{s.price} ر.س · {s.duration_min} دقيقة</div>
+            </div>
+            <button onClick={() => del(s.id)} className="p-1.5 text-red-400 hover:bg-red-500/20 rounded" data-testid={`svc-del-${s.id}`}>🗑️</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
+   PRODUCTS TAB — e-commerce catalog management
+   ================================================================ */
+function ProductsTab({ token }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({ name: '', price: '', stock: '', category: '' });
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`${API}/api/websites/client/products`, { headers: authH(token) });
+      setItems((await r.json()).products || []);
+    } catch (_) {} finally { setLoading(false); }
+  }, [token]);
+  useEffect(() => { load(); }, [load]);
+
+  const add = async () => {
+    if (!form.name || !form.price) { toast.error('الاسم والسعر مطلوبان'); return; }
+    try {
+      await fetch(`${API}/api/websites/client/products`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...authH(token) },
+        body: JSON.stringify({ name: form.name, price: parseFloat(form.price), stock: parseInt(form.stock) || 0, category: form.category || null }),
+      });
+      toast.success('أُضيف المنتج');
+      setForm({ name: '', price: '', stock: '', category: '' });
+      load();
+    } catch (_) { toast.error('فشل'); }
+  };
+
+  const del = async (id) => {
+    if (!window.confirm('حذف؟')) return;
+    await fetch(`${API}/api/websites/client/products/${id}`, { method: 'DELETE', headers: authH(token) });
+    load();
+  };
+
+  if (loading) return <div className="text-center py-10 opacity-60">...</div>;
+  return (
+    <div data-testid="products-tab" className="space-y-3">
+      <div className="bg-white/3 border border-white/10 rounded-xl p-3 space-y-2">
+        <h3 className="font-black text-sm mb-2">➕ إضافة منتج</h3>
+        <input placeholder="اسم المنتج" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
+          className="w-full px-3 py-2 bg-white/5 border border-white/15 rounded text-sm" data-testid="prod-name" />
+        <div className="grid grid-cols-3 gap-2">
+          <input type="number" placeholder="السعر" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })}
+            className="px-3 py-2 bg-white/5 border border-white/15 rounded text-sm" data-testid="prod-price" />
+          <input type="number" placeholder="المخزون" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })}
+            className="px-3 py-2 bg-white/5 border border-white/15 rounded text-sm" data-testid="prod-stock" />
+          <input placeholder="الفئة" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}
+            className="px-3 py-2 bg-white/5 border border-white/15 rounded text-sm" data-testid="prod-cat" />
+        </div>
+        <button onClick={add} className="w-full py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-black rounded font-black text-sm" data-testid="prod-add">إضافة</button>
+      </div>
+      <div className="space-y-2">
+        {items.length === 0 && <div className="text-center py-8 opacity-60 text-sm">لا منتجات بعد</div>}
+        {items.map((p) => (
+          <div key={p.id} className="flex items-center gap-2 bg-white/3 border border-white/10 rounded-xl p-3 text-sm" data-testid={`prod-${p.id}`}>
+            <div className="flex-1">
+              <div className="font-bold">{p.name}</div>
+              <div className="text-[11px] opacity-60">
+                {p.price} ر.س · مخزون: {p.stock} {p.stock <= 5 ? '⚠️' : ''}
+                {p.category && <span> · {p.category}</span>}
+              </div>
+            </div>
+            <button onClick={() => del(p.id)} className="p-1.5 text-red-400 hover:bg-red-500/20 rounded" data-testid={`prod-del-${p.id}`}>🗑️</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function LoyaltyTab({ token }) {  const [s, setS] = useState({ enabled: true, welcome_bonus: 50, points_per_sar: 1, redeem_rate: 0.1, referral_bonus: 100 });
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -1257,23 +1473,41 @@ function Dashboard({ slug, token, onLogout }) {
           <Stat icon={MessageSquare} label="جديدة" value={analytics?.messages_unread ?? 0} accent="text-yellow-300" />
         </div>
 
-        {/* Tabs */}
+        {/* Tabs — conditional per vertical */}
         <div className="flex gap-1 mb-4 bg-white/3 rounded-xl p-1 overflow-x-auto" data-testid="dashboard-tabs">
-          {[
-            { id: 'overview', label: 'نظرة عامة', icon: BarChart3 },
-            { id: 'orders', label: 'الطلبات', icon: MessageSquare },
-            { id: 'livemap', label: '🗺️ خريطة حية', icon: MapPin },
-            { id: 'customers', label: 'العملاء', icon: Users },
-            { id: 'drivers', label: 'السائقون', icon: ExternalLink },
-            { id: 'delivery', label: 'التوصيل', icon: MapPin },
-            { id: 'payments', label: '💳 الدفع', icon: Key },
-            { id: 'coupons', label: '🎟️ كوبونات', icon: Key },
-            { id: 'loyalty', label: '🎁 النقاط', icon: CheckCircle2 },
-            { id: 'edit', label: 'المحتوى', icon: Edit3 },
-            { id: 'messages', label: 'الرسائل', icon: MessageSquare },
-            { id: 'support', label: 'الدعم', icon: RefreshCw },
-            { id: 'password', label: 'الأمان', icon: Key },
-          ].map((t) => (
+          {(() => {
+            const v = project?.vertical;
+            const hasBookings = ['salon', 'pets', 'medical', 'gym'].includes(v);
+            const hasProducts = v === 'ecommerce';
+            const hasOrders = ['restaurant', 'ecommerce'].includes(v) || !v;
+            const base = [
+              { id: 'overview', label: 'نظرة عامة', icon: BarChart3 },
+            ];
+            if (hasBookings) {
+              base.push({ id: 'bookings', label: '📅 المواعيد', icon: BarChart3 });
+              base.push({ id: 'services', label: '✂️ الخدمات', icon: Key });
+            }
+            if (hasProducts) {
+              base.push({ id: 'products', label: '📦 المنتجات', icon: Key });
+            }
+            if (hasOrders) {
+              base.push({ id: 'orders', label: 'الطلبات', icon: MessageSquare });
+              base.push({ id: 'livemap', label: '🗺️ خريطة حية', icon: MapPin });
+              base.push({ id: 'drivers', label: 'السائقون', icon: ExternalLink });
+              base.push({ id: 'delivery', label: 'التوصيل', icon: MapPin });
+            }
+            base.push(
+              { id: 'customers', label: 'العملاء', icon: Users },
+              { id: 'payments', label: '💳 الدفع', icon: Key },
+              { id: 'coupons', label: '🎟️ كوبونات', icon: Key },
+              { id: 'loyalty', label: '🎁 النقاط', icon: CheckCircle2 },
+              { id: 'edit', label: 'المحتوى', icon: Edit3 },
+              { id: 'messages', label: 'الرسائل', icon: MessageSquare },
+              { id: 'support', label: 'الدعم', icon: RefreshCw },
+              { id: 'password', label: 'الأمان', icon: Key },
+            );
+            return base;
+          })().map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
@@ -1314,6 +1548,9 @@ function Dashboard({ slug, token, onLogout }) {
         )}
 
         {tab === 'orders' && <OrdersTab token={token} />}
+        {tab === 'bookings' && <BookingsTab token={token} />}
+        {tab === 'services' && <ServicesTab token={token} />}
+        {tab === 'products' && <ProductsTab token={token} />}
         {tab === 'livemap' && <LiveMapTab token={token} slug={slug} />}
         {tab === 'customers' && <CustomersTab token={token} />}
         {tab === 'drivers' && <DriversTab token={token} />}
