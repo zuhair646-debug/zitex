@@ -27,6 +27,7 @@ from __future__ import annotations
 import os
 import json
 import logging
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
@@ -185,7 +186,6 @@ class MoyasarProvider:
       Visa:      4111111111111111
       Mastercard 5555555555554444
     """
-
     API_BASE = "https://api.moyasar.com/v1"
 
     def __init__(self, publishable_key: str, secret_key: str):
@@ -260,9 +260,257 @@ class MoyasarProvider:
 
 
 # ------------------------------------------------------------------
+# Tabby BNPL Provider
+# ------------------------------------------------------------------
+class TabbyProvider:
+    """Tabby — 4-installment BNPL, hosted redirect flow.
+
+    Sandbox test card: 4005550000000001 (approved) / 4005550000000011 (declined)
+    Test phone:       +966501234567
+    """
+
+    API_BASE = "https://api.tabby.ai"
+
+    def __init__(self, public_key: str, secret_key: str):
+        self.public_key = public_key
+        self.secret_key = secret_key
+
+    async def test(self):
+        try:
+            async with httpx.AsyncClient(timeout=12) as c:
+                # Hit a lightweight endpoint — Tabby has no dedicated verify;
+                # use a minimal precheck call.
+                r = await c.post(
+                    f"{self.API_BASE}/api/v2/checkout",
+                    headers={
+                        "Authorization": f"Bearer {self.public_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={"payment": {"amount": "0.00", "currency": "SAR"}},
+                )
+            if r.status_code in (400, 422):
+                return True, "المفتاح صالح (رفض الطلب الناقص كما هو متوقع) ✓"
+            if r.status_code == 401:
+                return False, "المفتاح غير صحيح (401)"
+            if r.status_code in (200, 201):
+                return True, "تم التحقق من Tabby ✓"
+            return False, f"استجابة غير متوقعة: {r.status_code}"
+        except Exception as e:
+            return False, f"فشل الاتصال بـTabby: {e}"
+
+    async def create_checkout(
+        self, *, amount_sar: float, order_id: str, slug: str,
+        customer: dict, items: list, callback_url: str,
+    ) -> dict:
+        if amount_sar <= 0:
+            raise PaymentError("المبلغ يجب أن يكون أكبر من صفر")
+        first, _, last = (customer.get("name") or "عميل زتكس").strip().partition(" ")
+        last = last or "-"
+        payload = {
+            "payment": {
+                "amount": f"{amount_sar:.2f}",
+                "currency": "SAR",
+                "description": f"طلب #{order_id[:8]}",
+                "buyer": {
+                    "email": (customer.get("email") or "customer@example.com"),
+                    "phone": (customer.get("phone") or "+966500000000"),
+                    "name": customer.get("name") or "عميل",
+                },
+                "shipping_address": {
+                    "city": (customer.get("city") or "الرياض"),
+                    "address": (customer.get("address") or "—"),
+                    "zip": (customer.get("zip") or "11564"),
+                },
+                "order": {
+                    "tax_amount": "0.00",
+                    "shipping_amount": "0.00",
+                    "discount_amount": "0.00",
+                    "reference_id": order_id,
+                    "items": [
+                        {"title": i.get("name") or "منتج", "quantity": int(i.get("qty", 1)),
+                         "unit_price": f"{float(i.get('price', 0)):.2f}", "category": "general"}
+                        for i in items
+                    ],
+                },
+                "buyer_history": {"registered_since": datetime.utcnow().isoformat(), "loyalty_level": 0},
+                "order_history": [],
+                "meta": {"order_id": order_id, "slug": slug},
+            },
+            "lang": "ar",
+            "merchant_code": "saudi_arabia",
+            "merchant_urls": {
+                "success": callback_url + "&status=success",
+                "failure": callback_url + "&status=failure",
+                "cancel": callback_url + "&status=cancel",
+            },
+        }
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.post(
+                f"{self.API_BASE}/api/v2/checkout",
+                headers={"Authorization": f"Bearer {self.public_key}",
+                         "Content-Type": "application/json"},
+                json=payload,
+            )
+        if r.status_code not in (200, 201):
+            raise PaymentError(f"Tabby {r.status_code}: {r.text[:200]}")
+        data = r.json()
+        cfg = (data.get("configuration") or {}).get("available_products", {})
+        redirect = None
+        if cfg.get("installments"):
+            redirect = (cfg["installments"][0] or {}).get("web_url")
+        if not redirect:
+            # fallback on other product types
+            for k in ("pay_later", "monthly_billing"):
+                if cfg.get(k):
+                    redirect = (cfg[k][0] or {}).get("web_url")
+                    if redirect:
+                        break
+        if not redirect:
+            status = data.get("status", "rejected")
+            raise PaymentError(f"Tabby رفض الطلب ({status})")
+        return {"checkout_id": data.get("id"), "url": redirect, "status": data.get("status")}
+
+    async def verify(self, checkout_id: str) -> dict:
+        async with httpx.AsyncClient(timeout=15) as c:
+            r = await c.get(
+                f"{self.API_BASE}/api/v2/checkout/{checkout_id}",
+                headers={"Authorization": f"Bearer {self.secret_key}"},
+            )
+        if r.status_code != 200:
+            raise PaymentError(f"Tabby verify {r.status_code}: {r.text[:200]}")
+        return r.json()
+
+
+# ------------------------------------------------------------------
+# Tamara BNPL Provider
+# ------------------------------------------------------------------
+class TamaraProvider:
+    """Tamara — 3-installment pay-later, hosted redirect."""
+
+    SANDBOX = "https://api-sandbox.tamara.co"
+    PROD = "https://api.tamara.co"
+
+    def __init__(self, api_token: str, notification_token: str = "", sandbox: bool = True):
+        self.api_token = api_token
+        self.notification_token = notification_token
+        self.base = self.SANDBOX if sandbox else self.PROD
+
+    async def test(self):
+        try:
+            async with httpx.AsyncClient(timeout=12) as c:
+                r = await c.get(
+                    f"{self.base}/merchants/me",
+                    headers={"Authorization": f"Bearer {self.api_token}"},
+                )
+            if r.status_code in (200, 201):
+                return True, "تم التحقق من Tamara ✓"
+            if r.status_code == 401:
+                return False, "API Token غير صحيح (401)"
+            return False, f"استجابة غير متوقعة: {r.status_code}"
+        except Exception as e:
+            return False, f"فشل الاتصال بـTamara: {e}"
+
+    async def create_checkout(
+        self, *, amount_sar: float, order_id: str, slug: str,
+        customer: dict, items: list, callback_url: str,
+    ) -> dict:
+        if amount_sar <= 0:
+            raise PaymentError("المبلغ يجب أن يكون أكبر من صفر")
+        first, _, last = (customer.get("name") or "عميل زتكس").strip().partition(" ")
+        last = last or "-"
+        payload = {
+            "order_reference_id": order_id,
+            "total_amount": {"amount": f"{amount_sar:.2f}", "currency": "SAR"},
+            "shipping_amount": {"amount": "0.00", "currency": "SAR"},
+            "tax_amount": {"amount": "0.00", "currency": "SAR"},
+            "country_code": "SA",
+            "locale": "ar_SA",
+            "payment_type": "PAY_BY_INSTALMENTS",
+            "instalments": 3,
+            "items": [
+                {
+                    "reference_id": str(i.get("id") or "item"),
+                    "type": "Physical",
+                    "name": i.get("name") or "منتج",
+                    "sku": str(i.get("id") or "sku"),
+                    "quantity": int(i.get("qty", 1)),
+                    "unit_price": {"amount": f"{float(i.get('price', 0)):.2f}", "currency": "SAR"},
+                    "total_amount": {"amount": f"{float(i.get('price', 0)) * int(i.get('qty', 1)):.2f}", "currency": "SAR"},
+                } for i in items
+            ],
+            "consumer": {
+                "first_name": first or "عميل",
+                "last_name": last,
+                "phone_number": (customer.get("phone") or "+966500000000"),
+                "email": (customer.get("email") or "customer@example.com"),
+            },
+            "shipping_address": {
+                "first_name": first or "عميل",
+                "last_name": last,
+                "line1": (customer.get("address") or "—"),
+                "city": (customer.get("city") or "الرياض"),
+                "country_code": "SA",
+            },
+            "merchant_url": {
+                "success": callback_url + "&status=success",
+                "failure": callback_url + "&status=failure",
+                "cancel": callback_url + "&status=cancel",
+                "notification": callback_url + "&status=notification",
+            },
+            "description": f"طلب #{order_id[:8]}",
+        }
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.post(
+                f"{self.base}/checkout",
+                headers={"Authorization": f"Bearer {self.api_token}",
+                         "Content-Type": "application/json"},
+                json=payload,
+            )
+        if r.status_code not in (200, 201):
+            raise PaymentError(f"Tamara {r.status_code}: {r.text[:200]}")
+        data = r.json()
+        return {
+            "order_id_tamara": data.get("order_id"),
+            "checkout_id": data.get("checkout_id"),
+            "url": data.get("checkout_url"),
+            "status": data.get("status"),
+        }
+
+    async def verify(self, tamara_order_id: str) -> dict:
+        async with httpx.AsyncClient(timeout=15) as c:
+            r = await c.get(
+                f"{self.base}/orders/{tamara_order_id}",
+                headers={"Authorization": f"Bearer {self.api_token}"},
+            )
+        if r.status_code != 200:
+            raise PaymentError(f"Tamara verify {r.status_code}: {r.text[:200]}")
+        return r.json()
+
+
+def load_tabby(gw):
+    if not gw or not gw.get("enabled"):
+        return None
+    pub = gw.get("public_key") or ""
+    sec = decrypt(gw.get("secret_key_enc") or "")
+    if not (pub and sec):
+        return None
+    return TabbyProvider(pub, sec)
+
+
+def load_tamara(gw):
+    if not gw or not gw.get("enabled"):
+        return None
+    tok = decrypt(gw.get("api_token_enc") or "")
+    notif = decrypt(gw.get("notification_token_enc") or "")
+    if not tok:
+        return None
+    return TamaraProvider(tok, notif, sandbox=True)
+
+
+# ------------------------------------------------------------------
 # Convenience: load a provider ready to call
 # ------------------------------------------------------------------
-def load_moyasar(gw: Optional[Dict[str, Any]]) -> Optional[MoyasarProvider]:
+def load_moyasar(gw):
     if not gw or not gw.get("enabled"):
         return None
     pub = gw.get("publishable_key") or ""

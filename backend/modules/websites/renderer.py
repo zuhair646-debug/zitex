@@ -1176,6 +1176,69 @@ img{{max-width:100%;display:block;border-radius:{r}}}
 """
 
 
+def _portfolio_overlay(slug: str) -> str:
+    """Inline Portfolio widget for stocks vertical — floating button + full modal.
+
+    Uses the same fetch helpers as the auth overlay; relies on SiteToken in localStorage.
+    """
+    if not slug:
+        return ""
+    return (
+        '<button id="zx-pf-fab" title="محفظتي">📈</button>'
+        '<div id="zx-pf-modal" class="zx-pf-modal" style="display:none"><div class="zx-pf-card"><div class="zx-pf-head"><div><b>📈 محفظتي</b><div id="zx-pf-total" style="font-size:13px;opacity:.75">...</div></div><button class="zx-pf-x" onclick="document.getElementById(\'zx-pf-modal\').style.display=\'none\'">✕</button></div><div class="zx-pf-stats"><div><div class="zx-pf-lbl">الرصيد النقدي</div><div id="zx-pf-bal" class="zx-pf-val">—</div></div><div><div class="zx-pf-lbl">قيمة الاستثمارات</div><div id="zx-pf-mkt" class="zx-pf-val">—</div></div><div><div class="zx-pf-lbl">الأرباح/الخسائر</div><div id="zx-pf-pnl" class="zx-pf-val">—</div></div></div><div id="zx-pf-chart"></div><div class="zx-pf-tabs"><button class="zx-pf-t zx-pf-t-on" data-tab="p">محفظتي</button><button class="zx-pf-t" data-tab="m">السوق</button><button class="zx-pf-t" data-tab="h">السجل</button></div><div id="zx-pf-body"></div><div class="zx-pf-note">⚠️ محاكاة تعليمية — لا أموال حقيقية</div></div></div>'
+        '<style>'
+        '#zx-pf-fab{position:fixed;top:78px;left:16px;z-index:95;width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#0891b2);color:#fff;border:2px solid rgba(255,255,255,.2);cursor:pointer;font-size:20px;box-shadow:0 8px 24px rgba(37,99,235,.4)}'
+        '.zx-pf-modal{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:1200;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)}'
+        '.zx-pf-card{width:100%;max-width:540px;max-height:92vh;overflow:auto;background:#0b0f1f;color:#fff;border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:18px}'
+        '.zx-pf-head{display:flex;justify-content:space-between;align-items:start;margin-bottom:14px;gap:10px}'
+        '.zx-pf-x{background:rgba(255,255,255,.08);color:#fff;border:0;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:14px}'
+        '.zx-pf-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}'
+        '.zx-pf-stats>div{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:8px;text-align:center}'
+        '.zx-pf-lbl{font-size:10px;opacity:.65;margin-bottom:2px}'
+        '.zx-pf-val{font-size:15px;font-weight:900}'
+        '#zx-pf-chart{height:70px;background:rgba(255,255,255,.03);border-radius:10px;margin-bottom:12px;position:relative;overflow:hidden}'
+        '.zx-pf-tabs{display:flex;gap:6px;margin-bottom:10px}'
+        '.zx-pf-t{flex:1;padding:8px;background:rgba(255,255,255,.05);border:0;border-radius:8px;color:#fff;cursor:pointer;font-size:12px;font-weight:700}'
+        '.zx-pf-t-on{background:linear-gradient(90deg,#2563eb,#0891b2)}'
+        '.zx-pf-row{display:flex;justify-content:space-between;align-items:center;padding:10px;background:rgba(255,255,255,.04);border-radius:10px;margin-bottom:6px;font-size:13px}'
+        '.zx-pf-sym{font-weight:900}.zx-pf-sub{font-size:10px;opacity:.65}'
+        '.zx-pf-up{color:#10b981}.zx-pf-dn{color:#ef4444}'
+        '.zx-pf-btn{padding:5px 10px;border-radius:6px;border:0;cursor:pointer;font-size:11px;font-weight:800;margin-right:4px}'
+        '.zx-pf-b{background:#10b981;color:#000}.zx-pf-s{background:#ef4444;color:#fff}'
+        '.zx-pf-note{text-align:center;font-size:10px;opacity:.5;margin-top:8px;padding:6px;background:rgba(239,68,68,.1);border-radius:8px}'
+        '.zx-pf-form{background:rgba(37,99,235,.1);border:1px solid rgba(37,99,235,.3);border-radius:10px;padding:10px;margin:6px 0}'
+        '.zx-pf-inp{width:100%;padding:7px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#fff;font-size:13px;margin:4px 0}'
+        '.zx-pf-cta{width:100%;padding:8px;background:linear-gradient(90deg,#10b981,#059669);color:#000;border:0;border-radius:8px;font-weight:900;cursor:pointer;font-size:13px}'
+        '.zx-pf-cta-s{background:linear-gradient(90deg,#ef4444,#dc2626);color:#fff}'
+        '</style>'
+        f'<script>(function(){{var API="";var SLUG="{slug}";'
+        'function tk(){return localStorage.getItem("zx_site_token_"+SLUG);}'
+        'async function api(p,o){var r=await fetch(API+"/api/websites"+p,{...o,headers:{"Content-Type":"application/json",...(o&&o.headers||{}),...(tk()?{"Authorization":"SiteToken "+tk()}:{})}});var d=await r.json();if(!r.ok)throw new Error(d.detail||"خطأ");return d;}'
+        'var pf=null,mkt=[],tab="p",hist=[];'
+        'async function refresh(){try{pf=await api("/public/"+SLUG+"/portfolio/me");var q=await fetch(API+"/api/websites/market/quotes");mkt=(await q.json()).quotes||[];hist.push(pf.total_value);if(hist.length>40)hist.shift();render();}catch(e){document.getElementById("zx-pf-body").innerHTML=\'<div style="text-align:center;padding:30px;opacity:.7">يجب تسجيل الدخول أولاً</div>\';}}'
+        'function fmt(n){return (n||0).toLocaleString(\'ar-SA\',{minimumFractionDigits:2,maximumFractionDigits:2})}'
+        'function chart(){if(hist.length<2)return"";var mi=Math.min(...hist),ma=Math.max(...hist),rn=ma-mi||1;var w=500,h=70;var pts=hist.map(function(v,i){return (i*(w/(hist.length-1)))+","+(h-((v-mi)/rn)*h)}).join(" ");var up=hist[hist.length-1]>=hist[0];return \'<svg viewBox="0 0 \'+w+\' \'+h+\'" preserveAspectRatio="none" style="width:100%;height:100%"><polyline points="\'+pts+\'" fill="none" stroke="\'+(up?"#10b981":"#ef4444")+\'" stroke-width="2"/></svg>\';}'
+        'function render(){if(!pf)return;'
+        'document.getElementById("zx-pf-bal").textContent=fmt(pf.balance)+" ر.س";'
+        'document.getElementById("zx-pf-mkt").textContent=fmt(pf.market_value)+" ر.س";'
+        'var pnl=pf.pnl_total;var pnlEl=document.getElementById("zx-pf-pnl");pnlEl.textContent=(pnl>=0?"+":"")+fmt(pnl)+" ر.س";pnlEl.className="zx-pf-val "+(pnl>=0?"zx-pf-up":"zx-pf-dn");'
+        'document.getElementById("zx-pf-total").textContent="إجمالي: "+fmt(pf.total_value)+" ر.س";'
+        'document.getElementById("zx-pf-chart").innerHTML=chart();'
+        'var b=document.getElementById("zx-pf-body"),h="";'
+        'if(tab==="p"){if(!pf.positions.length)h=\'<div style="text-align:center;padding:20px;opacity:.7">لا استثمارات بعد — تصفّح السوق 👉</div>\';pf.positions.forEach(function(p){var cls=p.pnl>=0?"zx-pf-up":"zx-pf-dn";h+=\'<div class="zx-pf-row"><div><div class="zx-pf-sym">\'+p.symbol.split(":")[1]+\'</div><div class="zx-pf-sub">\'+p.name+\' · \'+p.qty+\' سهم</div></div><div style="text-align:left"><div>\'+fmt(p.price)+\'</div><div class="\'+cls+\'" style="font-size:11px">\'+(p.pnl>=0?"+":"")+fmt(p.pnl)+\' (\'+p.pnl_pct.toFixed(1)+\'%)</div></div></div>\';if(p._sell){h+=\'<div class="zx-pf-form"><input class="zx-pf-inp" id="pf-qty-\'+p.symbol+\'" type="number" step="0.1" placeholder="الكمية للبيع"/><button class="zx-pf-cta zx-pf-cta-s" onclick="window.zxPfTrade(\\\'\'+p.symbol+\'\\\',\\\'sell\\\')">💰 بيع</button></div>\';}else{h+=\'<div style="text-align:center;margin-bottom:6px"><button class="zx-pf-btn zx-pf-s" onclick="window.zxPfMarkSell(\\\'\'+p.symbol+\'\\\')">💰 بيع</button></div>\';}});}'
+        'else if(tab==="m"){mkt.forEach(function(q){var cls=q.change_pct>=0?"zx-pf-up":"zx-pf-dn";h+=\'<div class="zx-pf-row"><div><div class="zx-pf-sym">\'+q.symbol.split(":")[1]+\'</div><div class="zx-pf-sub">\'+q.name+\'</div></div><div style="text-align:left"><div>\'+fmt(q.price)+\'</div><div class="\'+cls+\'" style="font-size:11px">\'+(q.change_pct>=0?"+":"")+q.change_pct+\'%</div></div></div>\';if(q._buy){h+=\'<div class="zx-pf-form"><input class="zx-pf-inp" id="pf-qty-\'+q.symbol+\'" type="number" step="0.1" placeholder="الكمية للشراء"/><button class="zx-pf-cta" onclick="window.zxPfTrade(\\\'\'+q.symbol+\'\\\',\\\'buy\\\')">🛒 شراء</button></div>\';}else{h+=\'<div style="text-align:center;margin-bottom:6px"><button class="zx-pf-btn zx-pf-b" onclick="window.zxPfMarkBuy(\\\'\'+q.symbol+\'\\\')">🛒 شراء</button></div>\';}});}'
+        'else{(pf.trades||[]).slice().reverse().forEach(function(t){var cls=t.side==="buy"?"zx-pf-up":"zx-pf-dn";h+=\'<div class="zx-pf-row"><div><div class="zx-pf-sym \'+cls+\'">\'+(t.side==="buy"?"🛒 شراء":"💰 بيع")+\' \'+t.symbol.split(":")[1]+\'</div><div class="zx-pf-sub">\'+new Date(t.at).toLocaleString("ar-SA")+\'</div></div><div style="text-align:left"><div>\'+t.qty+\' × \'+fmt(t.price)+\'</div></div></div>\';});if(!(pf.trades||[]).length)h=\'<div style="text-align:center;padding:20px;opacity:.7">لا صفقات بعد</div>\';}'
+        'b.innerHTML=h;}'
+        'window.zxPfMarkBuy=function(s){mkt.forEach(function(q){q._buy=q.symbol===s});mkt.forEach(function(q){if(q.symbol!==s)q._buy=false});render();};'
+        'window.zxPfMarkSell=function(s){pf.positions.forEach(function(p){p._sell=p.symbol===s});render();};'
+        'window.zxPfTrade=async function(sym,side){var q=parseFloat(document.getElementById("pf-qty-"+sym).value);if(!q||q<=0)return alert("أدخل كمية صحيحة");try{var r=await api("/public/"+SLUG+"/portfolio/trade",{method:"POST",body:JSON.stringify({symbol:sym,side:side,qty:q})});alert("✅ "+(side==="buy"?"تم الشراء":"تم البيع")+"\\nالرصيد الجديد: "+fmt(r.new_balance)+" ر.س");await refresh();}catch(e){alert("❌ "+e.message);}};'
+        'document.querySelectorAll(".zx-pf-t").forEach(function(b){b.onclick=function(){tab=b.dataset.tab;document.querySelectorAll(".zx-pf-t").forEach(function(x){x.classList.toggle("zx-pf-t-on",x===b)});render();};});'
+        'document.getElementById("zx-pf-fab").onclick=function(){document.getElementById("zx-pf-modal").style.display="flex";refresh();};'
+        'setInterval(function(){if(document.getElementById("zx-pf-modal").style.display==="flex")refresh();},15000);'
+        '})();</script>'
+    )
+
+
 def render_website_to_html(project: Dict[str, Any]) -> str:
     """Render a Website Project dict to full HTML."""
     lang = project.get("lang", "ar")
@@ -1216,5 +1279,6 @@ def render_website_to_html(project: Dict[str, Any]) -> str:
 {_floating_widgets(theme)}
 {''.join(body_parts)}
 {_auth_and_commerce_overlay(project.get('slug'))}
+{_portfolio_overlay(project.get('slug')) if project.get('vertical') == 'stocks' else ''}
 </body>
 </html>"""

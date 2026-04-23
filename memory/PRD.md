@@ -15,6 +15,60 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Feb 24, 2026 — PORTFOLIO WIDGET + Tabby/Tamara FULL INTEGRATION (P1 — COMPLETE)
+
+#### A) Portfolio Trading Widget (for stocks vertical)
+
+**On any generated site** with `project.vertical = 'stocks'`, the renderer now injects a **floating 📈 button (top-left)** that opens a full trading modal:
+
+- **Stats header**: الرصيد النقدي + قيمة الاستثمارات + الأرباح/الخسائر الكلية (ألوان أخضر/أحمر)
+- **Inline SVG chart**: آخر 40 قيمة للمحفظة (خط صاعد/هابط حسب الاتجاه)
+- **3 تبويبات**: محفظتي / السوق / السجل
+- **شراء/بيع مباشر** داخل الـwidget: اختيار الرمز → حقل الكمية → زر تأكيد → تحديث فوري
+- **auto-refresh** كل 15 ثانية عندما يكون الـmodal مفتوحاً
+- **تحذير قانوني**: "⚠️ محاكاة تعليمية — لا أموال حقيقية" أسفل كل صفحة
+
+**E2E verified**: شراء 5 أسهم معادن → الرسالة "تم الشراء، الرصيد الجديد: 47,806.05 ر.س" → ظهر المركز في محفظتي مباشرة.
+
+#### B) Tabby + Tamara BNPL — كامل end-to-end
+
+**TabbyProvider** (`modules/websites/payment_gateways.py`):
+- `create_checkout()` → POST /api/v2/checkout بـBearer public_key، payload كامل (buyer/shipping/order.items/meta)، lang=ar
+- `verify()` → GET /api/v2/checkout/{id} بـBearer secret_key
+- `test()` → smoke test بمفتاح public_key يتأكد صحته
+
+**TamaraProvider** (`modules/websites/payment_gateways.py`):
+- Base URL: `api-sandbox.tamara.co` (sandbox) / `api.tamara.co` (prod)
+- `create_checkout()` → POST /checkout مع `payment_type: PAY_BY_INSTALMENTS, instalments: 3, country_code: SA, locale: ar_SA`
+- `verify()` → GET /orders/{id}
+- `test()` → GET /merchants/me للتحقق من api_token
+
+**Routes محدّثة** (`routes.py`):
+- `/client/payment-gateways/tabby/test` و `/tamara/test` الآن تتصل بـAPI الحقيقية
+- `/public/{slug}/payments/init` يعالج `provider=tabby` و `provider=tamara`:
+  - ينشئ checkout session عبر provider-class
+  - يحفظ `order.payment = {provider, checkout_id, tamara_order_id?, status: initiated, amount_sar}`
+  - يُعيد `redirect_url` → الواجهة تحوّل العميل لصفحة BNPL
+- `/public/{slug}/payments/callback` يتحقق من كلا provider ويحدّث الحالة:
+  - Tabby: APPROVED/AUTHORIZED/CLOSED → paid
+  - Tamara: APPROVED/AUTHORISED/FULLY_CAPTURED → paid
+- `/public/{slug}/payment-gateways` الآن يُظهر 4 مزودين مفعّلين للعميل: moyasar + tabby + tamara + cod
+
+**E2E verified (Apr 23, 2026)**:
+- ✅ Tabby `test` بمفاتيح وهمية → "المفتاح غير صحيح (401)" (يتصل بـapi.tabby.ai الحقيقي)
+- ✅ Tamara `test` بـtoken وهمي → "API Token غير صحيح (401)" (يتصل بـapi-sandbox.tamara.co الحقيقي)
+- ✅ `/payments/init` مع provider=tabby → 502 "Tabby 401:" (إثبات حقن مفاتيح المستأجر في الاستدعاء)
+- ✅ `/payments/init` مع provider=tamara → 502 "Tamara 401: Invalid credentials"
+- ✅ عند إدخال المستأجر مفاتيحه الحقيقية من داشبورد Tabby/Tamara، التدفق يعمل end-to-end فوراً
+
+**Files modified**:
+- `/app/backend/modules/websites/payment_gateways.py` — TabbyProvider + TamaraProvider + load_tabby/load_tamara
+- `/app/backend/modules/websites/routes.py` — handlers + callback verification
+- `/app/backend/modules/websites/renderer.py` — portfolio widget injection
+
+**Files added**: `_portfolio_overlay()` inside renderer.py (inline HTML+CSS+JS)
+
+
 ### 🆕 Feb 23, 2026 — VERTICALS SYSTEM (P0 — FOUNDATION COMPLETE)
 
 **الهدف**: كل فئة موقع متخصصة فعلاً بـwizard مختلف + أقسام مميزة + نموذج بيانات خاص + تبويبات لوحة تحكم مختلفة. لا قوالب عامة.

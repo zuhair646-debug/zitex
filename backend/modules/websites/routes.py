@@ -1865,10 +1865,20 @@ def register_routes(app, database, auth_dep):
                 return {"ok": False, "message": "لم يتم إعداد مفاتيح Moyasar بعد"}
             ok, msg = await prov.test()
             return {"ok": ok, "message": msg}
+        if provider_id == "tabby":
+            prov = pg.load_tabby(gw)
+            if not prov:
+                return {"ok": False, "message": "لم يتم إعداد مفاتيح Tabby بعد"}
+            ok, msg = await prov.test()
+            return {"ok": ok, "message": msg}
+        if provider_id == "tamara":
+            prov = pg.load_tamara(gw)
+            if not prov:
+                return {"ok": False, "message": "لم يتم إعداد API Token لـTamara بعد"}
+            ok, msg = await prov.test()
+            return {"ok": ok, "message": msg}
         if provider_id == "cod":
             return {"ok": True, "message": "الدفع عند الاستلام لا يحتاج مفاتيح — فقط فعّله"}
-        if provider_id in ("tabby", "tamara"):
-            return {"ok": bool(gw.get("enabled")), "message": "تم حفظ المفاتيح (دعم الاختبار قيد الإضافة)"}
         return {"ok": False, "message": "غير مدعوم"}
 
     # ---- Public checkout init (tenant-scoped) ----
@@ -1901,6 +1911,16 @@ def register_routes(app, database, auth_dep):
                     "methods": raw.get("methods") or meta["supports_methods"],
                     "publishable_key": raw.get("publishable_key"),  # pk_ is safe for browser
                 })
+            elif pid == "tabby":
+                if not (raw.get("public_key") and raw.get("secret_key_enc")):
+                    continue
+                visible.append({"id": "tabby", "name_ar": meta["name_ar"],
+                                "methods": ["tabby"], "public_key": raw.get("public_key")})
+            elif pid == "tamara":
+                if not raw.get("api_token_enc"):
+                    continue
+                visible.append({"id": "tamara", "name_ar": meta["name_ar"],
+                                "methods": ["tamara"]})
         return {"gateways": visible}
 
     @r.post("/public/{slug}/payments/init")
@@ -1958,6 +1978,49 @@ def register_routes(app, database, auth_dep):
             return {"ok": True, "provider": "moyasar", "redirect_url": inv["url"],
                     "invoice_id": inv["invoice_id"], "status": "initiated"}
 
+        if body.provider in ("tabby", "tamara"):
+            base = os.environ.get("BACKEND_URL", "").rstrip("/")
+            callback = f"{base}/api/websites/public/{slug}/payments/callback?order_id={body.order_id}"
+            cust = {
+                "name": data["customer"].get("name"),
+                "phone": data["customer"].get("phone"),
+                "email": data["customer"].get("email") or f"{data['customer'].get('phone','user')}@zitex.site",
+                "address": order.get("address"),
+                "city": order.get("city") or "الرياض",
+            }
+            items = order.get("items") or [{"id": "item", "name": "طلب", "price": amount_sar, "qty": 1}]
+            try:
+                if body.provider == "tabby":
+                    prov = pg.load_tabby(gw)
+                    if not prov:
+                        raise HTTPException(400, "مفاتيح Tabby غير مُعدّة")
+                    out = await prov.create_checkout(
+                        amount_sar=amount_sar, order_id=body.order_id, slug=slug,
+                        customer=cust, items=items, callback_url=callback,
+                    )
+                    pay_doc = {"provider": "tabby", "checkout_id": out["checkout_id"],
+                               "status": "initiated", "amount_sar": amount_sar}
+                else:
+                    prov = pg.load_tamara(gw)
+                    if not prov:
+                        raise HTTPException(400, "API Token لـTamara غير مُعدّ")
+                    out = await prov.create_checkout(
+                        amount_sar=amount_sar, order_id=body.order_id, slug=slug,
+                        customer=cust, items=items, callback_url=callback,
+                    )
+                    pay_doc = {"provider": "tamara",
+                               "tamara_order_id": out["order_id_tamara"],
+                               "checkout_id": out["checkout_id"],
+                               "status": "initiated", "amount_sar": amount_sar}
+            except pg.PaymentError as e:
+                raise HTTPException(502, str(e))
+            await database.website_projects.update_one(
+                {"id": proj["id"], "orders.id": body.order_id},
+                {"$set": {"orders.$.payment": pay_doc}},
+            )
+            return {"ok": True, "provider": body.provider, "redirect_url": out["url"],
+                    "status": "initiated"}
+
         raise HTTPException(400, "بوابة غير مدعومة بعد")
 
     @r.get("/public/{slug}/payments/callback")
@@ -1980,16 +2043,39 @@ def register_routes(app, database, auth_dep):
             if prov:
                 try:
                     inv = await prov.fetch_invoice(pay["invoice_id"])
-                    # Check if amount matches server-side expected
                     paid_halalas = inv.get("amount", 0)
                     expected_halalas = int(round(float(pay.get("amount_sar") or order.get("total") or 0) * 100))
-                    mstatus = inv.get("status")  # paid | initiated | expired | failed
+                    mstatus = inv.get("status")
                     if mstatus == "paid" and paid_halalas == expected_halalas:
                         verified_status = "paid"
                     elif mstatus in ("expired", "failed", "canceled"):
                         verified_status = mstatus
                 except pg.PaymentError as e:
                     logger.warning(f"callback fetch failed: {e}")
+        elif pay.get("provider") == "tabby" and pay.get("checkout_id"):
+            prov = pg.load_tabby((proj.get("payment_gateways") or {}).get("tabby"))
+            if prov:
+                try:
+                    inv = await prov.verify(pay["checkout_id"])
+                    tstatus = (inv.get("status") or "").upper()
+                    if tstatus in ("APPROVED", "AUTHORIZED", "CLOSED"):
+                        verified_status = "paid"
+                    elif tstatus in ("EXPIRED", "REJECTED", "FAILED"):
+                        verified_status = tstatus.lower()
+                except pg.PaymentError as e:
+                    logger.warning(f"tabby verify failed: {e}")
+        elif pay.get("provider") == "tamara" and pay.get("tamara_order_id"):
+            prov = pg.load_tamara((proj.get("payment_gateways") or {}).get("tamara"))
+            if prov:
+                try:
+                    inv = await prov.verify(pay["tamara_order_id"])
+                    tstatus = (inv.get("status") or "").upper()
+                    if tstatus in ("APPROVED", "AUTHORISED", "FULLY_CAPTURED"):
+                        verified_status = "paid"
+                    elif tstatus in ("DECLINED", "CANCELED", "CANCELLED", "EXPIRED", "FAILED"):
+                        verified_status = tstatus.lower()
+                except pg.PaymentError as e:
+                    logger.warning(f"tamara verify failed: {e}")
         # Persist (idempotent)
         if pay.get("status") != "paid":
             await database.website_projects.update_one(
