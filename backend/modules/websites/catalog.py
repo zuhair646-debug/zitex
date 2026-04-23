@@ -465,20 +465,48 @@ def _base_as_layout(key: str) -> Dict[str, Any]:
     }
 
 
-# Categories ordered for display
+# Categories ordered for display (with professional Unsplash hero images)
 CATEGORIES: List[Dict[str, Any]] = [
-    {"id": "restaurant", "name": "مطاعم",            "icon": "🍽️", "color": "#D4AF37"},
-    {"id": "coffee",     "name": "كوفي شوب",          "icon": "☕", "color": "#92400E"},
-    {"id": "store",      "name": "متاجر",             "icon": "🛍️", "color": "#FF6B35"},
-    {"id": "barber",     "name": "حلاقة",             "icon": "💈", "color": "#D4AF37"},
-    {"id": "pets",       "name": "قطط وحيوانات",      "icon": "🐱", "color": "#D97706"},
-    {"id": "clinic",     "name": "عيادات",            "icon": "🏥", "color": "#06B6D4"},
-    {"id": "plumbing",   "name": "سباكة",              "icon": "🔧", "color": "#2563EB"},
-    {"id": "electrical", "name": "كهرباء",             "icon": "⚡", "color": "#FBBF24"},
-    {"id": "company",    "name": "شركات",              "icon": "🏢", "color": "#3B82F6"},
-    {"id": "portfolio",  "name": "بورتفوليو",           "icon": "🎨", "color": "#EC4899"},
-    {"id": "saas",       "name": "SaaS / تطبيقات",    "icon": "💻", "color": "#10B981"},
-    {"id": "blank",      "name": "مخصّص / فارغ",        "icon": "✨", "color": "#FFD700"},
+    {"id": "restaurant", "name": "مطاعم",           "icon": "🍽️", "color": "#D4AF37",
+     "image": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&q=70"},
+    {"id": "coffee",     "name": "كوفي شوب",         "icon": "☕", "color": "#92400E",
+     "image": "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=600&q=70"},
+    {"id": "store",      "name": "متاجر",            "icon": "🛍️", "color": "#FF6B35",
+     "image": "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=600&q=70"},
+    {"id": "barber",     "name": "حلاقة رجال",        "icon": "💈", "color": "#D4AF37",
+     "image": "https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=600&q=70"},
+    {"id": "salon_women","name": "صالون نساء",        "icon": "💇‍♀️", "color": "#EC4899",
+     "image": "https://images.unsplash.com/photo-1560066984-138dadb4c035?w=600&q=70"},
+    {"id": "pets",       "name": "قطط وحيوانات",     "icon": "🐱", "color": "#D97706",
+     "image": "https://images.unsplash.com/photo-1425082661705-1834bfd09dca?w=600&q=70"},
+    {"id": "clinic",     "name": "عيادات",           "icon": "🏥", "color": "#06B6D4",
+     "image": "https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?w=600&q=70"},
+    {"id": "bakery",     "name": "مخبز وحلويات",      "icon": "🍰", "color": "#F472B6",
+     "image": "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=600&q=70"},
+    {"id": "car_wash",   "name": "غسيل سيارات",       "icon": "🚗", "color": "#0EA5E9",
+     "image": "https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?w=600&q=70"},
+    {"id": "sports_club","name": "نوادي رياضية",      "icon": "🏋️", "color": "#059669",
+     "image": "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600&q=70"},
+    {"id": "library",    "name": "مكتبة وقرطاسية",    "icon": "📚", "color": "#7C3AED",
+     "image": "https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=600&q=70"},
+    {"id": "art_gallery","name": "معارض فنية",        "icon": "🎨", "color": "#B45309",
+     "image": "https://images.unsplash.com/photo-1545987796-200677ee1011?w=600&q=70"},
+    {"id": "maintenance","name": "فني صيانة",         "icon": "🛠️", "color": "#EA580C",
+     "image": "https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=600&q=70"},
+    {"id": "jewelry",    "name": "مجوهرات وذهب",      "icon": "💍", "color": "#FBBF24",
+     "image": "https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=600&q=70"},
+    {"id": "plumbing",   "name": "سباكة",             "icon": "🔧", "color": "#2563EB",
+     "image": "https://images.unsplash.com/photo-1606613221062-5c4c2d85ce31?w=600&q=70"},
+    {"id": "electrical", "name": "كهرباء",            "icon": "⚡", "color": "#FBBF24",
+     "image": "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&q=70"},
+    {"id": "company",    "name": "شركات",             "icon": "🏢", "color": "#3B82F6",
+     "image": "https://images.unsplash.com/photo-1497366216548-37526070297c?w=600&q=70"},
+    {"id": "portfolio",  "name": "بورتفوليو",          "icon": "🎭", "color": "#EC4899",
+     "image": "https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=600&q=70"},
+    {"id": "saas",       "name": "SaaS / تطبيقات",   "icon": "💻", "color": "#10B981",
+     "image": "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&q=70"},
+    {"id": "blank",      "name": "مخصّص / فارغ",       "icon": "✨", "color": "#FFD700",
+     "image": "https://images.unsplash.com/photo-1557804506-669a67965ba0?w=600&q=70"},
 ]
 
 
@@ -577,10 +605,24 @@ def list_layouts(category_id: str) -> List[Dict[str, Any]]:
     """Return all layouts for a category — RADICALLY different via hero + arrangement combinations."""
     from .variants import STYLE_VARIANTS
 
+    # 🆕 New categories inherit base templates from closest existing category
+    # so they get the full 120+ design variations without needing bespoke templates.
+    CATEGORY_ALIASES = {
+        "salon_women": "barber",
+        "bakery": "coffee",
+        "car_wash": "plumbing",
+        "sports_club": "company",
+        "library": "store",
+        "art_gallery": "portfolio",
+        "maintenance": "plumbing",
+        "jewelry": "store",
+    }
+    effective_category = CATEGORY_ALIASES.get(category_id, category_id)
+
     base_layouts: List[Dict[str, Any]] = []
-    if category_id in BASE_TEMPLATES:
-        base_layouts.append(_base_as_layout(category_id))
-    for layout in EXTRA_LAYOUTS.get(category_id, []):
+    if effective_category in BASE_TEMPLATES:
+        base_layouts.append(_base_as_layout(effective_category))
+    for layout in EXTRA_LAYOUTS.get(effective_category, []):
         base_layouts.append(layout)
 
     out: List[Dict[str, Any]] = []

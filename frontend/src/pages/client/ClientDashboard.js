@@ -2311,10 +2311,10 @@ function Dashboard({ slug, token, onLogout }) {
         <div className="flex gap-1 mb-4 bg-white/3 rounded-xl p-1 overflow-x-auto" data-testid="dashboard-tabs">
           {(() => {
             const v = project?.vertical;
-            const hasBookings = ['salon', 'pets', 'medical', 'gym'].includes(v);
-            const hasProducts = v === 'ecommerce';
+            const hasBookings = ['salon', 'salon_women', 'pets', 'medical', 'gym', 'car_wash', 'sports_club', 'maintenance'].includes(v);
+            const hasProducts = ['ecommerce', 'bakery', 'library', 'art_gallery', 'jewelry'].includes(v);
             const hasListings = v === 'realestate';
-            const hasOrders = ['restaurant', 'ecommerce'].includes(v) || !v;
+            const hasOrders = ['restaurant', 'ecommerce', 'bakery', 'library', 'jewelry'].includes(v) || !v;
             const base = [
               { id: 'overview', label: 'نظرة عامة', icon: BarChart3 },
             ];

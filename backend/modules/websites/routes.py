@@ -257,6 +257,7 @@ def register_routes(app, database, auth_dep):
         _category_to_vertical = {
             "restaurant": "restaurant", "coffee": "restaurant",
             "barber": "salon",
+            "salon_women": "salon_women",
             "pets": "pets",
             "clinic": "medical",
             "store": "ecommerce",
@@ -264,6 +265,13 @@ def register_routes(app, database, auth_dep):
             "academy": "academy",
             "realestate": "realestate",
             "stocks": "stocks",
+            "bakery": "bakery",
+            "car_wash": "car_wash",
+            "sports_club": "sports_club",
+            "library": "library",
+            "art_gallery": "art_gallery",
+            "maintenance": "maintenance",
+            "jewelry": "jewelry",
         }
         vid = _category_to_vertical.get(category_id)
         if vid:

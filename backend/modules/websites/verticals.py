@@ -201,6 +201,184 @@ VERTICALS = {
         ],
         "sample_sections": ["hero_search", "listings_grid", "map_view", "mortgage_calculator", "agents", "contact"],
     },
+
+    # ════════════════════════════════════════════════════════════════
+    # 🆕 Feb 26, 2026 — 8 NEW VERTICALS
+    # ════════════════════════════════════════════════════════════════
+
+    "salon_women": {
+        "id": "salon_women",
+        "name_ar": "صالون نساء",
+        "icon": "💇‍♀️",
+        "color": "#EC4899",
+        "features": ["bookings", "services"],
+        "checkout_type": "appointment",
+        "dashboard_tabs": ["appointments", "services", "staff", "customers", "payments", "coupons"],
+        "wizard_questions": [
+            {"id": "categories", "q": "ما الأقسام؟", "chips": ["شعر", "بشرة وسبا", "أظافر", "حناء وعروس", "مكياج", "ليزر"]},
+            {"id": "specialty", "q": "التخصص الرئيسي؟", "chips": ["تجميل عام", "عروس/مناسبات", "سبا استرخاء", "مراكز متكاملة"]},
+            {"id": "working_hours", "q": "ساعات العمل؟", "chips": ["10 ص - 10 م", "9 ص - 9 م", "أيام العمل + ويكند"]},
+            {"id": "booking_type", "q": "نوع الحجز؟", "chips": ["موعد فردي", "باقات/اشتراكات", "الاثنين"]},
+        ],
+        "sample_services": [
+            {"id": "sw1", "name": "قص وتصفيف شعر", "price": 150, "duration_min": 60, "category": "شعر"},
+            {"id": "sw2", "name": "صبغة كاملة", "price": 400, "duration_min": 120, "category": "شعر"},
+            {"id": "sw3", "name": "مانيكير وباديكير", "price": 120, "duration_min": 60, "category": "أظافر"},
+            {"id": "sw4", "name": "حنّاء عروس", "price": 600, "duration_min": 180, "category": "حناء وعروس"},
+        ],
+        "sample_sections": ["hero", "services_grid", "booking_widget", "gallery", "testimonials", "contact"],
+    },
+
+    "bakery": {
+        "id": "bakery",
+        "name_ar": "مخبز وحلويات",
+        "icon": "🍰",
+        "color": "#F472B6",
+        "features": ["products", "orders", "custom_orders"],
+        "checkout_type": "delivery",
+        "dashboard_tabs": ["products", "orders", "custom_orders", "livemap", "customers", "drivers", "payments", "coupons"],
+        "wizard_questions": [
+            {"id": "type", "q": "نوع المخبز؟", "chips": ["كيك ومناسبات", "مخبز شرقي", "كروسان وقهوة", "حلويات فاخرة", "معجنات"]},
+            {"id": "custom", "q": "طلبات خاصة بالمناسبات؟", "chips": ["نعم، تخصيص كامل", "قوالب جاهزة فقط", "الاثنين"]},
+            {"id": "lead_time", "q": "مدة التحضير المسبق للطلبات الخاصة؟", "chips": ["24 ساعة", "48 ساعة", "3 أيام", "أسبوع"]},
+        ],
+        "sample_products": [
+            {"id": "b1", "name": "كيكة عيد ميلاد", "price": 180, "stock": 20, "category": "كيك",
+             "variants": [{"name": "النكهة", "options": ["شوكولاتة", "فانيلا", "فراولة"]}, {"name": "الحجم", "options": ["صغير", "وسط", "كبير"]}]},
+            {"id": "b2", "name": "كرواسون زبدة", "price": 8, "stock": 200, "category": "معجنات"},
+            {"id": "b3", "name": "كنافة بالجبن", "price": 45, "stock": 50, "category": "حلويات شرقية"},
+        ],
+        "sample_sections": ["hero", "product_grid_filters", "custom_order_form", "gallery", "testimonials", "contact"],
+    },
+
+    "car_wash": {
+        "id": "car_wash",
+        "name_ar": "غسيل سيارات متنقل",
+        "icon": "🚗",
+        "color": "#0EA5E9",
+        "features": ["bookings", "services", "mobile_service"],
+        "checkout_type": "appointment_location",
+        "dashboard_tabs": ["appointments", "services", "technicians", "livemap", "customers", "payments"],
+        "wizard_questions": [
+            {"id": "service_type", "q": "نوع الخدمة؟", "chips": ["غسيل فقط", "تلميع كامل", "تنظيف داخلي", "حماية سيراميك", "خدمة متنقلة"]},
+            {"id": "location_mode", "q": "أين تقدّم الخدمة؟", "chips": ["مقر ثابت", "متنقل للعميل", "الاثنين"]},
+            {"id": "car_types", "q": "أنواع السيارات؟", "chips": ["سيدان", "SUV", "شاحنات صغيرة", "دراجات نارية", "الكل"]},
+        ],
+        "sample_services": [
+            {"id": "cw1", "name": "غسيل خارجي سريع", "price": 30, "duration_min": 20, "category": "غسيل"},
+            {"id": "cw2", "name": "غسيل داخلي وخارجي", "price": 80, "duration_min": 45, "category": "غسيل"},
+            {"id": "cw3", "name": "تلميع شامل", "price": 250, "duration_min": 120, "category": "تلميع"},
+            {"id": "cw4", "name": "حماية سيراميك", "price": 800, "duration_min": 240, "category": "حماية"},
+        ],
+        "sample_sections": ["hero", "services_grid", "booking_widget", "coverage_map", "testimonials", "contact"],
+    },
+
+    "sports_club": {
+        "id": "sports_club",
+        "name_ar": "نوادي رياضية",
+        "icon": "⚽",
+        "color": "#059669",
+        "features": ["bookings", "memberships", "facilities"],
+        "checkout_type": "subscription",
+        "dashboard_tabs": ["memberships", "bookings", "facilities", "members", "trainers", "payments"],
+        "wizard_questions": [
+            {"id": "facility_types", "q": "نوع الملاعب؟", "chips": ["كرة قدم", "كرة سلة", "تنس", "بادل", "سكواش", "سباحة"]},
+            {"id": "membership_types", "q": "نماذج العضوية؟", "chips": ["شهري", "سنوي", "حجز بالساعة", "الكل"]},
+            {"id": "facilities_count", "q": "عدد الملاعب؟", "chips": ["1-2", "3-5", "6-10", "+10"]},
+        ],
+        "sample_services": [
+            {"id": "sc1", "name": "حجز ملعب بادل (ساعة)", "price": 150, "duration_min": 60, "type": "booking"},
+            {"id": "sc2", "name": "حجز ملعب كرة قدم (ساعة)", "price": 250, "duration_min": 60, "type": "booking"},
+            {"id": "sc3", "name": "عضوية شهرية مفتوحة", "price": 500, "duration_days": 30, "type": "membership"},
+        ],
+        "sample_sections": ["hero", "facilities_showcase", "booking_widget", "memberships_pricing", "gallery", "contact"],
+    },
+
+    "library": {
+        "id": "library",
+        "name_ar": "مكتبة وقرطاسية",
+        "icon": "📚",
+        "color": "#7C3AED",
+        "features": ["products", "orders", "isbn_search"],
+        "checkout_type": "delivery",
+        "dashboard_tabs": ["products", "orders", "categories", "authors", "customers", "payments", "coupons"],
+        "wizard_questions": [
+            {"id": "focus", "q": "التخصص؟", "chips": ["كتب عامة", "قرطاسية مدرسية", "كتب إسلامية", "أدوات مكتبية", "الكل"]},
+            {"id": "isbn_support", "q": "بحث بـISBN؟", "chips": ["نعم، أساسي", "قريباً", "لا"]},
+            {"id": "shipping", "q": "التوصيل؟", "chips": ["محلي فقط", "السعودية", "الخليج"]},
+        ],
+        "sample_products": [
+            {"id": "l1", "name": "كتاب الأسود يليق بك", "price": 45, "stock": 30, "category": "روايات",
+             "variants": [{"name": "الغلاف", "options": ["عادي", "مقوى"]}]},
+            {"id": "l2", "name": "دفتر A4 - 200 صفحة", "price": 15, "stock": 100, "category": "قرطاسية"},
+            {"id": "l3", "name": "القرآن الكريم - تجويد", "price": 75, "stock": 50, "category": "إسلامية"},
+        ],
+        "sample_sections": ["hero", "categories_grid", "product_grid_filters", "featured_products", "testimonials", "contact"],
+    },
+
+    "art_gallery": {
+        "id": "art_gallery",
+        "name_ar": "معارض فنية",
+        "icon": "🎨",
+        "color": "#B45309",
+        "features": ["products", "exhibitions", "virtual_tour"],
+        "checkout_type": "inquiry_and_shipping",
+        "dashboard_tabs": ["artworks", "exhibitions", "artists", "inquiries", "sold", "payments"],
+        "wizard_questions": [
+            {"id": "style", "q": "النمط الفني؟", "chips": ["معاصر", "تراثي", "خط عربي", "تجريدي", "واقعي", "مختلط"]},
+            {"id": "artists_count", "q": "عدد الفنانين؟", "chips": ["فنان واحد", "2-5", "6-15", "+15"]},
+            {"id": "price_range", "q": "نطاق الأسعار؟", "chips": ["< 1,000 ر.س", "1-5 آلاف", "5-20 ألف", "+20 ألف"]},
+        ],
+        "sample_products": [
+            {"id": "a1", "name": "لوحة زيتية - صحراء", "price": 3500, "stock": 1, "category": "معاصر",
+             "variants": [{"name": "الإطار", "options": ["بدون", "خشب", "ذهبي"]}], "artist": "محمد العلي"},
+            {"id": "a2", "name": "خط عربي - آية الكرسي", "price": 1200, "stock": 1, "category": "خط عربي", "artist": "فاطمة الخالدي"},
+        ],
+        "sample_sections": ["hero", "featured_artworks", "product_grid_filters", "artists_showcase", "gallery", "contact"],
+    },
+
+    "maintenance": {
+        "id": "maintenance",
+        "name_ar": "فني صيانة منزلية",
+        "icon": "🛠️",
+        "color": "#EA580C",
+        "features": ["bookings", "services", "estimates"],
+        "checkout_type": "service_visit",
+        "dashboard_tabs": ["appointments", "services", "technicians", "livemap", "customers", "estimates", "payments"],
+        "wizard_questions": [
+            {"id": "trades", "q": "التخصصات؟", "chips": ["كهرباء", "سباكة", "تكييف", "نجارة", "صيانة عامة", "دهان", "الكل"]},
+            {"id": "service_area", "q": "نطاق العمل؟", "chips": ["حي محدد", "مدينة كاملة", "عدة مدن"]},
+            {"id": "emergency", "q": "خدمة طوارئ 24/7؟", "chips": ["نعم", "أوقات محددة", "لا"]},
+        ],
+        "sample_services": [
+            {"id": "mt1", "name": "زيارة تشخيص (كهرباء)", "price": 100, "duration_min": 30, "category": "كهرباء"},
+            {"id": "mt2", "name": "إصلاح تسريب حنفية", "price": 150, "duration_min": 45, "category": "سباكة"},
+            {"id": "mt3", "name": "تنظيف وصيانة مكيف", "price": 120, "duration_min": 60, "category": "تكييف"},
+        ],
+        "sample_sections": ["hero", "services_grid", "booking_widget", "how_it_works", "testimonials", "contact"],
+    },
+
+    "jewelry": {
+        "id": "jewelry",
+        "name_ar": "مجوهرات وذهب",
+        "icon": "💍",
+        "color": "#FBBF24",
+        "features": ["products", "gold_calculator", "orders"],
+        "checkout_type": "delivery",
+        "dashboard_tabs": ["products", "orders", "gold_prices", "categories", "customers", "payments"],
+        "wizard_questions": [
+            {"id": "product_type", "q": "نوع المجوهرات؟", "chips": ["ذهب", "ألماس", "فضة", "لؤلؤ", "مختلط"]},
+            {"id": "occasions", "q": "مناسبات خاصة؟", "chips": ["خواتم زواج", "هدايا", "مجموعات يومية", "مناسبات فاخرة"]},
+            {"id": "live_gold_price", "q": "سعر الذهب اللحظي؟", "chips": ["نعم، أساسي", "اختياري", "لا"]},
+        ],
+        "sample_products": [
+            {"id": "j1", "name": "خاتم ذهب عيار 21", "price": 2800, "stock": 5, "category": "خواتم",
+             "variants": [{"name": "المقاس", "options": ["16", "17", "18", "19"]}]},
+            {"id": "j2", "name": "قلادة ألماس", "price": 12500, "stock": 2, "category": "قلادات"},
+            {"id": "j3", "name": "إسورة فضة", "price": 450, "stock": 15, "category": "أساور"},
+        ],
+        "sample_sections": ["hero", "gold_ticker", "product_grid_filters", "categories_grid", "gold_calculator", "contact"],
+    },
 }
 
 

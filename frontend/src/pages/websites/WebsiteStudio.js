@@ -15,24 +15,58 @@ const authH = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` 
    ================================================================ */
 function CategoryPicker({ categories, onPick }) {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-6" data-testid="category-picker">
-      <div className="text-center mb-6 max-w-xl">
+    <div className="flex-1 flex flex-col items-center justify-start p-4 md:p-6 overflow-y-auto" data-testid="category-picker">
+      <div className="text-center mb-6 max-w-xl pt-4">
         <Sparkles className="w-12 h-12 mx-auto mb-3 text-yellow-500" />
-        <h2 className="text-xl md:text-3xl font-bold mb-1.5">اختر نوع موقعك</h2>
-        <p className="text-white/60 text-xs md:text-sm">12 فئة • أكثر من 20 تصميماً مختلفاً</p>
+        <h2 className="text-2xl md:text-4xl font-black mb-2 bg-gradient-to-r from-yellow-300 via-yellow-500 to-orange-400 bg-clip-text text-transparent">اختر نوع موقعك</h2>
+        <p className="text-white/60 text-xs md:text-sm">{categories.length} فئة • أكثر من 120 تصميماً لكل واحدة</p>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 w-full max-w-5xl">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4 w-full max-w-7xl">
         {categories.map((c) => (
           <button
             key={c.id}
             onClick={() => onPick(c)}
-            className="group relative p-3 md:p-4 rounded-xl border border-white/10 hover:border-yellow-500/60 transition-all text-center hover:-translate-y-0.5 hover:shadow-xl hover:shadow-yellow-500/10"
-            style={{ background: `linear-gradient(135deg, ${c.color}22, ${c.color}08)` }}
+            className="group relative overflow-hidden rounded-2xl border border-white/10 hover:border-yellow-400/70 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-yellow-500/20 aspect-[4/5] bg-slate-900"
             data-testid={`category-card-${c.id}`}
           >
-            <div className="text-3xl md:text-4xl mb-1.5">{c.icon}</div>
-            <div className="font-bold text-sm md:text-base mb-0.5 group-hover:text-yellow-400">{c.name}</div>
-            <div className="text-[10px] opacity-60">{c.layouts_count} تصميم</div>
+            {/* Background image */}
+            {c.image && (
+              <div
+                className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110"
+                style={{ backgroundImage: `url('${c.image}')` }}
+                aria-hidden
+              />
+            )}
+            {/* Gradient overlay — darker at bottom for legibility, tinted with brand color on hover */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-black/10 group-hover:via-black/30" />
+            <div
+              className="absolute inset-0 opacity-0 group-hover:opacity-40 transition-opacity mix-blend-overlay"
+              style={{ background: `linear-gradient(135deg, ${c.color}, transparent 70%)` }}
+              aria-hidden
+            />
+            {/* Content */}
+            <div className="absolute inset-0 flex flex-col justify-between p-3 md:p-4 text-right">
+              <div className="flex items-start justify-between">
+                <div
+                  className="w-10 h-10 md:w-11 md:h-11 rounded-xl flex items-center justify-center text-xl md:text-2xl backdrop-blur-md shadow-lg"
+                  style={{ background: `${c.color}cc`, color: '#fff' }}
+                >
+                  {c.icon}
+                </div>
+                <span className="text-[10px] opacity-80 bg-black/50 backdrop-blur px-2 py-0.5 rounded-full border border-white/10">
+                  {c.layouts_count} تصميم
+                </span>
+              </div>
+              <div>
+                <div className="font-black text-base md:text-lg text-white mb-0.5 drop-shadow-lg leading-tight group-hover:text-yellow-300 transition">
+                  {c.name}
+                </div>
+                <div className="text-[11px] opacity-80 text-white/90 flex items-center gap-1">
+                  <span>اختر الآن</span>
+                  <span className="transition-transform group-hover:-translate-x-1">←</span>
+                </div>
+              </div>
+            </div>
           </button>
         ))}
       </div>
