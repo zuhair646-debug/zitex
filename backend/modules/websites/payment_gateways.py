@@ -90,6 +90,16 @@ PROVIDERS = {
         "needs_keys": ["publishable_key", "secret_key"],
         "key_hint": "احصل عليها من لوحة تحكم Moyasar → Settings → API Keys (تبدأ بـ pk_test_ و sk_test_)",
         "signup_url": "https://dashboard.moyasar.com",
+        "comparison": {
+            "fees_pct": "2.5% + 1 ر.س",
+            "settlement": "T+1 يوم عمل",
+            "best_for": "المتاجر العامة، المطاعم، الخدمات",
+            "pros": ["أقل رسوم في السعودية", "مرخّصة من ساما", "تسوية يومية", "يدعم Mada محلياً", "سهولة إعداد"],
+            "cons": ["لا يدعم تقسيط BNPL", "يحتاج سجل تجاري سعودي للتفعيل"],
+            "currencies": ["SAR"],
+            "license": "ساما (SAMA) - رخصة مدفوعات كاملة",
+            "setup_time": "5 دقائق (sandbox) / 1-3 أيام عمل للإنتاج",
+        },
     },
     "tabby": {
         "id": "tabby",
@@ -100,7 +110,16 @@ PROVIDERS = {
         "needs_keys": ["public_key", "secret_key"],
         "key_hint": "احصل عليها من لوحة تحكم Tabby → Developers → API Keys",
         "signup_url": "https://tabby.ai",
-        "coming_soon": True,
+        "comparison": {
+            "fees_pct": "4-6% (حسب الباقة)",
+            "settlement": "فوري — تابي تدفع لك كامل المبلغ مقدماً",
+            "best_for": "متاجر قيمة سلة 100+ ر.س، موضة، إلكترونيات",
+            "pros": ["زيادة معدل التحويل 30%+", "تابي تحمل مخاطر عدم السداد", "دفع فوري للتاجر", "تكامل سهل"],
+            "cons": ["رسوم أعلى", "محدود للسعودية/الإمارات/الكويت", "قد يرفض الطلب حسب تقييم العميل"],
+            "currencies": ["SAR", "AED", "KWD"],
+            "license": "مرخّصة من ساما + CBUAE",
+            "setup_time": "يومين (يتطلب مراجعة التاجر)",
+        },
     },
     "tamara": {
         "id": "tamara",
@@ -111,7 +130,16 @@ PROVIDERS = {
         "needs_keys": ["api_token", "notification_token"],
         "key_hint": "احصل عليها من Tamara Merchant Portal → Developers",
         "signup_url": "https://tamara.co",
-        "coming_soon": True,
+        "comparison": {
+            "fees_pct": "5-7% (حسب الباقة)",
+            "settlement": "فوري",
+            "best_for": "متاجر المشتريات الكبيرة (1000+ ر.س)، أثاث، إلكترونيات منزلية",
+            "pros": ["شريحة عملاء أكبر في السعودية", "خيار 30 يوم بدون فوائد", "دفع فوري مضمون"],
+            "cons": ["رسوم أعلى من Moyasar", "حد أدنى للقيمة"],
+            "currencies": ["SAR", "AED"],
+            "license": "مرخّصة من ساما",
+            "setup_time": "3-5 أيام عمل",
+        },
     },
     "cod": {
         "id": "cod",
@@ -122,6 +150,16 @@ PROVIDERS = {
         "needs_keys": [],
         "key_hint": "",
         "signup_url": "",
+        "comparison": {
+            "fees_pct": "0% (لكن تحمل مخاطر رفض الاستلام)",
+            "settlement": "فوري (نقداً مع السائق)",
+            "best_for": "المطاعم، خدمات التوصيل المحلي، العملاء الحذرين من الدفع الإلكتروني",
+            "pros": ["مجاني تماماً", "لا يحتاج حساب تجاري", "ثقة مع العملاء الجدد"],
+            "cons": ["معدل رفض/إلغاء أعلى", "تحصيل الكاش يعرّض السائق للمخاطر", "صعوبة المحاسبة"],
+            "currencies": ["SAR"],
+            "license": "لا يتطلب",
+            "setup_time": "فوري",
+        },
     },
 }
 
@@ -129,6 +167,29 @@ PROVIDERS = {
 def catalog_public() -> List[Dict[str, Any]]:
     """Safe catalogue for frontend."""
     return [dict(p) for p in PROVIDERS.values()]
+
+
+def compare_all() -> List[Dict[str, Any]]:
+    """Comparison table — used by the 'Gateway Comparison' view in client dashboard."""
+    rows = []
+    for pid, p in PROVIDERS.items():
+        c = p.get("comparison", {})
+        rows.append({
+            "id": pid,
+            "name_ar": p["name_ar"],
+            "description_ar": p["description_ar"],
+            "methods": p["supports_methods"],
+            "fees": c.get("fees_pct", "—"),
+            "settlement": c.get("settlement", "—"),
+            "best_for": c.get("best_for", "—"),
+            "pros": c.get("pros", []),
+            "cons": c.get("cons", []),
+            "currencies": c.get("currencies", []),
+            "license": c.get("license", "—"),
+            "setup_time": c.get("setup_time", "—"),
+            "signup_url": p.get("signup_url", ""),
+        })
+    return rows
 
 
 # ------------------------------------------------------------------

@@ -73,6 +73,25 @@ class TradeIn(BaseModel):
     qty: float
 
 
+class ListingIn(BaseModel):
+    id: Optional[str] = None
+    title: str
+    price: float
+    transaction: str = "بيع"  # بيع | إيجار
+    type: Optional[str] = None  # شقة | فيلا | أرض | تجاري
+    city: Optional[str] = None
+    district: Optional[str] = None
+    area_sqm: Optional[float] = None
+    bedrooms: Optional[int] = None
+    bathrooms: Optional[int] = None
+    description: Optional[str] = None
+    images: Optional[List[str]] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    agent_phone: Optional[str] = None
+    commission_pct: Optional[float] = 2.5  # % of price as agent commission
+
+
 # ====================================================================
 def register_engines(r: APIRouter, database, resolve_client, resolve_site_customer, realtime_mgr):
     """Register all vertical engines on the shared router.
@@ -466,6 +485,82 @@ def register_engines(r: APIRouter, database, resolve_client, resolve_site_custom
             {"$set": {"portfolios": pfs, "updated_at": _iso_now()}},
         )
         return {"ok": True, "trade": trade, "new_balance": pf["balance"]}
+
+    # ═══════════════════════════════════════════════════════════════
+    # 🆕 LISTINGS ENGINE — real estate
+    # ═══════════════════════════════════════════════════════════════
+    @r.get("/client/listings")
+    async def _list_listings(authorization: str = _Header(None)):
+        p = await resolve_client(authorization or "")
+        items = p.get("listings") or []
+        # Compute commission stats
+        total_value = sum(float(x.get("price") or 0) for x in items)
+        total_commission = sum(float(x.get("price") or 0) * float(x.get("commission_pct") or 2.5) / 100 for x in items)
+        sold = [x for x in items if x.get("sold")]
+        return {"listings": items, "stats": {
+            "total": len(items),
+            "active": len(items) - len(sold),
+            "sold": len(sold),
+            "total_value": round(total_value, 2),
+            "potential_commission": round(total_commission, 2),
+        }}
+
+    @r.post("/client/listings")
+    async def _add_listing(body: ListingIn, authorization: str = _Header(None)):
+        p = await resolve_client(authorization or "")
+        lst = body.model_dump()
+        lst["id"] = lst.get("id") or str(uuid.uuid4())
+        lst["created_at"] = _iso_now()
+        lst["sold"] = False
+        await database.website_projects.update_one(
+            {"id": p["id"]},
+            {"$push": {"listings": lst}, "$set": {"updated_at": _iso_now()}},
+        )
+        return {"ok": True, "listing": lst}
+
+    @r.put("/client/listings/{listing_id}")
+    async def _update_listing(listing_id: str, body: ListingIn, authorization: str = _Header(None)):
+        p = await resolve_client(authorization or "")
+        patch = {f"listings.$.{k}": v for k, v in body.model_dump(exclude_none=True).items() if k != "id"}
+        res = await database.website_projects.update_one(
+            {"id": p["id"], "listings.id": listing_id},
+            {"$set": {**patch, "updated_at": _iso_now()}},
+        )
+        if res.matched_count == 0:
+            raise HTTPException(404, "عقار غير موجود")
+        return {"ok": True}
+
+    @r.patch("/client/listings/{listing_id}/mark-sold")
+    async def _mark_sold(listing_id: str, authorization: str = _Header(None)):
+        p = await resolve_client(authorization or "")
+        await database.website_projects.update_one(
+            {"id": p["id"], "listings.id": listing_id},
+            {"$set": {"listings.$.sold": True, "listings.$.sold_at": _iso_now()}},
+        )
+        return {"ok": True}
+
+    @r.delete("/client/listings/{listing_id}")
+    async def _del_listing(listing_id: str, authorization: str = _Header(None)):
+        p = await resolve_client(authorization or "")
+        await database.website_projects.update_one(
+            {"id": p["id"]},
+            {"$pull": {"listings": {"id": listing_id}}, "$set": {"updated_at": _iso_now()}},
+        )
+        return {"ok": True}
+
+    @r.get("/public/{slug}/listings")
+    async def _public_listings(slug: str, transaction: Optional[str] = None, city: Optional[str] = None):
+        p = await database.website_projects.find_one(
+            {"slug": slug}, {"_id": 0, "listings": 1}
+        )
+        if not p:
+            raise HTTPException(404, "الموقع غير موجود")
+        items = [x for x in (p.get("listings") or []) if not x.get("sold")]
+        if transaction:
+            items = [x for x in items if x.get("transaction") == transaction]
+        if city:
+            items = [x for x in items if x.get("city") == city]
+        return {"listings": items}
 
     # ═══════════════════════════════════════════════════════════════
     # VERTICAL CATALOG

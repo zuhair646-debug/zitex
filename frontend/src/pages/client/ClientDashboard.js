@@ -834,7 +834,8 @@ function PaymentGatewaysTab({ token }) {
   const [gateways, setGateways] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
-  const [draft, setDraft] = useState({}); // per-provider form state
+  const [draft, setDraft] = useState({});
+  const [showCompare, setShowCompare] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -885,8 +886,14 @@ function PaymentGatewaysTab({ token }) {
     <div className="space-y-4" data-testid="payment-gateways-tab">
       <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/5 border border-blue-500/30 rounded-xl p-4">
         <h3 className="font-black text-blue-300 mb-1">💳 بوابات الدفع الخاصة بك</h3>
-        <p className="text-xs opacity-70">أدخل مفاتيح بوابات الدفع الخاصة بك هنا — ستُشفَّر قبل الحفظ. جميع المدفوعات تذهب مباشرة إلى حسابك.</p>
+        <p className="text-xs opacity-70 mb-3">أدخل مفاتيح بوابات الدفع الخاصة بك هنا — ستُشفَّر قبل الحفظ. جميع المدفوعات تذهب مباشرة إلى حسابك.</p>
+        <button onClick={() => setShowCompare(true)}
+          className="w-full py-2 bg-gradient-to-r from-blue-500/40 to-cyan-500/40 hover:from-blue-500/60 hover:to-cyan-500/60 border border-blue-400/40 rounded-lg font-black text-xs text-white"
+          data-testid="open-gw-compare">
+          📊 مقارنة تفصيلية بين كل البوابات (رسوم، تسوية، مميزات، عيوب)
+        </button>
       </div>
+      {showCompare && <GatewayCompareModal onClose={() => setShowCompare(false)} />}
 
       {gateways.map((g) => (
         <div key={g.id} className={`rounded-xl border p-4 ${g.enabled ? 'bg-green-500/5 border-green-500/30' : 'bg-white/3 border-white/10'}`} data-testid={`gateway-${g.id}`}>
@@ -1235,6 +1242,216 @@ function ProductsTab({ token }) {
   );
 }
 
+/* ================================================================
+   LISTINGS TAB — real estate agent's property list
+   ================================================================ */
+function ListingsTab({ token }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({
+    title: '', price: '', transaction: 'بيع', type: 'شقة',
+    city: '', district: '', area_sqm: '', bedrooms: '', bathrooms: '',
+    agent_phone: '', commission_pct: '2.5', description: '', images: '',
+  });
+  const [showForm, setShowForm] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`${API}/api/websites/client/listings`, { headers: authH(token) });
+      setData(await r.json());
+    } catch (_) {} finally { setLoading(false); }
+  }, [token]);
+  useEffect(() => { load(); }, [load]);
+
+  const save = async () => {
+    if (!form.title || !form.price || !form.agent_phone) {
+      toast.error('العنوان والسعر وهاتف الدلّال مطلوبة');
+      return;
+    }
+    try {
+      const body = {
+        ...form,
+        price: parseFloat(form.price),
+        area_sqm: form.area_sqm ? parseFloat(form.area_sqm) : null,
+        bedrooms: form.bedrooms ? parseInt(form.bedrooms) : null,
+        bathrooms: form.bathrooms ? parseInt(form.bathrooms) : null,
+        commission_pct: parseFloat(form.commission_pct) || 2.5,
+        images: form.images ? form.images.split(',').map((s) => s.trim()).filter(Boolean) : null,
+      };
+      await fetch(`${API}/api/websites/client/listings`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...authH(token) },
+        body: JSON.stringify(body),
+      });
+      toast.success('أُضيف العقار ✓');
+      setShowForm(false);
+      setForm({ ...form, title: '', price: '', city: '', district: '', area_sqm: '', bedrooms: '', bathrooms: '', description: '', images: '' });
+      load();
+    } catch (_) { toast.error('فشل'); }
+  };
+
+  const markSold = async (id) => {
+    await fetch(`${API}/api/websites/client/listings/${id}/mark-sold`, { method: 'PATCH', headers: authH(token) });
+    toast.success('تم تأشير العقار كمباع ✓');
+    load();
+  };
+  const del = async (id) => {
+    if (!window.confirm('حذف العقار؟')) return;
+    await fetch(`${API}/api/websites/client/listings/${id}`, { method: 'DELETE', headers: authH(token) });
+    load();
+  };
+
+  if (loading && !data) return <div className="text-center py-10 opacity-60">...</div>;
+  const s = data?.stats || {};
+  return (
+    <div data-testid="listings-tab" className="space-y-3">
+      {/* Commission / Stats Dashboard */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+        <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-center">
+          <div className="text-[10px] opacity-60">إجمالي العقارات</div>
+          <div className="text-lg font-black">{s.total || 0}</div>
+        </div>
+        <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-3 text-center">
+          <div className="text-[10px] opacity-60">نشطة</div>
+          <div className="text-lg font-black text-green-300">{s.active || 0}</div>
+        </div>
+        <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3 text-center">
+          <div className="text-[10px] opacity-60">مُباعة</div>
+          <div className="text-lg font-black text-blue-300">{s.sold || 0}</div>
+        </div>
+        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3 text-center">
+          <div className="text-[10px] opacity-60">عمولة متوقعة</div>
+          <div className="text-lg font-black text-yellow-300">{(s.potential_commission || 0).toLocaleString('ar-SA', { maximumFractionDigits: 0 })} ر.س</div>
+        </div>
+      </div>
+      <div className="text-[11px] opacity-60 text-center mb-2">💰 قيمة المحفظة الإجمالية: <b className="text-yellow-300">{(s.total_value || 0).toLocaleString('ar-SA')} ر.س</b></div>
+
+      <button onClick={() => setShowForm(!showForm)}
+        className="w-full py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-black rounded-lg font-black text-sm" data-testid="toggle-add-listing">
+        {showForm ? '× إغلاق' : '🏠 إضافة عقار جديد'}
+      </button>
+
+      {showForm && (
+        <div className="bg-white/3 border border-white/10 rounded-xl p-3 space-y-2">
+          <input placeholder="عنوان العقار" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })}
+            className="w-full px-3 py-2 bg-white/5 border border-white/15 rounded text-sm" data-testid="lst-title" />
+          <div className="grid grid-cols-2 gap-2">
+            <select value={form.transaction} onChange={(e) => setForm({ ...form, transaction: e.target.value })}
+              className="px-3 py-2 bg-white/5 border border-white/15 rounded text-sm">
+              <option value="بيع">بيع</option><option value="إيجار">إيجار</option>
+            </select>
+            <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}
+              className="px-3 py-2 bg-white/5 border border-white/15 rounded text-sm">
+              <option>شقة</option><option>فيلا</option><option>أرض</option><option>تجاري</option><option>مزرعة</option>
+            </select>
+            <input type="number" placeholder="السعر (ر.س)" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })}
+              className="px-3 py-2 bg-white/5 border border-white/15 rounded text-sm" data-testid="lst-price" />
+            <input type="number" placeholder="المساحة (م²)" value={form.area_sqm} onChange={(e) => setForm({ ...form, area_sqm: e.target.value })}
+              className="px-3 py-2 bg-white/5 border border-white/15 rounded text-sm" />
+            <input placeholder="المدينة" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })}
+              className="px-3 py-2 bg-white/5 border border-white/15 rounded text-sm" />
+            <input placeholder="الحي" value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })}
+              className="px-3 py-2 bg-white/5 border border-white/15 rounded text-sm" />
+            <input type="number" placeholder="غرف النوم" value={form.bedrooms} onChange={(e) => setForm({ ...form, bedrooms: e.target.value })}
+              className="px-3 py-2 bg-white/5 border border-white/15 rounded text-sm" />
+            <input type="number" placeholder="دورات المياه" value={form.bathrooms} onChange={(e) => setForm({ ...form, bathrooms: e.target.value })}
+              className="px-3 py-2 bg-white/5 border border-white/15 rounded text-sm" />
+            <input placeholder="واتساب الدلّال (+966...)" value={form.agent_phone} onChange={(e) => setForm({ ...form, agent_phone: e.target.value })}
+              className="px-3 py-2 bg-white/5 border border-white/15 rounded text-sm" />
+            <input type="number" step="0.1" placeholder="عمولة %" value={form.commission_pct} onChange={(e) => setForm({ ...form, commission_pct: e.target.value })}
+              className="px-3 py-2 bg-white/5 border border-white/15 rounded text-sm" />
+          </div>
+          <textarea rows={2} placeholder="الوصف" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
+            className="w-full px-3 py-2 bg-white/5 border border-white/15 rounded text-sm" />
+          <input placeholder="روابط صور مفصولة بفاصلة" value={form.images} onChange={(e) => setForm({ ...form, images: e.target.value })}
+            className="w-full px-3 py-2 bg-white/5 border border-white/15 rounded text-sm" />
+          <button onClick={save} className="w-full py-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-black rounded font-black text-sm" data-testid="lst-save">💾 حفظ العقار</button>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {(data?.listings || []).length === 0 && <div className="text-center py-8 opacity-60 text-sm">لا عقارات بعد</div>}
+        {(data?.listings || []).map((l) => {
+          const comm = (l.price || 0) * (l.commission_pct || 2.5) / 100;
+          return (
+            <div key={l.id} className={`border rounded-xl p-3 ${l.sold ? 'bg-blue-500/5 border-blue-500/20 opacity-70' : 'bg-white/3 border-white/10'}`} data-testid={`lst-${l.id}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-black text-sm">{l.title}</span>
+                    <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded-full">{l.transaction}</span>
+                    {l.sold && <span className="text-[10px] bg-blue-500/30 text-blue-200 px-2 py-0.5 rounded-full">✓ مُباع</span>}
+                  </div>
+                  <div className="text-yellow-300 font-black mb-1">{Number(l.price).toLocaleString('ar-SA')} ر.س</div>
+                  <div className="text-[11px] opacity-70">
+                    📍 {l.city} {l.district && `- ${l.district}`} · {l.area_sqm || '—'}م² · {l.bedrooms || '—'}🛏 · {l.bathrooms || '—'}🚿
+                  </div>
+                  <div className="text-[10px] text-emerald-300 mt-1">
+                    💰 عمولة متوقعة: {comm.toLocaleString('ar-SA', { maximumFractionDigits: 0 })} ر.س ({l.commission_pct || 2.5}%)
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  {!l.sold && <button onClick={() => markSold(l.id)} className="px-2 py-1 bg-blue-500/20 hover:bg-blue-500/30 rounded text-[10px] font-bold">✓ مُباع</button>}
+                  <button onClick={() => del(l.id)} className="px-2 py-1 bg-red-500/20 hover:bg-red-500/30 rounded text-[10px] font-bold">🗑</button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
+   GATEWAY COMPARE MODAL — detailed side-by-side comparison
+   ================================================================ */
+function GatewayCompareModal({ onClose }) {
+  const [rows, setRows] = useState([]);
+  useEffect(() => {
+    fetch(`${API}/api/websites/payment-gateways/compare`).then((r) => r.json()).then((d) => setRows(d.rows || []));
+  }, []);
+  return (
+    <div className="fixed inset-0 bg-black/85 z-[1100] flex items-center justify-center p-4" onClick={onClose} data-testid="gw-compare-modal">
+      <div onClick={(e) => e.stopPropagation()} className="bg-slate-900 text-white rounded-2xl max-w-5xl w-full max-h-[92vh] overflow-auto p-5 border border-white/10">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl md:text-2xl font-black">📊 مقارنة بوابات الدفع المدعومة</h2>
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20" data-testid="gw-compare-close">✕</button>
+        </div>
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-3">
+          {rows.map((r) => (
+            <div key={r.id} className="bg-white/5 border border-white/10 rounded-xl p-3 flex flex-col text-xs" data-testid={`gw-compare-${r.id}`}>
+              <div className="font-black text-base mb-1">{r.name_ar}</div>
+              <div className="opacity-70 text-[11px] mb-3 min-h-[32px]">{r.description_ar}</div>
+              <div className="space-y-2 flex-1">
+                <div className="bg-yellow-500/10 rounded p-2"><span className="opacity-60">الرسوم: </span><b>{r.fees}</b></div>
+                <div className="bg-green-500/10 rounded p-2"><span className="opacity-60">التسوية: </span><b>{r.settlement}</b></div>
+                <div className="bg-blue-500/10 rounded p-2"><span className="opacity-60">مناسبة لـ: </span>{r.best_for}</div>
+                <div className="bg-purple-500/10 rounded p-2"><span className="opacity-60">الترخيص: </span>{r.license}</div>
+                <div className="bg-cyan-500/10 rounded p-2"><span className="opacity-60">وقت الإعداد: </span>{r.setup_time}</div>
+                <div>
+                  <div className="font-bold text-green-300 mb-1">✅ مميزات</div>
+                  <ul className="pr-3 space-y-0.5 opacity-80">{(r.pros || []).map((p, i) => <li key={i}>• {p}</li>)}</ul>
+                </div>
+                <div>
+                  <div className="font-bold text-red-300 mb-1">⚠️ عيوب</div>
+                  <ul className="pr-3 space-y-0.5 opacity-80">{(r.cons || []).map((p, i) => <li key={i}>• {p}</li>)}</ul>
+                </div>
+              </div>
+              {r.signup_url && (
+                <a href={r.signup_url} target="_blank" rel="noreferrer"
+                  className="mt-3 block text-center py-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-black font-black rounded text-xs">
+                  🔗 سجّل الآن
+                </a>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LoyaltyTab({ token }) {  const [s, setS] = useState({ enabled: true, welcome_bonus: 50, points_per_sar: 1, redeem_rate: 0.1, referral_bonus: 100 });
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -1272,16 +1489,22 @@ function LoyaltyTab({ token }) {  const [s, setS] = useState({ enabled: true, we
 function LiveMapTab({ token, slug }) {
   const [data, setData] = useState(null);
   const [wsOnline, setWsOnline] = useState(false);
+  const [pendingOrders, setPendingOrders] = useState([]);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [assigning, setAssigning] = useState(false);
   const wsRef = useRef(null);
 
   const loadInitial = useCallback(async () => {
     try {
       const r = await fetch(`${API}/api/websites/client/live-map`, { headers: authH(token) });
       setData(await r.json());
+      // Also load pending orders (ones without driver)
+      const or = await fetch(`${API}/api/websites/client/orders`, { headers: authH(token) });
+      const od = await or.json();
+      setPendingOrders((od.orders || []).filter((o) => !o.driver_id && ['pending', 'accepted', 'preparing', 'ready'].includes(o.status)));
     } catch (_) {}
   }, [token]);
 
-  // Apply an incoming realtime event to state
   const applyEvent = useCallback((evt) => {
     if (!evt || !evt.type) return;
     setData((prev) => {
@@ -1290,16 +1513,13 @@ function LiveMapTab({ token, slug }) {
       if (evt.type === 'location') {
         const d = evt.data || {};
         const idx = next.drivers.findIndex((x) => x.id === d.driver_id);
-        if (idx >= 0) {
-          next.drivers[idx] = { ...next.drivers[idx], lat: d.lat, lng: d.lng };
-        } else {
-          next.drivers.push({ id: d.driver_id, name: d.driver_name, lat: d.lat, lng: d.lng });
-        }
+        if (idx >= 0) next.drivers[idx] = { ...next.drivers[idx], lat: d.lat, lng: d.lng, last_ping: d.at };
+        else next.drivers.push({ id: d.driver_id, name: d.driver_name, lat: d.lat, lng: d.lng, last_ping: d.at });
       } else if (evt.type === 'order_created') {
         const d = evt.data || {};
-        if (!next.orders.find((o) => o.id === d.order_id)) {
+        if (!next.orders.find((o) => o.id === d.order_id))
           next.orders.unshift({ id: d.order_id, customer: d.customer, total: d.total, lat: d.lat, lng: d.lng, status: d.status });
-        }
+        loadInitial();
       } else if (evt.type === 'order_status') {
         const d = evt.data || {};
         const idx = next.orders.findIndex((o) => o.id === d.order_id);
@@ -1307,91 +1527,163 @@ function LiveMapTab({ token, slug }) {
       }
       return next;
     });
-  }, []);
+  }, [loadInitial]);
 
   useEffect(() => {
     loadInitial();
     if (!slug || !token) return undefined;
     const wsUrl = `${API.replace(/^http/, 'ws')}/api/websites/ws/client/${slug}?token=${encodeURIComponent(token)}`;
-    let closedByUs = false;
-    let retryTimer = null;
-    let pingTimer = null;
-
+    let closedByUs = false, retryTimer = null, pingTimer = null;
     const connect = () => {
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
-      ws.onopen = () => {
-        setWsOnline(true);
-        pingTimer = setInterval(() => { try { ws.send('ping'); } catch (_) {} }, 25000);
-      };
-      ws.onmessage = (e) => {
-        try { applyEvent(JSON.parse(e.data)); } catch (_) {}
-      };
-      ws.onclose = () => {
-        setWsOnline(false);
-        if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
-        if (!closedByUs) {
-          retryTimer = setTimeout(connect, 3000);
-        }
-      };
+      ws.onopen = () => { setWsOnline(true); pingTimer = setInterval(() => { try { ws.send('ping'); } catch (_) {} }, 25000); };
+      ws.onmessage = (e) => { try { applyEvent(JSON.parse(e.data)); } catch (_) {} };
+      ws.onclose = () => { setWsOnline(false); if (pingTimer) { clearInterval(pingTimer); pingTimer = null; } if (!closedByUs) retryTimer = setTimeout(connect, 3000); };
       ws.onerror = () => { try { ws.close(); } catch (_) {} };
     };
     connect();
-    return () => {
-      closedByUs = true;
-      if (retryTimer) clearTimeout(retryTimer);
-      if (pingTimer) clearInterval(pingTimer);
-      if (wsRef.current) { try { wsRef.current.close(); } catch (_) {} }
-    };
+    return () => { closedByUs = true; if (retryTimer) clearTimeout(retryTimer); if (pingTimer) clearInterval(pingTimer); if (wsRef.current) try { wsRef.current.close(); } catch (_) {} };
   }, [slug, token, loadInitial, applyEvent]);
+
+  const assignDriver = async (orderId, driverId) => {
+    setAssigning(true);
+    try {
+      await fetch(`${API}/api/websites/client/orders/${orderId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authH(token) },
+        body: JSON.stringify({ driver_id: driverId, status: 'on_the_way' }),
+      });
+      toast.success('✅ تم تعيين السائق');
+      setSelectedOrder(null);
+      loadInitial();
+    } catch (_) { toast.error('فشل'); }
+    finally { setAssigning(false); }
+  };
 
   if (!data) return <div className="text-center py-10 opacity-60">...</div>;
 
   const center = data.base?.lat ? `${data.base.lat},${data.base.lng}` : (data.drivers[0] ? `${data.drivers[0].lat},${data.drivers[0].lng}` : '24.7136,46.6753');
   const [lat, lng] = center.split(',').map(parseFloat);
   const bbox = `${lng - 0.08}%2C${lat - 0.06}%2C${lng + 0.08}%2C${lat + 0.06}`;
-  const markers = [];
-  if (data.base?.lat) markers.push(`${data.base.lat},${data.base.lng}`);
-  data.drivers.forEach((d) => markers.push(`${d.lat},${d.lng}`));
-  data.orders.forEach((o) => markers.push(`${o.lat},${o.lng}`));
-  const osm = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik${markers.length ? `&marker=${markers[0]}` : ''}`;
+  const osm = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}`;
+  const minsSince = (iso) => iso ? Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000)) : null;
 
   return (
     <div data-testid="livemap-tab" className="space-y-3">
-      <div className="flex items-center justify-between text-[11px]">
+      {/* HEADER: WS status + command center title */}
+      <div className="flex items-center justify-between text-[11px] flex-wrap gap-2">
+        <h3 className="font-black text-base flex items-center gap-2">🚀 مركز قيادة السائقين</h3>
         <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full ${wsOnline ? 'bg-green-500/20 text-green-300' : 'bg-yellow-500/20 text-yellow-300'}`} data-testid="ws-status">
           <span className={`w-1.5 h-1.5 rounded-full ${wsOnline ? 'bg-green-400 animate-pulse' : 'bg-yellow-400'}`}></span>
           {wsOnline ? 'مباشر (WebSocket)' : 'إعادة الاتصال...'}
         </span>
       </div>
-      <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden" style={{ aspectRatio: '16/9' }}>
+
+      {/* KPI GRID */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div className="bg-gradient-to-br from-yellow-500/10 to-orange-500/5 border border-yellow-500/30 rounded-xl p-3 text-center">
+          <div className="text-[10px] opacity-60">المتجر</div>
+          <div className="text-lg font-black text-yellow-400">📍 {data.base?.city || 'الرياض'}</div>
+        </div>
+        <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/5 border border-green-500/30 rounded-xl p-3 text-center">
+          <div className="text-[10px] opacity-60">سائقون نشطون</div>
+          <div className="text-lg font-black text-green-400">🟢 {data.drivers.length}</div>
+        </div>
+        <div className="bg-gradient-to-br from-pink-500/10 to-rose-500/5 border border-pink-500/30 rounded-xl p-3 text-center">
+          <div className="text-[10px] opacity-60">طلبات فعّالة</div>
+          <div className="text-lg font-black text-pink-400">📦 {data.orders.length}</div>
+        </div>
+        <div className="bg-gradient-to-br from-orange-500/10 to-red-500/5 border border-orange-500/30 rounded-xl p-3 text-center">
+          <div className="text-[10px] opacity-60">بانتظار تعيين</div>
+          <div className="text-lg font-black text-orange-400">⏳ {pendingOrders.length}</div>
+        </div>
+      </div>
+
+      {/* LIVE MAP */}
+      <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden relative" style={{ aspectRatio: '16/9' }}>
         <iframe src={osm} className="w-full h-full" title="live-map" style={{ border: 0 }} data-testid="live-map-iframe" />
-      </div>
-      <div className="grid grid-cols-3 gap-2 text-center text-xs">
-        <div className="bg-white/5 rounded-lg p-2"><div className="text-lg font-black text-yellow-400">1</div><div className="opacity-60">المتجر</div></div>
-        <div className="bg-white/5 rounded-lg p-2"><div className="text-lg font-black text-cyan-400">{data.drivers.length}</div><div className="opacity-60">سائق نشط</div></div>
-        <div className="bg-white/5 rounded-lg p-2"><div className="text-lg font-black text-pink-400">{data.orders.length}</div><div className="opacity-60">طلب قيد التنفيذ</div></div>
-      </div>
-      <div className="bg-white/3 border border-white/10 rounded-xl p-3 text-xs">
-        <div className="font-black mb-2">🛵 السائقون:</div>
-        {data.drivers.length ? data.drivers.map((d) => (
-          <div key={d.id} className="flex items-center gap-2 py-1">
-            <span className="w-2 h-2 bg-green-400 rounded-full"></span>
-            <span className="font-bold">{d.name}</span>
-            <span className="opacity-60 text-[11px]">({d.lat?.toFixed(3)}, {d.lng?.toFixed(3)})</span>
+        {data.drivers.length > 0 && (
+          <div className="absolute bottom-2 left-2 right-2 bg-black/75 backdrop-blur-sm rounded-lg p-2 text-[11px]">
+            🛵 {data.drivers.map((d) => `${d.name} (${d.lat?.toFixed(3)}, ${d.lng?.toFixed(3)})`).join(' · ')}
           </div>
-        )) : <div className="opacity-60">لا سائق يشارك موقعه حالياً</div>}
+        )}
       </div>
-      <div className="bg-white/3 border border-white/10 rounded-xl p-3 text-xs">
-        <div className="font-black mb-2">📦 طلبات فعّالة:</div>
-        {data.orders.length ? data.orders.map((o) => (
-          <div key={o.id} className="flex items-center justify-between py-1">
-            <span><b>{o.customer}</b> · #{o.id.slice(0, 6)}</span>
-            <span className="text-yellow-400 font-bold">{o.total} ر.س</span>
+
+      {/* PENDING ORDERS — needs driver assignment */}
+      {pendingOrders.length > 0 && (
+        <div className="bg-orange-500/5 border border-orange-500/20 rounded-xl p-3">
+          <div className="font-black text-sm mb-2 text-orange-300">⏳ طلبات بانتظار سائق ({pendingOrders.length})</div>
+          <div className="space-y-2">
+            {pendingOrders.slice(0, 5).map((o) => (
+              <div key={o.id} className="bg-white/3 rounded-lg p-2 text-xs flex items-center justify-between gap-2" data-testid={`pending-${o.id}`}>
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold">#{o.id.slice(0, 6)} · {o.customer_name || o.customer || 'عميل'}</div>
+                  <div className="opacity-60 text-[10px]">{o.total} ر.س · {o.status}</div>
+                </div>
+                <button onClick={() => setSelectedOrder(o)}
+                  className="px-3 py-1 bg-orange-500/30 hover:bg-orange-500/50 rounded font-bold text-[10px]"
+                  data-testid={`assign-${o.id}`}>
+                  👤 عيّن سائق
+                </button>
+              </div>
+            ))}
           </div>
-        )) : <div className="opacity-60">لا طلبات قيد التنفيذ</div>}
+        </div>
+      )}
+
+      {/* DRIVERS DETAIL */}
+      <div className="bg-white/3 border border-white/10 rounded-xl p-3">
+        <div className="font-black text-sm mb-2">🛵 السائقون ({data.drivers.length})</div>
+        {data.drivers.length === 0 ? (
+          <div className="opacity-60 text-xs py-3 text-center">لا سائق يشارك موقعه حالياً — اطلب من السائقين تفعيل مشاركة الموقع من تطبيق السائق</div>
+        ) : (
+          <div className="space-y-1.5">
+            {data.drivers.map((d) => {
+              const m = minsSince(d.last_ping);
+              const fresh = m !== null && m < 3;
+              return (
+                <div key={d.id} className="flex items-center gap-2 bg-white/5 rounded-lg p-2 text-xs" data-testid={`driver-card-${d.id}`}>
+                  <span className={`w-2 h-2 rounded-full ${fresh ? 'bg-green-400 animate-pulse' : 'bg-yellow-400'}`}></span>
+                  <div className="flex-1">
+                    <div className="font-bold">{d.name}</div>
+                    <div className="opacity-60 text-[10px]">{d.lat?.toFixed(4)}, {d.lng?.toFixed(4)} · {m !== null ? `آخر تحديث قبل ${m} د` : 'لم يحدّث'}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
-      <div className="text-[10px] opacity-50 text-center">تحديثات فورية عبر WebSocket — لا حاجة لتحديث الصفحة</div>
+      <div className="text-[10px] opacity-50 text-center">🛰️ تحديثات فورية عبر WebSocket — لا حاجة للتحديث اليدوي</div>
+
+      {/* ASSIGN DRIVER MODAL */}
+      {selectedOrder && (
+        <div className="fixed inset-0 bg-black/80 z-[1100] flex items-center justify-center p-4" onClick={() => setSelectedOrder(null)} data-testid="assign-modal">
+          <div onClick={(e) => e.stopPropagation()} className="bg-slate-900 text-white rounded-2xl max-w-md w-full p-5 border border-white/10">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-black">تعيين سائق للطلب #{selectedOrder.id.slice(0, 6)}</h3>
+              <button onClick={() => setSelectedOrder(null)} className="w-8 h-8 rounded-full bg-white/10">✕</button>
+            </div>
+            <div className="text-xs opacity-70 mb-3">اختر السائق الأنسب:</div>
+            <div className="space-y-2 max-h-[50vh] overflow-auto">
+              {data.drivers.length === 0 ? (
+                <div className="text-center py-6 opacity-60 text-xs">لا سائقون متصلون حالياً</div>
+              ) : data.drivers.map((d) => (
+                <button key={d.id} onClick={() => assignDriver(selectedOrder.id, d.id)}
+                  disabled={assigning}
+                  className="w-full p-3 bg-white/5 hover:bg-white/10 rounded-lg text-right flex items-center justify-between disabled:opacity-50"
+                  data-testid={`pick-driver-${d.id}`}>
+                  <div>
+                    <div className="font-bold text-sm">{d.name}</div>
+                    <div className="text-[10px] opacity-60">{d.lat?.toFixed(3)}, {d.lng?.toFixed(3)}</div>
+                  </div>
+                  <span className="text-green-400">←</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1479,6 +1771,7 @@ function Dashboard({ slug, token, onLogout }) {
             const v = project?.vertical;
             const hasBookings = ['salon', 'pets', 'medical', 'gym'].includes(v);
             const hasProducts = v === 'ecommerce';
+            const hasListings = v === 'realestate';
             const hasOrders = ['restaurant', 'ecommerce'].includes(v) || !v;
             const base = [
               { id: 'overview', label: 'نظرة عامة', icon: BarChart3 },
@@ -1489,6 +1782,9 @@ function Dashboard({ slug, token, onLogout }) {
             }
             if (hasProducts) {
               base.push({ id: 'products', label: '📦 المنتجات', icon: Key });
+            }
+            if (hasListings) {
+              base.push({ id: 'listings', label: '🏠 العقارات', icon: MapPin });
             }
             if (hasOrders) {
               base.push({ id: 'orders', label: 'الطلبات', icon: MessageSquare });
@@ -1551,6 +1847,7 @@ function Dashboard({ slug, token, onLogout }) {
         {tab === 'bookings' && <BookingsTab token={token} />}
         {tab === 'services' && <ServicesTab token={token} />}
         {tab === 'products' && <ProductsTab token={token} />}
+        {tab === 'listings' && <ListingsTab token={token} />}
         {tab === 'livemap' && <LiveMapTab token={token} slug={slug} />}
         {tab === 'customers' && <CustomersTab token={token} />}
         {tab === 'drivers' && <DriversTab token={token} />}

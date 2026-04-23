@@ -1807,6 +1807,11 @@ def register_routes(app, database, auth_dep):
         """Public catalog (no auth) — used by the client dashboard UI."""
         return {"providers": pg.catalog_public()}
 
+    @r.get("/payment-gateways/compare")
+    async def _pg_compare():
+        """Detailed side-by-side comparison of all gateways (fees, settlement, pros/cons)."""
+        return {"rows": pg.compare_all()}
+
     @r.get("/client/payment-gateways")
     async def _client_pg_list(authorization: str = _Header(None)):
         p = await _resolve_client_project(authorization or "")

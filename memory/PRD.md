@@ -15,6 +15,56 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Feb 25, 2026 — VERTICAL SECTIONS + LISTINGS + COMMAND CENTER (P1 — COMPLETE)
+
+**1) Vertical-specific renderer sections** (`renderer.py`):
+- `booking_widget` — نموذج حجز تفاعلي (اختر خدمة → موظف → تاريخ → slot → بيانات → تأكيد). يجلب الخدمات من `/public/{slug}/services` ويستخدم `/availability` لعرض slots متاحة فقط. يعمل تلقائياً للصالون/الحيوانات/الطبي/الجيم.
+- `product_grid_filters` — شبكة منتجات تجارية مع فلاتر التصنيف + بحث فوري + أزرار "أضف للسلة" + تنبيه "آخر X قطعة". auto-refresh كل 60 ثانية.
+- `stock_ticker` — شريط أسعار لحظية scrolling أفقي مع أسهم ▲▼ بلون أخضر/أحمر. 10 رموز: Tadawul + NASDAQ + Crypto.
+- `listings_grid` — شبكة عقارات دلّال مع صور، فلتر "بيع/إيجار"، modal تفاصيل كامل مع زر واتساب للدلّال.
+
+**2) Real Estate Vertical (دلّال العقارات) كامل:**
+- `ListingsEngine` في `engines.py`: CRUD كامل (create/update/mark-sold/delete) + public listing API
+- كل عقار يحوي: `title, price, transaction (بيع/إيجار), type, city, district, area_sqm, bedrooms, bathrooms, images, agent_phone, commission_pct`
+- **حاسبة العمولات التلقائية** في dashboard stats: إجمالي المحفظة + عمولة متوقعة = Σ(price × commission_pct/100)
+- `ListingsTab` UI: نموذج إضافة شامل + بطاقة لكل عقار مع عرض العمولة المتوقعة + زر "✓ مُباع" لتأشير البيع
+- **E2E verified**: فيلا 2.5 مليون ر.س → عمولة متوقعة 62,500 ر.س (2.5%) ✓
+
+**3) Driver Command Center (مركز قيادة السائقين) — حصري ومطور:**
+- عنوان "🚀 مركز قيادة السائقين" + badge WebSocket حي
+- 4 بطاقات KPI ملوّنة: موقع المتجر + سائقون نشطون + طلبات فعّالة + **طلبات بانتظار تعيين**
+- قسم **"⏳ طلبات بانتظار سائق"** يعرض كل الطلبات التي بلا driver_id مع زر **"👤 عيّن سائق"**
+- Modal اختيار السائق يفتح قائمة السائقين المتصلين ويعيّن بنقرة واحدة (PATCH /client/orders/{id})
+- قسم السائقين محسّن: شارة خضراء نابضة للتحديثات الحديثة (<3 دقائق) + "آخر تحديث قبل X د" لكل سائق
+
+**4) Payment Gateway Comparison (شرح تفصيلي):**
+- `GET /api/websites/payment-gateways/compare` — 4 مزودين مع رسوم/تسوية/مناسبة لـ/مميزات/عيوب/ترخيص/وقت إعداد
+- `GatewayCompareModal` في `ClientDashboard`: 4 بطاقات جنباً إلى جنب تفتح بزر "📊 مقارنة تفصيلية" داخل تبويب الدفع
+- محتوى ثري: Moyasar (2.5%, ساما), Tabby (4-6%, دفع فوري للتاجر), Tamara (5-7%, 30 يوم)، COD (0%, مجاني)
+- كل بطاقة بها روابط signup_url + pros/cons + currencies + license + setup_time
+
+**Files added**:
+- في `engines.py`: `ListingsEngine` endpoints (`/client/listings`, `/public/{slug}/listings`, `mark-sold`)
+- في `payment_gateways.py`: `compare_all()` + بيانات comparison لكل مزود
+- في `renderer.py`: 4 sections جديدة (`_section_booking_widget`, `_section_product_grid_filters`, `_section_stock_ticker`, `_section_listings_grid`)
+- في `ClientDashboard.js`: `ListingsTab`, `GatewayCompareModal`, تطوير كامل لـ`LiveMapTab` بمركز القيادة
+
+**New vertical ideas** (للجلسات القادمة):
+- 💇‍♀️ **صالون نساء** — مشابه للصالون العام لكن بـcategories (تجميل/سبا/حناء)
+- 🍰 **مخبز/حلويات** — طلبات خاصة + مناسبات (كيك جاتوه)
+- 🚗 **غسيل سيارات متنقل** — حجز مع موقع العميل + أنواع (عادي/تلميع/تنظيف داخلي)
+- 🏊 **نوادي رياضية** — حجز ملاعب + اشتراكات زمنية
+- 📚 **مكتبة/قرطاسية** — كتب + مستلزمات + تصفح بـISBN
+- 🎨 **معارض فنية** — لوحات للبيع + جولة افتراضية + sold out status
+- 🛠️ **فني صيانة** — حجز زيارة منزلية + أنواع خدمات (كهرباء/سباكة) + تقدير سعر
+- 💍 **مجوهرات** — كتالوج ثمين + أسعار ذهب لحظية + حاسبة شراء
+
+**Tool flexibility roadmap** (قيد التخطيط للجلسة القادمة):
+- `style_variant` لكل widget: السلة بـ3 أشكال (مستطيلة/دائرية/باقة), الخريطة بـ3 ألوان (فاتح/غامق/satellite), زر الدفع بـ4 أنماط
+- `position` قابل للتحريك: top-left/top-right/bottom-left/bottom-right/fixed-custom (x,y)
+- Drag-and-drop بسيط في الـstudio للمعاينة المباشرة قبل الحفظ
+
+
 ### 🆕 Feb 24, 2026 — PORTFOLIO WIDGET + Tabby/Tamara FULL INTEGRATION (P1 — COMPLETE)
 
 #### A) Portfolio Trading Widget (for stocks vertical)
