@@ -15,6 +15,73 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Feb 26, 2026 (Evening) — TEMPLATE ARCHETYPES REWRITE (P0 — COMPLETE)
+
+**المشكلة قبل التغيير**: النظام القديم كان يُولّد ~120 "layout" لكل فئة عبر ضرب hero × arrangement × 3 ألوان، والنتيجة: قوالب متشابهة هيكلياً مع ألوان مختلفة فقط. المستخدم طلب صراحة: **"قوالب مختلفة تماماً في الشكل، لا علاقة لها بالألوان"**.
+
+**الحل** — ملفان جديدان:
+
+**1) `template_archetypes.py`** — 20 archetype هيكلي فريد:
+| # | id | الاسم | الكثافة | المميز |
+|---|----|------|--------|--------|
+| 1 | `classic_stack` | كلاسيكي متراكم | comfortable | hero مركزي → about → features → grid |
+| 2 | `magazine` | أسلوب المجلة | dense | timeline + masonry + quote |
+| 3 | `split_screen` | شاشة مقسّمة | comfortable | hero مقسوم + features متناوبة |
+| 4 | `longform_story` | قصة طويلة | spacious | timeline 5 + steps + quotes |
+| 5 | `gallery_first` | المعرض أولاً | visual | gallery strip كبيرة فوق |
+| 6 | `minimal_portrait` | عمودي بسيط | minimal | 4 أقسام فقط، فاخر |
+| 7 | `bold_banner` | بانر جريء | bold | stats + pricing + CTA قوي |
+| 8 | `card_stack` | بطاقات متراصة | carded | كل قسم بطاقة |
+| 9 | `asymmetric` | غير متماثل | creative | شبكات منزاحة + quote وسط |
+| 10 | `services_showcase` | عرض الخدمات | focused | grid كبير + steps + team |
+| 11 | `booking_first` | الحجز أولاً | action | نموذج حجز أعلى الصفحة |
+| 12 | `process_steps` | الخطوات | educational | 5 خطوات مرقمة + FAQ |
+| 13 | `team_centric` | الفريق في القلب | human | team circles كبيرة |
+| 14 | `reviews_driven` | تقودها الآراء | trust | testimonials quote-big أعلى |
+| 15 | `pricing_table` | جدول الأسعار | comparative | جدول مقارنة SaaS-style |
+| 16 | `faq_heavy` | أسئلة كثيفة | informational | FAQ 10 أسئلة |
+| 17 | `stats_numbers` | الأرقام | corporate | 4 stats كبيرة + achievements |
+| 18 | `location_map` | الموقع والخريطة | local | خريطة كبيرة + ساعات |
+| 19 | `newsletter_first` | النشرة البريدية | lead | newsletter capture مبكراً |
+| 20 | `product_dense` | منتجات كثيفة | catalog | Pinterest grid + فلاتر |
+
+**2) `category_content.py`** — CATEGORY_CONFIG لكل فئة (20 فئة):
+- hero_title/subtitle/image/cta خاصة لكل فئة
+- `primary_grid` = menu (مطاعم/كوفي) | products (متاجر/مكتبة/مجوهرات/معارض/مخبز) | services (خدمات)
+- resolve_placeholder() يملأ كل section placeholder بالمحتوى المناسب
+
+**النتيجة**:
+- 20 فئة × 20 archetype = **400 template فريد هيكلياً**
+- نفس الـarchetype في فئتين مختلفتين يُنتج محتوى مختلف كلياً (restaurant `classic_stack` → menu sections، jewelry `classic_stack` → products sections)
+- كل الـarchetypes تستخدم **NEUTRAL_THEME** (ذهبي/كحلي افتراضي) — لا ألوان في مرحلة الاختيار
+
+**3) Phase 2 — اختيار الألوان بعد القالب**:
+- `GET /api/websites/palettes` → 10 palettes (classic/modern/warm/minimal/luxury/playful/nature/bold/pastel/dark_pro)
+- `POST /projects/{id}/apply-palette` `{palette_id}` → يُحدّث theme فقط بدون لمس sections + auto-snapshot
+- **UI**: `PalettePickerModal` يفتح تلقائياً بعد `confirmLayout()` + زر 🎨 الألوان دائم في topbar (pink/purple gradient)
+- 3 swatches كبيرة لكل palette + font hint + Check badge للمُختار حالياً
+
+**4) LayoutBrowser UI محدّث**:
+- كروت الـsidebar تعرض الآن `density` badge + `hero_layout` badge + `sections_count` بدل color dots (لأن كل الـarchetypes نفس اللون الافتراضي)
+- iframe preview يعرض اختلافات هيكلية حقيقية (تم التحقق: HTML sizes 32KB-36KB تختلف بين archetypes = proof structure differs)
+
+**E2E verified (Feb 26, 2026 late)**:
+- ✅ 54/54 backend tests + 100% frontend
+- ✅ 20 layouts × 20 categories = 400 templates (منها 20 × 2 = 40 للمقارنة بين fatت)
+- ✅ archetype_id موحد بين الفئات، المحتوى يتغير (menu vs products vs services)
+- ✅ apply-palette يبدّل الألوان فوراً بدون لمس sections + snapshot تلقائي
+- ✅ No regressions (orders, bookings, payments, widgets, section variants, snapshots)
+
+**Files added**:
+- `/app/backend/modules/websites/template_archetypes.py`
+- `/app/backend/modules/websites/category_content.py`
+
+**Files modified**:
+- `/app/backend/modules/websites/catalog.py` — `list_layouts()` rewritten (removed HERO_LAYOUTS × ARRANGEMENTS × STYLES multiplication)
+- `/app/backend/modules/websites/routes.py` — layouts endpoint enriched metadata + fallback for categories w/o base templates + `/palettes` + `/apply-palette`
+- `/app/frontend/src/pages/websites/WebsiteStudio.js` — LayoutBrowser density badges + PalettePickerModal + auto-open after confirmLayout + topbar 🎨 button
+
+
 ### 🆕 Feb 26, 2026 (late) — 8 NEW VERTICALS + IMAGE-RICH CATEGORY PICKER (P2 — COMPLETE)
 
 **1) 8 New Verticals** (`verticals.py` + `catalog.py` + routes mapping):
