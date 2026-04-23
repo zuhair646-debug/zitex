@@ -26,6 +26,7 @@ from .wizard import (
 )
 from .realtime import realtime
 from . import payment_gateways as pg
+from . import widget_styles as wx
 
 logger = logging.getLogger(__name__)
 
@@ -1811,6 +1812,49 @@ def register_routes(app, database, auth_dep):
     async def _pg_compare():
         """Detailed side-by-side comparison of all gateways (fees, settlement, pros/cons)."""
         return {"rows": pg.compare_all()}
+
+    # ═══════════════════════════════════════════════════════════════
+    # 🎨 WIDGET CUSTOMIZATION — variants + position per widget per site
+    # ═══════════════════════════════════════════════════════════════
+    @r.get("/widget-styles/catalog")
+    async def _widget_catalog():
+        """Public catalog of all customizable widgets + their variants."""
+        return {"widgets": wx.catalog(), "positions": list(wx.POSITIONS.keys())}
+
+    @r.get("/client/widget-styles")
+    async def _client_ws(authorization: str = _Header(None)):
+        p = await _resolve_client_project(authorization or "")
+        return {"widget_styles": p.get("widget_styles") or {}}
+
+    class WidgetStyleIn(BaseModel):
+        variant: Optional[str] = None
+        position: Optional[str] = None
+        offset_x: Optional[int] = 0
+        offset_y: Optional[int] = 0
+        hidden: Optional[bool] = False
+
+    @r.put("/client/widget-styles/{widget_id}")
+    async def _save_ws(widget_id: str, body: WidgetStyleIn, authorization: str = _Header(None)):
+        if widget_id not in wx.WIDGETS:
+            raise HTTPException(404, "ودجت غير معروفة")
+        if body.position and body.position not in wx.POSITIONS:
+            raise HTTPException(400, "موقع غير صالح")
+        p = await _resolve_client_project(authorization or "")
+        await database.website_projects.update_one(
+            {"id": p["id"]},
+            {"$set": {f"widget_styles.{widget_id}": body.model_dump(exclude_none=False),
+                      "updated_at": _iso_now()}},
+        )
+        return {"ok": True}
+
+    @r.delete("/client/widget-styles/{widget_id}")
+    async def _reset_ws(widget_id: str, authorization: str = _Header(None)):
+        p = await _resolve_client_project(authorization or "")
+        await database.website_projects.update_one(
+            {"id": p["id"]},
+            {"$unset": {f"widget_styles.{widget_id}": ""}, "$set": {"updated_at": _iso_now()}},
+        )
+        return {"ok": True}
 
     @r.get("/client/payment-gateways")
     async def _client_pg_list(authorization: str = _Header(None)):

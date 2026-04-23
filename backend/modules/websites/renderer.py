@@ -2,6 +2,7 @@
 Pure deterministic rendering — no AI drift. Each section type has its own renderer."""
 from typing import Dict, Any, List
 import html as _html
+from .widget_styles import get_styles_css as _widget_css
 
 
 def _esc(s: Any) -> str:
@@ -1355,5 +1356,6 @@ def render_website_to_html(project: Dict[str, Any]) -> str:
 {''.join(body_parts)}
 {_auth_and_commerce_overlay(project.get('slug'))}
 {_portfolio_overlay(project.get('slug')) if project.get('vertical') == 'stocks' else ''}
+{_widget_css(project)}
 </body>
 </html>"""

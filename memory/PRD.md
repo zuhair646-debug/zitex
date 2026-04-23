@@ -15,6 +15,48 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Feb 25, 2026 (late) — WIDGET CUSTOMIZER COMPLETE (P1 — CORE FLEXIBILITY)
+
+**الهدف**: كل أداة في الموقع يمكن للعميل تخصيصها بالكامل — الشكل، الموقع، الإخفاء، التحريك الدقيق.
+
+**7 أدوات قابلة للتخصيص** (`modules/websites/widget_styles.py`):
+1. 👤 **زر الحساب** — 4 أشكال (كلاسيكي/كبسولة/مربع/شفاف)
+2. 🛒 **سلة التسوق** — **5 أشكال** (كلاسيكي/كبسولة/مربع/شفاف/**نيون متوهّج**)
+3. 📈 **المحفظة** (للأسهم) — 4 أشكال (أزرق/كبسولة/ثور أخضر/مبسّط)
+4. 💬 **واتساب** — 4 أشكال (كلاسيكي/كبسولة مع نص/مربع/بسيط)
+5. ⬆ **العودة للأعلى** — 3 أشكال
+6. 📅 **زر الحجز** (للصالون/عيادة) — 3 أشكال
+7. 📣 **شريط الإعلانات** — 4 أشكال (متدرج ذهبي/داكن/بسيط/**احتفالي متحرك**)
+
+**6 مواقع قابلة للاختيار** لكل أداة: أعلى-يسار، أعلى-يمين، أسفل-يسار، أسفل-يمين، وسط-يسار، وسط-يمين + **تحريك دقيق بالـpx** (offset_x / offset_y).
+
+**CSS Injection**: `get_styles_css(project)` يُنشئ `<style>` block في نهاية `<body>` يتجاوز CSS الأصلي باستخدام ID selectors. الـkeyframes للـneon/festive مضمّنة.
+
+**API الجديدة** (`modules/websites/routes.py`):
+- `GET /widget-styles/catalog` (public) — قائمة كل الأدوات + variants + positions
+- `GET /client/widget-styles` — إعدادات المستأجر الحالية
+- `PUT /client/widget-styles/{widget_id}` — حفظ style لأداة واحدة `{variant, position, offset_x, offset_y, hidden}`
+- `DELETE /client/widget-styles/{widget_id}` — إعادة للافتراضي
+
+**`WidgetCustomizerTab`** في لوحة العميل:
+- بطاقة لكل أداة مع: 🎨 أزرار Variants (وهج ذهبي للمحدد) + 📍 شبكة مواقع (بنفسجي للمحدد) + حقلي offset بالـpx + checkbox "إخفاء" + زر "↺ افتراضي"
+- رابط "👁️ اعرض موقعك في تبويب جديد للمعاينة" — تطبيق فوري بلا reload
+
+**E2E verified**:
+- ✅ حفظ cart=neon + top-right → HTML يحوي `#zx-cart-fab{width:52px...background:#000;color:#00ff88;border:2px solid #00ff88;...}`
+- ✅ تعيين auth=hidden → HTML يحوي `#zx-auth-fab{display:none !important;}`
+- ✅ إعادة للافتراضي (DELETE) → الأنماط تختفي من الـHTML
+- ✅ UI مكتملة عربية RTL بكل البطاقات والأزرار
+
+**Files added**:
+- `/app/backend/modules/websites/widget_styles.py` — registry + CSS generator
+
+**Files modified**:
+- `/app/backend/modules/websites/routes.py` — 4 endpoints جديدة
+- `/app/backend/modules/websites/renderer.py` — حقن CSS block في `</body>`
+- `/app/frontend/src/pages/client/ClientDashboard.js` — `WidgetCustomizerTab` + تبويب "🎨 الأدوات"
+
+
 ### 🆕 Feb 25, 2026 — VERTICAL SECTIONS + LISTINGS + COMMAND CENTER (P1 — COMPLETE)
 
 **1) Vertical-specific renderer sections** (`renderer.py`):

@@ -1452,6 +1452,144 @@ function GatewayCompareModal({ onClose }) {
   );
 }
 
+/* ================================================================
+   WIDGET CUSTOMIZER TAB — per-widget variant + position picker
+   ================================================================ */
+function WidgetCustomizerTab({ token, slug }) {
+  const [catalog, setCatalog] = useState(null);
+  const [styles, setStyles] = useState({});
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [cat, mine] = await Promise.all([
+        fetch(`${API}/api/websites/widget-styles/catalog`).then((r) => r.json()),
+        fetch(`${API}/api/websites/client/widget-styles`, { headers: authH(token) }).then((r) => r.json()),
+      ]);
+      setCatalog(cat);
+      setStyles(mine.widget_styles || {});
+    } catch (_) {} finally { setLoading(false); }
+  }, [token]);
+  useEffect(() => { load(); }, [load]);
+
+  const save = async (wid, patch) => {
+    const next = { ...(styles[wid] || {}), ...patch };
+    setStyles((s) => ({ ...s, [wid]: next }));
+    try {
+      await fetch(`${API}/api/websites/client/widget-styles/${wid}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json', ...authH(token) },
+        body: JSON.stringify(next),
+      });
+      toast.success('✓');
+    } catch (_) { toast.error('فشل الحفظ'); }
+  };
+
+  const reset = async (wid) => {
+    await fetch(`${API}/api/websites/client/widget-styles/${wid}`, { method: 'DELETE', headers: authH(token) });
+    setStyles((s) => { const n = { ...s }; delete n[wid]; return n; });
+    toast.success('استُعيد الافتراضي');
+  };
+
+  if (loading) return <div className="text-center py-10 opacity-60">...</div>;
+  const posLabels = { 'top-left': '⬉ أعلى يسار', 'top-right': '⬈ أعلى يمين', 'bottom-left': '⬋ أسفل يسار', 'bottom-right': '⬌ أسفل يمين', 'middle-left': '◧ وسط يسار', 'middle-right': '◨ وسط يمين' };
+
+  return (
+    <div data-testid="widget-customizer-tab" className="space-y-4">
+      <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/5 border border-purple-500/30 rounded-xl p-4">
+        <h3 className="font-black text-purple-300 mb-1">🎨 تخصيص الأدوات</h3>
+        <p className="text-xs opacity-70">اختر شكل كل أداة، مكان ظهورها على الموقع، أو أخفِها تماماً. التغييرات تظهر مباشرة في موقعك.</p>
+        <a href={`/sites/${slug}`} target="_blank" rel="noreferrer"
+          className="mt-2 inline-block text-xs text-purple-300 underline" data-testid="preview-link">
+          👁️ اعرض موقعك في تبويب جديد للمعاينة
+        </a>
+      </div>
+
+      {(catalog?.widgets || []).map((w) => {
+        const cur = styles[w.id] || {};
+        const curVariant = cur.variant || (w.variants[0] && w.variants[0].id);
+        const curPos = cur.position || w.default_pos;
+        const hidden = !!cur.hidden;
+        return (
+          <div key={w.id} className={`rounded-xl border p-4 ${hidden ? 'bg-red-500/5 border-red-500/20 opacity-75' : 'bg-white/3 border-white/10'}`} data-testid={`wid-${w.id}`}>
+            <div className="flex items-start justify-between gap-2 mb-3">
+              <div className="flex-1">
+                <h4 className="font-black text-sm">{w.name_ar}</h4>
+                <p className="text-[11px] opacity-60">{w.description_ar}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                  <input type="checkbox" checked={hidden} onChange={(e) => save(w.id, { hidden: e.target.checked })}
+                    data-testid={`wid-${w.id}-hide`} />
+                  <span className="opacity-75">إخفاء</span>
+                </label>
+                <button onClick={() => reset(w.id)} className="text-[10px] text-yellow-300 hover:underline"
+                  data-testid={`wid-${w.id}-reset`}>↺ افتراضي</button>
+              </div>
+            </div>
+
+            {!hidden && (
+              <>
+                {/* VARIANTS */}
+                <div className="mb-3">
+                  <label className="text-[11px] opacity-70 block mb-1.5">🎨 الشكل</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {w.variants.map((v) => (
+                      <button key={v.id}
+                        onClick={() => save(w.id, { variant: v.id })}
+                        className={`px-3 py-1.5 rounded-lg text-[11px] font-bold ${curVariant === v.id ? 'bg-gradient-to-r from-yellow-400 to-orange-500 text-black' : 'bg-white/5 hover:bg-white/10'}`}
+                        data-testid={`wid-${w.id}-variant-${v.id}`}>
+                        {v.name_ar}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* POSITIONS */}
+                {w.supports_position && (
+                  <div className="mb-3">
+                    <label className="text-[11px] opacity-70 block mb-1.5">📍 الموقع</label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {(catalog?.positions || []).map((p) => (
+                        <button key={p}
+                          onClick={() => save(w.id, { position: p })}
+                          className={`px-2 py-1.5 rounded text-[11px] font-bold ${curPos === p ? 'bg-purple-500 text-white' : 'bg-white/5 hover:bg-white/10'}`}
+                          data-testid={`wid-${w.id}-pos-${p}`}>
+                          {posLabels[p] || p}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* OFFSETS — fine nudge */}
+                {w.supports_position && (
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <div>
+                      <label className="text-[10px] opacity-60 block">تحريك أفقي (px)</label>
+                      <input type="number" value={cur.offset_x || 0}
+                        onChange={(e) => save(w.id, { offset_x: parseInt(e.target.value) || 0 })}
+                        className="w-full px-2 py-1 bg-white/5 border border-white/15 rounded text-sm"
+                        data-testid={`wid-${w.id}-ox`} />
+                    </div>
+                    <div>
+                      <label className="text-[10px] opacity-60 block">تحريك عمودي (px)</label>
+                      <input type="number" value={cur.offset_y || 0}
+                        onChange={(e) => save(w.id, { offset_y: parseInt(e.target.value) || 0 })}
+                        className="w-full px-2 py-1 bg-white/5 border border-white/15 rounded text-sm"
+                        data-testid={`wid-${w.id}-oy`} />
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function LoyaltyTab({ token }) {  const [s, setS] = useState({ enabled: true, welcome_bonus: 50, points_per_sar: 1, redeem_rate: 0.1, referral_bonus: 100 });
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -1795,6 +1933,7 @@ function Dashboard({ slug, token, onLogout }) {
             base.push(
               { id: 'customers', label: 'العملاء', icon: Users },
               { id: 'payments', label: '💳 الدفع', icon: Key },
+              { id: 'widgets', label: '🎨 الأدوات', icon: Key },
               { id: 'coupons', label: '🎟️ كوبونات', icon: Key },
               { id: 'loyalty', label: '🎁 النقاط', icon: CheckCircle2 },
               { id: 'edit', label: 'المحتوى', icon: Edit3 },
@@ -1853,6 +1992,7 @@ function Dashboard({ slug, token, onLogout }) {
         {tab === 'drivers' && <DriversTab token={token} />}
         {tab === 'delivery' && <DeliverySettingsTab token={token} slug={slug} />}
         {tab === 'payments' && <PaymentGatewaysTab token={token} />}
+        {tab === 'widgets' && <WidgetCustomizerTab token={token} slug={slug} />}
         {tab === 'coupons' && <CouponsTab token={token} />}
         {tab === 'loyalty' && <LoyaltyTab token={token} />}
 
