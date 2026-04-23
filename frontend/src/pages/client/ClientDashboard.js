@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import {
   LogIn, Eye, EyeOff, LogOut, ExternalLink, Users, MessageSquare, BarChart3,
   Edit3, Save, X, RefreshCw, Check, Key, CheckCircle2, Copy, Lock, MapPin,
+  Palette, History, RotateCcw, Trash2,
 } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -124,6 +125,18 @@ function SectionsEditor({ project, token, onUpdated }) {
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState({});
   const [busy, setBusy] = useState(false);
+  const [variantFor, setVariantFor] = useState(null); // section being styled
+  const [catalog, setCatalog] = useState({});
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch(`${API}/api/websites/section-variants/catalog`);
+        const d = await r.json();
+        setCatalog(d.catalog || {});
+      } catch (_) {}
+    })();
+  }, []);
 
   const startEdit = (s) => {
     setEditingId(s.id);
@@ -160,6 +173,21 @@ function SectionsEditor({ project, token, onUpdated }) {
     finally { setBusy(false); }
   };
 
+  const applyVariant = async (s, variantId) => {
+    setBusy(true);
+    try {
+      await fetch(`${API}/api/websites/client/sections/${s.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authH(token) },
+        body: JSON.stringify({ data: { style: variantId } }),
+      });
+      toast.success('تم تغيير الشكل — شاهد الموقع للمعاينة');
+      setVariantFor(null);
+      onUpdated();
+    } catch (_) { toast.error('فشل التطبيق'); }
+    finally { setBusy(false); }
+  };
+
   const EDITABLE_FIELDS = ['title', 'subtitle', 'text', 'cta_text', 'brand', 'description', 'address'];
 
   return (
@@ -177,6 +205,11 @@ function SectionsEditor({ project, token, onUpdated }) {
                 {s.visible === false && <span className="text-[10px] px-1.5 py-0.5 bg-red-500/20 text-red-300 rounded">مخفي</span>}
               </div>
               <div className="flex gap-1">
+                {catalog[s.type] && (
+                  <button onClick={() => setVariantFor(s)} className="p-1.5 hover:bg-white/10 rounded-lg text-purple-300" title="غيّر الشكل" data-testid={`variant-btn-${s.type}`}>
+                    <Palette className="w-4 h-4" />
+                  </button>
+                )}
                 <button onClick={() => toggleVisible(s)} disabled={busy} className="p-1.5 hover:bg-white/10 rounded-lg text-xs" title={s.visible === false ? 'إظهار' : 'إخفاء'} data-testid={`toggle-visible-${s.type}`}>
                   {s.visible === false ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                 </button>
@@ -215,6 +248,40 @@ function SectionsEditor({ project, token, onUpdated }) {
           </div>
         );
       })}
+
+      {/* 🎨 Variant picker modal */}
+      {variantFor && (() => {
+        const entry = catalog[variantFor.type];
+        const currentStyle = (variantFor.data || {}).style || entry?.variants?.[0]?.id;
+        return (
+          <div className="fixed inset-0 z-[10000] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setVariantFor(null)} data-testid="variant-modal">
+            <div onClick={(e) => e.stopPropagation()} className="bg-[#0e1128] border border-purple-500/30 rounded-2xl p-5 md:p-6 max-w-2xl w-full shadow-[0_30px_80px_rgba(168,85,247,0.2)]">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold flex items-center gap-2"><Palette className="w-5 h-5 text-purple-400" />شكل قسم "{entry?.label || variantFor.type}"</h3>
+                <button onClick={() => setVariantFor(null)} className="p-1 hover:bg-white/10 rounded-lg"><X className="w-5 h-5" /></button>
+              </div>
+              <div className="text-xs opacity-70 mb-4">اختر الشكل الذي يعجبك — يُطبَّق فوراً على موقعك (وتنحفظ نسخة قبل التغيير تقدر ترجعلها).</div>
+              <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {(entry?.variants || []).map((v) => {
+                  const active = v.id === currentStyle;
+                  return (
+                    <button
+                      key={v.id}
+                      onClick={() => applyVariant(variantFor, v.id)}
+                      disabled={busy}
+                      className={`text-right p-4 rounded-xl border-2 transition ${active ? 'bg-purple-500/20 border-purple-500 shadow-[0_0_20px_rgba(168,85,247,0.3)]' : 'bg-white/3 border-white/10 hover:border-purple-400/50 hover:bg-white/6'}`}
+                      data-testid={`variant-${variantFor.type}-${v.id}`}
+                    >
+                      <div className="font-bold mb-1 flex items-center gap-2">{v.label} {active && <Check className="w-3.5 h-3.5 text-purple-400" />}</div>
+                      <div className="text-xs opacity-70 leading-relaxed">{v.description}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -1455,6 +1522,151 @@ function GatewayCompareModal({ onClose }) {
 /* ================================================================
    WIDGET CUSTOMIZER TAB — per-widget variant + position picker
    ================================================================ */
+/* ================================================================
+   🖱️ DRAG-POSITION CANVAS — mini-screen with draggable widget chip
+   Translates a free drag into nearest anchor + precise offset.
+   ================================================================ */
+function DragPositionCanvas({ widget, position, offsetX, offsetY, onChange }) {
+  const ref = React.useRef(null);
+  const [drag, setDrag] = React.useState(null); // { x, y } in canvas-local px
+  const [dims, setDims] = React.useState({ w: 320, h: 180 });
+
+  // Map anchor to (left%, top%) of the canvas
+  const anchorXY = (anchor) => {
+    const m = {
+      'top-left': [0.08, 0.12], 'top-right': [0.92, 0.12],
+      'bottom-left': [0.08, 0.88], 'bottom-right': [0.92, 0.88],
+      'middle-left': [0.08, 0.5], 'middle-right': [0.92, 0.5],
+    };
+    return m[anchor] || [0.92, 0.88];
+  };
+
+  // Current widget position inside canvas (in px)
+  const [ax, ay] = anchorXY(position);
+  const baseX = ax * dims.w;
+  const baseY = ay * dims.h;
+  // Scale offsets — real widget offsets are in px relative to a full screen (~1000×700)
+  // so we scale down by ~3× for the mini canvas. This gives user a sense of direction.
+  const scale = 0.25;
+  const dispX = drag ? drag.x : baseX + offsetX * scale;
+  const dispY = drag ? drag.y : baseY + offsetY * scale;
+
+  const updateDims = React.useCallback(() => {
+    if (ref.current) setDims({ w: ref.current.clientWidth, h: ref.current.clientHeight });
+  }, []);
+  React.useEffect(() => {
+    updateDims();
+    window.addEventListener('resize', updateDims);
+    return () => window.removeEventListener('resize', updateDims);
+  }, [updateDims]);
+
+  // Find nearest anchor to a local (x,y) and return anchor + required offset
+  const snap = (x, y) => {
+    const anchors = ['top-left', 'top-right', 'bottom-left', 'bottom-right', 'middle-left', 'middle-right'];
+    let best = null;
+    for (const a of anchors) {
+      const [ax2, ay2] = anchorXY(a);
+      const cx = ax2 * dims.w, cy = ay2 * dims.h;
+      const d2 = (cx - x) ** 2 + (cy - y) ** 2;
+      if (!best || d2 < best.d) best = { a, d: d2, cx, cy };
+    }
+    const ox = Math.round((x - best.cx) / scale);
+    const oy = Math.round((y - best.cy) / scale);
+    return { position: best.a, offset_x: ox, offset_y: oy };
+  };
+
+  const onMouseDown = (e) => {
+    e.preventDefault();
+    const rect = ref.current.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    setDrag({ x: mx, y: my });
+
+    const onMove = (ev) => {
+      const rx = ev.clientX - rect.left;
+      const ry = ev.clientY - rect.top;
+      const x = Math.max(16, Math.min(rect.width - 16, rx));
+      const y = Math.max(16, Math.min(rect.height - 16, ry));
+      setDrag({ x, y });
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      setDrag((cur) => {
+        if (!cur) return cur;
+        const snapped = snap(cur.x, cur.y);
+        onChange(snapped);
+        return null;
+      });
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  const onTouchStart = (e) => {
+    const t = e.touches[0];
+    const rect = ref.current.getBoundingClientRect();
+    setDrag({ x: t.clientX - rect.left, y: t.clientY - rect.top });
+    const onMove = (ev) => {
+      const tt = ev.touches[0];
+      const rx = tt.clientX - rect.left;
+      const ry = tt.clientY - rect.top;
+      setDrag({
+        x: Math.max(16, Math.min(rect.width - 16, rx)),
+        y: Math.max(16, Math.min(rect.height - 16, ry)),
+      });
+    };
+    const onEnd = () => {
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onEnd);
+      setDrag((cur) => {
+        if (!cur) return cur;
+        const snapped = snap(cur.x, cur.y);
+        onChange(snapped);
+        return null;
+      });
+    };
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('touchend', onEnd);
+  };
+
+  const icon = widget.icon || '●';
+  return (
+    <div
+      ref={ref}
+      className="relative w-full h-44 bg-gradient-to-br from-slate-800/70 to-slate-900/70 border border-white/10 rounded-xl overflow-hidden select-none"
+      data-testid={`drag-canvas-${widget.id}`}
+    >
+      {/* Fake site skeleton */}
+      <div className="absolute inset-3 opacity-30">
+        <div className="h-6 bg-white/15 rounded mb-2" />
+        <div className="h-16 bg-white/8 rounded mb-2" />
+        <div className="grid grid-cols-3 gap-1">
+          <div className="h-8 bg-white/8 rounded" />
+          <div className="h-8 bg-white/8 rounded" />
+          <div className="h-8 bg-white/8 rounded" />
+        </div>
+      </div>
+      {/* Draggable chip */}
+      <div
+        onMouseDown={onMouseDown}
+        onTouchStart={onTouchStart}
+        style={{
+          left: `${dispX}px`,
+          top: `${dispY}px`,
+          transform: 'translate(-50%, -50%)',
+          cursor: drag ? 'grabbing' : 'grab',
+        }}
+        className={`absolute w-9 h-9 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 text-black font-black flex items-center justify-center shadow-lg ring-2 ring-yellow-300/50 ${drag ? 'scale-110 ring-4' : ''} transition-transform`}
+        data-testid={`drag-chip-${widget.id}`}
+      >
+        <span className="text-base">{icon}</span>
+      </div>
+      <div className="absolute bottom-1 left-2 text-[10px] opacity-50">اسحب لتحريك · يُثبَّت في أقرب زاوية تلقائياً</div>
+    </div>
+  );
+}
+
 function WidgetCustomizerTab({ token, slug }) {
   const [catalog, setCatalog] = useState(null);
   const [styles, setStyles] = useState({});
@@ -1579,6 +1791,20 @@ function WidgetCustomizerTab({ token, slug }) {
                         className="w-full px-2 py-1 bg-white/5 border border-white/15 rounded text-sm"
                         data-testid={`wid-${w.id}-oy`} />
                     </div>
+                  </div>
+                )}
+
+                {/* 🖱️ DRAG-TO-POSITION MINI CANVAS */}
+                {w.supports_position && (
+                  <div className="mt-3">
+                    <label className="text-[11px] opacity-70 block mb-1.5">🖱️ اسحب الأيقونة لتثبيت مكانها على الشاشة</label>
+                    <DragPositionCanvas
+                      widget={w}
+                      position={curPos}
+                      offsetX={cur.offset_x || 0}
+                      offsetY={cur.offset_y || 0}
+                      onChange={(patch) => save(w.id, patch)}
+                    />
                   </div>
                 )}
               </>
@@ -1827,6 +2053,184 @@ function LiveMapTab({ token, slug }) {
 }
 
 /* ================================================================
+   📚 SNAPSHOTS TAB — Version History (restore past designs)
+   ================================================================ */
+function SnapshotsTab({ token, onRestored }) {
+  const [snapshots, setSnapshots] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [previewing, setPreviewing] = useState(null); // {id, html, label, created_at}
+  const [savingLabel, setSavingLabel] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`${API}/api/websites/client/snapshots`, { headers: authH(token) });
+      const d = await r.json();
+      setSnapshots(d.snapshots || []);
+    } catch (_) {}
+    finally { setLoading(false); }
+  }, [token]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const saveManual = async () => {
+    setBusy(true);
+    try {
+      await fetch(`${API}/api/websites/client/snapshots`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authH(token) },
+        body: JSON.stringify({ label: (savingLabel || 'نسخة محفوظة').trim().slice(0, 60) }),
+      });
+      setSavingLabel('');
+      toast.success('تم حفظ النسخة الحالية');
+      load();
+    } catch (_) { toast.error('فشل الحفظ'); }
+    finally { setBusy(false); }
+  };
+
+  const openPreview = async (snap) => {
+    setPreviewing({ ...snap, html: null });
+    try {
+      const r = await fetch(`${API}/api/websites/client/snapshots/${snap.id}/preview-html`, { headers: authH(token) });
+      const d = await r.json();
+      setPreviewing({ ...snap, html: d.html || '' });
+    } catch (_) { toast.error('فشل تحميل المعاينة'); setPreviewing(null); }
+  };
+
+  const restore = async (snap) => {
+    if (!window.confirm(`استعادة "${snap.label}"؟\nسيُحفظ تصميمك الحالي كنسخة قبل الاستعادة تلقائياً — فيمكنك الرجوع له.`)) return;
+    setBusy(true);
+    try {
+      const r = await fetch(`${API}/api/websites/client/snapshots/${snap.id}/restore`, {
+        method: 'POST', headers: authH(token),
+      });
+      if (!r.ok) throw new Error();
+      toast.success('✅ تمّت الاستعادة — حدّث موقعك لمشاهدة النسخة');
+      setPreviewing(null);
+      load();
+      onRestored && onRestored();
+    } catch (_) { toast.error('فشلت الاستعادة'); }
+    finally { setBusy(false); }
+  };
+
+  const del = async (snap) => {
+    if (!window.confirm(`حذف نسخة "${snap.label}" نهائياً؟`)) return;
+    try {
+      await fetch(`${API}/api/websites/client/snapshots/${snap.id}`, { method: 'DELETE', headers: authH(token) });
+      toast.success('تم الحذف');
+      load();
+    } catch (_) {}
+  };
+
+  const originBadge = (o) => {
+    const map = {
+      manual: { label: '✋ يدوي', cls: 'bg-yellow-500/20 text-yellow-300' },
+      wizard: { label: '🧭 مرشد', cls: 'bg-blue-500/20 text-blue-300' },
+      ai_chat: { label: '🤖 ذكاء', cls: 'bg-purple-500/20 text-purple-300' },
+      variant: { label: '🎨 نمط', cls: 'bg-pink-500/20 text-pink-300' },
+      auto: { label: '⚙️ تلقائي', cls: 'bg-white/10 text-white/70' },
+    };
+    const m = map[o] || map.auto;
+    return <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${m.cls}`}>{m.label}</span>;
+  };
+
+  return (
+    <div data-testid="snapshots-tab">
+      <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-2xl p-4 mb-4">
+        <div className="flex items-start gap-3">
+          <History className="w-6 h-6 text-purple-300 shrink-0 mt-1" />
+          <div className="flex-1">
+            <h3 className="font-bold text-lg mb-1">📚 سجل التصاميم (Version History)</h3>
+            <div className="text-xs opacity-80 leading-relaxed">كل تعديل كبير يُحفظ تلقائياً هنا. اضغط أي نسخة لمعاينتها، ثم "استعادة" للرجوع لها. لن تفقد شغلك أبداً.</div>
+          </div>
+        </div>
+        <div className="mt-3 flex items-center gap-2">
+          <input
+            value={savingLabel}
+            onChange={(e) => setSavingLabel(e.target.value)}
+            placeholder="اسم النسخة (اختياري، مثل: قبل تغيير الألوان)"
+            className="flex-1 px-3 py-2 bg-white/5 border border-white/15 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-purple-500"
+            data-testid="snapshot-label-input"
+          />
+          <button
+            onClick={saveManual}
+            disabled={busy}
+            className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg text-sm font-bold flex items-center gap-1.5 transition"
+            data-testid="save-snapshot-btn"
+          >
+            <Save className="w-4 h-4" />احفظ النسخة الحالية
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-10 opacity-60">جاري التحميل...</div>
+      ) : snapshots.length === 0 ? (
+        <div className="text-center py-14 bg-white/3 border border-dashed border-white/15 rounded-2xl">
+          <History className="w-10 h-10 mx-auto mb-2 opacity-30" />
+          <div className="text-sm opacity-60">لا توجد نسخ محفوظة بعد</div>
+          <div className="text-xs opacity-40 mt-1">ستظهر نسخ تلقائية بعد أي تعديل كبير</div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {snapshots.map((s) => (
+            <div key={s.id} className="bg-white/3 border border-white/10 rounded-xl p-3 flex items-center gap-3 flex-wrap" data-testid={`snapshot-${s.id}`}>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <span className="font-bold text-sm">{s.label}</span>
+                  {originBadge(s.origin)}
+                  <span className="text-[10px] opacity-50">{s.sections_count} قسم</span>
+                </div>
+                <div className="text-[11px] opacity-60">{new Date(s.created_at).toLocaleString('ar-SA')}</div>
+              </div>
+              <div className="flex gap-1">
+                <button onClick={() => openPreview(s)} className="px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-lg text-xs font-bold flex items-center gap-1" data-testid={`preview-snapshot-${s.id}`}>
+                  <Eye className="w-3.5 h-3.5" />معاينة
+                </button>
+                <button onClick={() => restore(s)} disabled={busy} className="px-3 py-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-300 rounded-lg text-xs font-bold flex items-center gap-1" data-testid={`restore-snapshot-${s.id}`}>
+                  <RotateCcw className="w-3.5 h-3.5" />استعد
+                </button>
+                <button onClick={() => del(s)} className="p-1.5 hover:bg-red-500/10 text-red-400 rounded-lg" title="حذف" data-testid={`delete-snapshot-${s.id}`}>
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Preview modal */}
+      {previewing && (
+        <div className="fixed inset-0 z-[10001] bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 md:p-6" onClick={() => setPreviewing(null)} data-testid="snapshot-preview-modal">
+          <div onClick={(e) => e.stopPropagation()} className="bg-[#0e1128] border border-purple-500/30 rounded-2xl w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden">
+            <div className="p-3 border-b border-white/10 flex items-center justify-between gap-2 flex-wrap">
+              <div className="min-w-0">
+                <div className="font-bold truncate">{previewing.label}</div>
+                <div className="text-[11px] opacity-60">{new Date(previewing.created_at).toLocaleString('ar-SA')}</div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => restore(previewing)} disabled={busy} className="px-4 py-2 bg-green-500 hover:bg-green-600 text-black rounded-lg text-sm font-bold flex items-center gap-1.5" data-testid="modal-restore-btn">
+                  <RotateCcw className="w-4 h-4" />استعد هذا التصميم
+                </button>
+                <button onClick={() => setPreviewing(null)} className="p-2 hover:bg-white/10 rounded-lg"><X className="w-5 h-5" /></button>
+              </div>
+            </div>
+            <div className="flex-1 bg-white">
+              {previewing.html === null ? (
+                <div className="h-full flex items-center justify-center opacity-60 text-black">جاري التحميل...</div>
+              ) : (
+                <iframe srcDoc={previewing.html} title="snapshot-preview" className="w-full h-full border-0" sandbox="allow-scripts allow-same-origin" />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ================================================================
    DASHBOARD — authenticated
    ================================================================ */
 function Dashboard({ slug, token, onLogout }) {
@@ -1937,6 +2341,7 @@ function Dashboard({ slug, token, onLogout }) {
               { id: 'coupons', label: '🎟️ كوبونات', icon: Key },
               { id: 'loyalty', label: '🎁 النقاط', icon: CheckCircle2 },
               { id: 'edit', label: 'المحتوى', icon: Edit3 },
+              { id: 'snapshots', label: '📚 السجل', icon: History },
               { id: 'messages', label: 'الرسائل', icon: MessageSquare },
               { id: 'support', label: 'الدعم', icon: RefreshCw },
               { id: 'password', label: 'الأمان', icon: Key },
@@ -1997,6 +2402,8 @@ function Dashboard({ slug, token, onLogout }) {
         {tab === 'loyalty' && <LoyaltyTab token={token} />}
 
         {tab === 'messages' && <MessagesTab token={token} />}
+
+        {tab === 'snapshots' && <SnapshotsTab token={token} onRestored={loadAll} />}
 
         {tab === 'support' && <SupportTab token={token} />}
 

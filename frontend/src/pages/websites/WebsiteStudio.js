@@ -1280,6 +1280,7 @@ export default function WebsiteStudio({ user }) {
   const [mobileView, setMobileView] = useState('preview');
   const [pending, setPending] = useState(null); // { step, value, html }
   const [previewDevice, setPreviewDevice] = useState('desktop'); // desktop | mobile
+  const [showSnapshots, setShowSnapshots] = useState(false);
   const buildTimer = useRef(null);
 
   useEffect(() => {
@@ -1497,6 +1498,9 @@ export default function WebsiteStudio({ user }) {
       }
       if (d.action && d.action.action) {
         const a = d.action.action;
+        if (a === 'show_snapshots') {
+          setShowSnapshots(true);
+        }
         const msgs = {
           add_section: '✨ تمت إضافة قسم جديد في المعاينة',
           fill_section: '📝 تم تحديث محتوى القسم',
@@ -1508,6 +1512,7 @@ export default function WebsiteStudio({ user }) {
           inject_css: '💫 تم تطبيق التأثير',
           scaffold: '🏗️ تم إعادة بناء الموقع',
           generate_logo: '🖼️ جاري توليد اللوقو...',
+          show_snapshots: '📚 فتحت لك سجل التصاميم',
         };
         if (msgs[a]) toast.success(msgs[a]);
       }
@@ -1686,6 +1691,10 @@ export default function WebsiteStudio({ user }) {
               <span className="text-base">🧩</span>
               <span className="hidden md:inline text-xs">التقنيات</span>
             </button>
+            <button onClick={() => setShowSnapshots(true)} disabled={!project} className="p-2 md:px-3 md:py-2 bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-400/30 rounded-lg flex items-center gap-1.5 disabled:opacity-40" data-testid="history-btn" title="سجل التصاميم السابقة">
+              <span className="text-base">📚</span>
+              <span className="hidden md:inline text-xs">السجل</span>
+            </button>
             {project && project.status !== 'approved' && (
               <button onClick={() => approveProject(project.id)} className="p-2 md:px-3 md:py-2 bg-gradient-to-r from-green-500/30 to-emerald-500/30 hover:from-green-500/50 hover:to-emerald-500/50 border border-green-400/40 rounded-lg flex items-center gap-1.5" data-testid="approve-btn" title="اعتماد نهائي">
                 <Check className="w-4 h-4 text-green-300" /><span className="hidden md:inline text-xs font-bold">اعتماد</span>
@@ -1780,6 +1789,152 @@ export default function WebsiteStudio({ user }) {
       {showIndependence && <IndependenceModal onClose={() => setShowIndependence(false)} />}
       {logoStudioOpen && <LogoStudioModal project={project} onClose={() => setLogoStudioOpen(false)} onApplied={onLogoApplied} />}
       {techStackOpen && <TechStackModal onClose={() => setTechStackOpen(false)} />}
+      {showSnapshots && project && <SnapshotsGalleryModal project={project} onClose={() => setShowSnapshots(false)} onRestored={(p) => { setProject(p); refreshPreview(p); setShowSnapshots(false); }} />}
+    </div>
+  );
+}
+
+/* ================================================================
+   📚 SNAPSHOTS GALLERY — version history for the studio (owner)
+   ================================================================ */
+function SnapshotsGalleryModal({ project, onClose, onRestored }) {
+  const [snapshots, setSnapshots] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [preview, setPreview] = useState(null); // { id, html, label }
+  const [label, setLabel] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`${API}/api/websites/projects/${project.id}/snapshots`, { headers: authH() });
+      const d = await r.json();
+      setSnapshots(d.snapshots || []);
+    } catch (_) {} finally { setLoading(false); }
+  }, [project.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      await fetch(`${API}/api/websites/projects/${project.id}/snapshots`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authH() },
+        body: JSON.stringify({ label: (label || 'نسخة').trim().slice(0, 60) }),
+      });
+      setLabel('');
+      toast.success('تم حفظ النسخة');
+      load();
+    } catch (_) { toast.error('فشل الحفظ'); } finally { setBusy(false); }
+  };
+
+  const openPreview = async (s) => {
+    setPreview({ ...s, html: null });
+    try {
+      const r = await fetch(`${API}/api/websites/projects/${project.id}/snapshots/${s.id}/preview-html`, { headers: authH() });
+      const d = await r.json();
+      setPreview({ ...s, html: d.html || '' });
+    } catch (_) { toast.error('فشل'); setPreview(null); }
+  };
+
+  const restore = async (s) => {
+    if (!window.confirm(`استعادة "${s.label}"؟\nسيُحفظ تصميمك الحالي كنسخة قبل الاستعادة.`)) return;
+    setBusy(true);
+    try {
+      const r = await fetch(`${API}/api/websites/projects/${project.id}/snapshots/${s.id}/restore`, { method: 'POST', headers: authH() });
+      const d = await r.json();
+      if (!r.ok) throw new Error();
+      toast.success('✅ تمّت الاستعادة');
+      onRestored(d);
+    } catch (_) { toast.error('فشلت الاستعادة'); }
+    finally { setBusy(false); }
+  };
+
+  const del = async (s) => {
+    if (!window.confirm(`حذف نسخة "${s.label}"؟`)) return;
+    try {
+      await fetch(`${API}/api/websites/projects/${project.id}/snapshots/${s.id}`, { method: 'DELETE', headers: authH() });
+      toast.success('تم الحذف');
+      load();
+    } catch (_) {}
+  };
+
+  const originBadge = (o) => {
+    const map = {
+      manual: { l: '✋ يدوي', c: 'bg-yellow-500/20 text-yellow-300' },
+      wizard: { l: '🧭 مرشد', c: 'bg-blue-500/20 text-blue-300' },
+      ai_chat: { l: '🤖 ذكاء', c: 'bg-purple-500/20 text-purple-300' },
+      variant: { l: '🎨 نمط', c: 'bg-pink-500/20 text-pink-300' },
+      auto: { l: '⚙️', c: 'bg-white/10 text-white/70' },
+    };
+    const m = map[o] || map.auto;
+    return <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${m.c}`}>{m.l}</span>;
+  };
+
+  return (
+    <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 md:p-6" onClick={onClose} data-testid="snapshots-gallery-modal">
+      <div onClick={(e) => e.stopPropagation()} className="bg-[#0e1128] border border-amber-500/30 rounded-2xl w-full max-w-6xl h-[90vh] flex flex-col overflow-hidden">
+        <div className="p-4 border-b border-white/10 flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h2 className="text-lg md:text-xl font-black flex items-center gap-2">📚 سجل تصاميم "{project.name || 'موقعك'}"</h2>
+            <p className="text-xs opacity-60">كل تعديل يُحفظ تلقائياً. اضغط معاينة لرؤية أي نسخة، ثم "استعد" للرجوع لها.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="اسم النسخة (اختياري)" className="px-3 py-2 bg-white/5 border border-white/15 rounded-lg text-sm" data-testid="owner-snap-label" />
+            <button onClick={save} disabled={busy} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-black rounded-lg text-sm font-bold" data-testid="owner-save-snap">احفظ النسخة</button>
+            <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg"><X className="w-5 h-5" /></button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+          <div className="md:w-1/3 overflow-y-auto p-3 space-y-2 border-b md:border-b-0 md:border-l border-white/10" style={{ maxHeight: '100%' }}>
+            {loading ? (
+              <div className="text-center py-10 opacity-60">...</div>
+            ) : snapshots.length === 0 ? (
+              <div className="text-center py-10 opacity-60 text-sm">لا نسخ بعد — ستظهر تلقائياً بعد أي تعديل</div>
+            ) : (
+              snapshots.map((s) => {
+                const active = preview && preview.id === s.id;
+                return (
+                  <button key={s.id} onClick={() => openPreview(s)} className={`w-full text-right p-3 rounded-xl border transition ${active ? 'bg-amber-500/20 border-amber-500' : 'bg-white/3 border-white/10 hover:bg-white/6'}`} data-testid={`owner-snap-${s.id}`}>
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className="font-bold text-sm">{s.label}</span>
+                      {originBadge(s.origin)}
+                    </div>
+                    <div className="text-[11px] opacity-60 flex justify-between">
+                      <span>{new Date(s.created_at).toLocaleString('ar-SA')}</span>
+                      <span>{s.sections_count} قسم</span>
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+          <div className="flex-1 bg-white flex flex-col">
+            {preview ? (
+              <>
+                <div className="bg-[#0e1128] p-3 flex items-center gap-2 flex-wrap border-b border-white/10 text-white">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold truncate">{preview.label}</div>
+                    <div className="text-[11px] opacity-60">{new Date(preview.created_at).toLocaleString('ar-SA')}</div>
+                  </div>
+                  <button onClick={() => restore(preview)} disabled={busy} className="px-4 py-2 bg-green-500 hover:bg-green-600 text-black rounded-lg text-sm font-bold" data-testid="owner-restore-btn">استعد هذه النسخة</button>
+                  <button onClick={() => del(preview)} className="p-2 bg-red-500/20 hover:bg-red-500/40 rounded-lg"><X className="w-4 h-4" /></button>
+                </div>
+                <div className="flex-1">
+                  {preview.html === null ? (
+                    <div className="h-full flex items-center justify-center text-black opacity-60">جاري التحميل...</div>
+                  ) : (
+                    <iframe srcDoc={preview.html} title="preview" className="w-full h-full border-0" sandbox="allow-scripts allow-same-origin" />
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center text-black opacity-40">اختر نسخة من اليمين لمعاينتها</div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

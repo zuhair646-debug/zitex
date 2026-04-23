@@ -182,13 +182,40 @@ def _section_testimonials(d, theme) -> str:
 
 
 def _section_team(d, theme) -> str:
+    style = d.get("style") or "grid"
     items = d.get("members", [])
+    if style == "circles":
+        cards = "".join(f"""<div style="text-align:center"><div style="width:140px;height:140px;border-radius:50%;background:#000 url('{_esc(i.get("image",""))}') center/cover;margin:0 auto 12px;border:3px solid rgba(255,255,255,.15)"></div><h3 style="margin:0;font-size:16px">{_esc(i.get('name',''))}</h3><p style="opacity:.7;font-size:13px;margin:4px 0 0">{_esc(i.get('role',''))}</p></div>""" for i in items)
+        return f"""<section class="team team-circles" id="team" data-hl="team"><div class="container"><h2>{_esc(d.get('title',''))}</h2><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:28px;padding:12px 0">{cards}</div></div></section>"""
+    if style == "rows":
+        cards = "".join(f"""<div style="display:flex;gap:16px;align-items:center;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:14px;margin-bottom:12px"><div style="width:70px;height:70px;border-radius:50%;background:#000 url('{_esc(i.get("image",""))}') center/cover;flex-shrink:0"></div><div><h3 style="margin:0;font-size:17px">{_esc(i.get('name',''))}</h3><p style="opacity:.7;font-size:13px;margin:4px 0 0">{_esc(i.get('role',''))}</p></div></div>""" for i in items)
+        return f"""<section class="team team-rows" id="team" data-hl="team"><div class="container"><h2>{_esc(d.get('title',''))}</h2><div>{cards}</div></div></section>"""
+    # default: grid
     cards = "".join(f"""<div class="team-card"><div class="team-photo" style="background-image:url('{_esc(i.get("image",""))}')"></div><h3>{_esc(i.get('name',''))}</h3><p>{_esc(i.get('role',''))}</p></div>""" for i in items)
     return f"""<section class="team" id="team" data-hl="team"><div class="container"><h2>{_esc(d.get('title',''))}</h2><div class="team-grid">{cards}</div></div></section>"""
 
 
 def _section_pricing(d, theme) -> str:
+    style = d.get("style") or "cards"
     items = d.get("plans", [])
+    if style == "table":
+        # Comparison table — plans as columns, features as rows
+        all_features = []
+        for p in items:
+            for f in (p.get("features") or []):
+                if f not in all_features:
+                    all_features.append(f)
+        head = "<tr><th></th>" + "".join(f"""<th style="padding:14px;text-align:center;background:{'rgba(255,215,0,.1)' if p.get('featured') else 'rgba(255,255,255,.03)'}">{_esc(p.get('name',''))}<div style="font-size:26px;font-weight:900;color:#FFD700;margin-top:6px">{_esc(p.get('price',''))}<span style="font-size:12px;opacity:.6">ر.س</span></div></th>""" for p in items) + "</tr>"
+        rows = ""
+        for f in all_features:
+            cells = "".join(f"""<td style="text-align:center;padding:10px">{'✓' if f in (p.get('features') or []) else '—'}</td>""" for p in items)
+            rows += f"""<tr><td style="padding:10px 14px;opacity:.85;font-size:14px">{_esc(f)}</td>{cells}</tr>"""
+        ctas = "<tr><td></td>" + "".join(f"""<td style="padding:14px;text-align:center"><button class="btn btn-primary" style="width:100%">{_esc(p.get('cta','اشترك'))}</button></td>""" for p in items) + "</tr>"
+        return f"""<section class="pricing pricing-table" id="pricing" data-hl="pricing"><div class="container"><h2>{_esc(d.get('title',''))}</h2><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;background:rgba(255,255,255,.02);border-radius:16px;overflow:hidden"><thead>{head}</thead><tbody>{rows}</tbody><tfoot>{ctas}</tfoot></table></div></div></section>"""
+    if style == "minimal":
+        cards = "".join(f"""<div style="padding:24px;border-bottom:1px solid rgba(255,255,255,.08);display:flex;justify-content:space-between;align-items:center;gap:16px"><div><h3 style="margin:0;font-size:18px">{_esc(p.get('name',''))}</h3><div style="opacity:.7;font-size:13px;margin-top:4px">{_esc((p.get('features') or [''])[0] if p.get('features') else '')}</div></div><div style="text-align:left"><div style="font-size:24px;font-weight:900;color:#FFD700">{_esc(p.get('price',''))} ر.س</div><button class="btn btn-primary" style="margin-top:6px;padding:6px 14px;font-size:12px">{_esc(p.get('cta','اشترك'))}</button></div></div>""" for p in items)
+        return f"""<section class="pricing pricing-minimal" id="pricing" data-hl="pricing"><div class="container"><h2>{_esc(d.get('title',''))}</h2><div style="background:rgba(255,255,255,.02);border-radius:16px;overflow:hidden">{cards}</div></div></section>"""
+    # default: cards
     cards = "".join(
         f"""<div class="pricing-card {'featured' if p.get('featured') else ''}">
           <h3>{_esc(p.get('name',''))}</h3>

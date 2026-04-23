@@ -338,6 +338,29 @@ def detect_section_intent(user_message: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def detect_snapshot_intent(user_message: str) -> Optional[Dict[str, Any]]:
+    """Detect if user is asking to see/restore past designs (version history).
+    Returns a directive that the frontend should handle by opening the snapshots gallery.
+    """
+    if not user_message:
+        return None
+    txt = user_message.strip().lower()
+    # Arabic triggers: "ارجع للتصميم الأول", "عرض التصاميم السابقة", "السجل", "الرجوع",
+    # "تصاميم قديمة", "كنت قبل", "اللي كان عندي", "ارجعلي", "راجع للنسخة"
+    patterns = [
+        r"(?:ارجع(?:لي)?|رجع(?:لي)?|استرجع|استعد|رجوع).*(?:تصميم|سابق|قديم|نسخ|أول|السجل|قبل)",
+        r"(?:تصاميم|نسخ|حفظات|تصميم).*(?:سابق|قديم|أول|الأول|قبل|أولي|الأولي)",
+        r"(?:اعرض|وريني|شوفني|افتح).*(?:السجل|التصاميم|النسخ|القديم|السابق)",
+        r"(?:السجل|history|version|versions|snapshots?)",
+        r"(?:لا\s+)?(?:تعجبني|يعجبني).*(?:الجديد|الحالي).*(?:رجع|ارجع)",
+        r"(?:كان\s+أحسن|أفضل\s+من\s+قبل|يا\s+ليت\s+قبل)",
+    ]
+    for pat in patterns:
+        if re.search(pat, txt, flags=re.IGNORECASE):
+            return {"action": "show_snapshots", "value": {}}
+    return None
+
+
 def clean_display_text(response_text: str) -> str:
     """Strip directive blocks before showing to the user."""
     out = re.sub(r"\[WIZARD_ACTION\].*?\[/WIZARD_ACTION\]", "", response_text, flags=re.DOTALL)

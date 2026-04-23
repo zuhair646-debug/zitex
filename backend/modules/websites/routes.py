@@ -15,6 +15,7 @@ from .renderer import render_website_to_html
 from .ai_service import (
     chat_with_consultant, extract_wizard_action, clean_display_text,
     extract_build_payload, build_sections_from_payload, detect_section_intent,
+    detect_snapshot_intent,
 )
 from .variants import list_variants_for_template, list_style_variants, get_variant_project
 from .catalog import list_categories, list_layouts, get_layout
@@ -27,6 +28,8 @@ from .wizard import (
 from .realtime import realtime
 from . import payment_gateways as pg
 from . import widget_styles as wx
+from . import section_variants as sv
+from . import snapshots as snaps
 
 logger = logging.getLogger(__name__)
 
@@ -422,13 +425,81 @@ def register_routes(app, database, auth_dep):
         if not p:
             raise HTTPException(404, "Project not found")
         vp = get_variant_project(body.template_id, body.variant_id)
-        update = {"theme": vp["theme"], "template": body.template_id, "updated_at": _iso_now()}
+        # 📸 Snapshot pre-change
+        new_snaps = snaps.push_snapshot(p, label=f"قبل تطبيق نمط: {body.variant_id}", origin="variant")
+        update = {"theme": vp["theme"], "template": body.template_id, "updated_at": _iso_now(), "snapshots": new_snaps}
         if body.replace_sections:
             sections = [{**s, "id": f"sec-{uuid.uuid4().hex[:8]}"} for s in vp["sections"]]
             update["sections"] = sections
             update["business_type"] = vp["business_type"]
         await database.website_projects.update_one({"id": project_id}, {"$set": update})
         return await database.website_projects.find_one({"id": project_id}, {"_id": 0})
+
+    # Owner-facing snapshot endpoints (parallel to /client/snapshots for the studio chat)
+    @r.get("/projects/{project_id}/snapshots")
+    async def _p_snapshots_list(project_id: str, current_user: dict = Depends(auth_dep)):
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "Project not found")
+        return {"snapshots": snaps.list_snapshots_summary(p), "total": len(p.get("snapshots") or [])}
+
+    class _OwnerSnapIn(BaseModel):
+        label: Optional[str] = "نسخة يدوية"
+
+    @r.post("/projects/{project_id}/snapshots")
+    async def _p_snapshots_create(project_id: str, body: _OwnerSnapIn, current_user: dict = Depends(auth_dep)):
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "Project not found")
+        new_snaps = snaps.push_snapshot(p, label=(body.label or "نسخة يدوية").strip()[:60], origin="manual")
+        await database.website_projects.update_one(
+            {"id": project_id}, {"$set": {"snapshots": new_snaps, "updated_at": _iso_now()}}
+        )
+        return {"ok": True, "total": len(new_snaps)}
+
+    @r.post("/projects/{project_id}/snapshots/{snapshot_id}/restore")
+    async def _p_snapshots_restore(project_id: str, snapshot_id: str, current_user: dict = Depends(auth_dep)):
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "Project not found")
+        update = snaps.apply_snapshot(p, snapshot_id)
+        if not update:
+            raise HTTPException(404, "النسخة غير موجودة")
+        await database.website_projects.update_one({"id": project_id}, {"$set": update})
+        return await database.website_projects.find_one({"id": project_id}, {"_id": 0})
+
+    @r.get("/projects/{project_id}/snapshots/{snapshot_id}/preview-html")
+    async def _p_snapshots_preview(project_id: str, snapshot_id: str, current_user: dict = Depends(auth_dep)):
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "Project not found")
+        snap = snaps.find_snapshot(p, snapshot_id)
+        if not snap:
+            raise HTTPException(404, "النسخة غير موجودة")
+        payload = snap.get("payload") or {}
+        virtual = {**p, **{k: v for k, v in payload.items() if v is not None}}
+        return {"html": render_website_to_html(virtual), "label": snap.get("label"), "created_at": snap.get("created_at")}
+
+    @r.delete("/projects/{project_id}/snapshots/{snapshot_id}")
+    async def _p_snapshots_delete(project_id: str, snapshot_id: str, current_user: dict = Depends(auth_dep)):
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "Project not found")
+        snaps_list = [s for s in (p.get("snapshots") or []) if s.get("id") != snapshot_id]
+        await database.website_projects.update_one(
+            {"id": project_id}, {"$set": {"snapshots": snaps_list, "updated_at": _iso_now()}}
+        )
+        return {"ok": True}
 
     # ---------------- Wizard: deterministic step answer (chip click) ----------------
     @r.post("/projects/{project_id}/wizard/answer")
@@ -452,10 +523,13 @@ def register_routes(app, database, auth_dep):
         else:
             chat.append({"role": "assistant", "content": "🎉 تمّت كل الأسئلة! راجع المعاينة — لو كل شيء تمام، اضغط 'اعتماد' من القائمة."})
         p["chat"] = chat
+        # 📸 Snapshot after wizard step
+        new_snaps = snaps.push_snapshot(p, label=f"خطوة: {_chip_label(body.step, body.value)}", origin="wizard")
         update = {
             "theme": p["theme"], "sections": p.get("sections", []),
             "wizard": p["wizard"], "chat": chat,
             "name": p.get("name"),
+            "snapshots": new_snaps,
             "updated_at": _iso_now(),
         }
         await database.website_projects.update_one({"id": project_id}, {"$set": update})
@@ -477,6 +551,12 @@ def register_routes(app, database, auth_dep):
         ai_text = await chat_with_consultant(history, wizard=p.get("wizard"), project_summary=summary)
         display = clean_display_text(ai_text)
         action = extract_wizard_action(ai_text)
+        # 🕰️ Snapshot intent takes PRIORITY over AI's action (AI can mis-interpret
+        # "ارجعلي للتصاميم السابقة" as remove_section). Check user message first.
+        snap_intent = detect_snapshot_intent(body.message)
+        if snap_intent:
+            action = snap_intent
+            display = "📚 فتحت لك سجل التصاميم السابقة — اختر أي نسخة لاستعادتها."
         # 🛡️ Safety net: if AI didn't emit a structural directive but the user
         # explicitly asked to add a known section type, inject the directive now.
         STRUCTURAL_ACTIONS = {"add_section", "scaffold", "fill_section", "patch_section", "remove_section", "move_section"}
@@ -510,6 +590,7 @@ def register_routes(app, database, auth_dep):
             {"$set": {
                 "chat": p["chat"], "theme": p.get("theme"), "sections": p.get("sections"),
                 "wizard": p.get("wizard"), "name": p.get("name"),
+                "snapshots": snaps.push_snapshot(p, label=f"AI: {(action or {}).get('action') or 'محادثة'}", origin="ai_chat") if action else (p.get("snapshots") or []),
                 "updated_at": _iso_now(),
             }}
         )
@@ -892,10 +973,71 @@ def register_routes(app, database, auth_dep):
         # Re-sort by order then rewrite consecutive order
         sections.sort(key=lambda s: s.get("order", 0))
         sections = [{**s, "order": i} for i, s in enumerate(sections)]
+        # 📸 Snapshot before persisting (so client can revert)
+        new_snaps = snaps.push_snapshot(p, label="تعديل قسم من لوحة العميل", origin="auto")
         await database.website_projects.update_one(
-            {"id": p["id"]}, {"$set": {"sections": sections, "updated_at": _iso_now()}}
+            {"id": p["id"]}, {"$set": {"sections": sections, "snapshots": new_snaps, "updated_at": _iso_now()}}
         )
         return {"ok": True}
+
+    # ═══════════════════════════════════════════════════════════════
+    # 📚 SECTION VARIANTS CATALOG + 🕰️ SNAPSHOTS (Version History)
+    # ═══════════════════════════════════════════════════════════════
+    @r.get("/section-variants/catalog")
+    async def _section_variants_catalog():
+        """Public: full catalog of visual styles for each section type."""
+        return {"catalog": sv.catalog_public()}
+
+    @r.get("/client/snapshots")
+    async def _client_list_snapshots(authorization: str = _Header(None)):
+        """List ALL snapshots (version history) for the authenticated client's project."""
+        p = await _resolve_client_project(authorization or "")
+        return {"snapshots": snaps.list_snapshots_summary(p), "total": len(p.get("snapshots") or [])}
+
+    class SnapshotCreateIn(BaseModel):
+        label: Optional[str] = "نسخة يدوية"
+
+    @r.post("/client/snapshots")
+    async def _client_create_snapshot(body: SnapshotCreateIn, authorization: str = _Header(None)):
+        """Manually save a named snapshot of the current state."""
+        p = await _resolve_client_project(authorization or "")
+        new_snaps = snaps.push_snapshot(p, label=(body.label or "نسخة يدوية").strip()[:60], origin="manual")
+        await database.website_projects.update_one(
+            {"id": p["id"]}, {"$set": {"snapshots": new_snaps, "updated_at": _iso_now()}}
+        )
+        return {"ok": True, "total": len(new_snaps)}
+
+    @r.post("/client/snapshots/{snapshot_id}/restore")
+    async def _client_restore_snapshot(snapshot_id: str, authorization: str = _Header(None)):
+        """Restore the project to a previous snapshot's state."""
+        p = await _resolve_client_project(authorization or "")
+        update = snaps.apply_snapshot(p, snapshot_id)
+        if not update:
+            raise HTTPException(404, "النسخة غير موجودة")
+        await database.website_projects.update_one({"id": p["id"]}, {"$set": update})
+        return {"ok": True, "restored_id": snapshot_id}
+
+    @r.delete("/client/snapshots/{snapshot_id}")
+    async def _client_delete_snapshot(snapshot_id: str, authorization: str = _Header(None)):
+        p = await _resolve_client_project(authorization or "")
+        snaps_list = [s for s in (p.get("snapshots") or []) if s.get("id") != snapshot_id]
+        await database.website_projects.update_one(
+            {"id": p["id"]}, {"$set": {"snapshots": snaps_list, "updated_at": _iso_now()}}
+        )
+        return {"ok": True}
+
+    @r.get("/client/snapshots/{snapshot_id}/preview-html")
+    async def _client_snapshot_preview(snapshot_id: str, authorization: str = _Header(None)):
+        """Render the snapshot to HTML for thumbnail preview (iframe)."""
+        p = await _resolve_client_project(authorization or "")
+        snap = snaps.find_snapshot(p, snapshot_id)
+        if not snap:
+            raise HTTPException(404, "النسخة غير موجودة")
+        payload = snap.get("payload") or {}
+        # Merge snapshot payload onto the project (for render context)
+        virtual = {**p, **{k: v for k, v in payload.items() if v is not None}}
+        html = render_website_to_html(virtual)
+        return {"html": html, "label": snap.get("label"), "created_at": snap.get("created_at")}
 
     @r.post("/client/change-password")
     async def _client_change_password(body: ClientPasswordChangeIn, authorization: str = _Header(None)):
