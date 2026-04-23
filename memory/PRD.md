@@ -9,10 +9,58 @@
 **كل قسم في module مستقل تماماً** — يمكن تطويره/نشره/إصلاحه بدون لمس الأقسام الأخرى.
 
 ### Modules Status
-- ✅ **Websites**: `/backend/modules/websites/` — **LIVE + Wizard**
+- ✅ **Websites**: `/backend/modules/websites/` — **LIVE + Wizard + Version History**
 - 🔒 **Games**: قريباً
 - 🔒 **Videos**: قريباً
 - 🔒 **Images**: قريباً
+
+
+### 🆕 Feb 26, 2026 — SECTION VARIANTS + SNAPSHOTS + DRAG POSITIONING (P0/P1 — COMPLETE)
+
+**1) Section-level Style Variants** (`/backend/modules/websites/section_variants.py` — جديد):
+- كتالوج بـ5 أنواع أقسام كل واحد بـ3 أشكال بصرية:
+  - `menu` (grid/list/carousel) — مطاعم/كوفي
+  - `gallery` (grid/masonry/strip) — معارض
+  - `testimonials` (grid/carousel/quote-big) — آراء
+  - `team` (grid/circles/rows) — فريق
+  - `pricing` (cards/table/minimal) — خطط
+- `GET /api/websites/section-variants/catalog` (public) — كل الأشكال
+- `PATCH /api/websites/client/sections/{id}` مع `{data:{style:"list"}}` يغيّر الشكل فوراً
+- كل shape له CSS مختلف جذرياً (مو ألوان فقط) — renderer.py يفرّق بناءً على `section.data.style`
+- **UI العميل**: زر 🎨 Palette بجانب كل قسم → Modal بـ3 بطاقات مع وصف تفصيلي
+
+**2) 📚 Version History / Snapshots** (`/backend/modules/websites/snapshots.py` — جديد):
+- **نموذج حفظ**: `project.snapshots[]` inline array (MAX=30, LRU eviction)
+- كل snapshot: `{id, label, origin, created_at, sections_count, payload:{theme, sections, extras, wizard, widget_styles, name}}`
+- **Auto-snapshot triggers**: Wizard step / apply-variant / section patch / AI chat action / Manual save
+- **Dedup**: لا يحفظ snapshot إذا المحتوى مطابق تماماً للأخير
+- **Undo-safe restore**: عند الاستعادة، يحفظ تلقائياً snapshot "قبل الاستعادة إلى: X"
+- **AI Intent Detection**: "ارجعلي للتصاميم السابقة" / "اعرض السجل" / "كان أحسن" → action=show_snapshots (PRIORITY على AI directive)
+
+**Endpoints** (ClientToken + Bearer للمالك):
+- `GET /client/snapshots` + `/projects/{id}/snapshots`
+- `POST /.../snapshots` — حفظ يدوي `{label}`
+- `POST /.../snapshots/{sid}/restore` — استعادة
+- `GET /.../snapshots/{sid}/preview-html` — iframe معاينة
+- `DELETE /.../snapshots/{sid}`
+
+**UI المالك (`WebsiteStudio`)**: زر `📚 السجل` amber/orange + `SnapshotsGalleryModal` (sidebar + iframe)
+**UI العميل (`ClientDashboard`)**: تبويب `📚 السجل` + `SnapshotsTab` مع badges (يدوي/مرشد/ذكاء/نمط/تلقائي)
+
+**3) 🖱️ Drag-to-Position Canvas** في `WidgetCustomizerTab`:
+- لكل widget له `supports_position=true`: mini-canvas 320×180 يحاكي الشاشة
+- سحب chip → على الإفلات snap إلى أقرب 6 anchors + حفظ offset_x/y بالـpx (مقياس 0.25×)
+- تحديث فوري بلا reload
+
+**E2E verified (Feb 26, 2026)**:
+- ✅ 17/17 new backend tests + 27/27 regression tests (100%)
+- ✅ All frontend UI flows verified
+- ✅ PATCH style → rendered HTML reflects (menu-list-style, gallery-masonry, team-circles, testi-carousel, pricing-table)
+- ✅ AI "ارجعلي للتصاميم السابقة" → show_snapshots
+- ✅ No regressions (orders, bookings, payments, widgets, listings, portfolio, realtime WS)
+
+**Files added**: `section_variants.py`, `snapshots.py`
+**Files modified**: `routes.py`, `renderer.py`, `ai_service.py`, `ClientDashboard.js`, `WebsiteStudio.js`
 
 
 ### 🆕 Feb 25, 2026 (late) — WIDGET CUSTOMIZER COMPLETE (P1 — CORE FLEXIBILITY)
