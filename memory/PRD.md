@@ -15,6 +15,72 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Feb 26, 2026 (night) — PHASE 2 EXPANSION: Courses + Memberships + Events + Analytics + Gold + ISBN + Vertical Wizard (P1/P2 — COMPLETE)
+
+**1) 🎯 Wizard vertical-specific questions** (P1):
+- `wizard.py` حُدِّثت — دوال `_vertical_steps()` و `_merged_steps()` تأخذ project context و تُولّد dynamic steps من `wizard_questions` في `verticals.py`
+- كل سؤال يصبح step بـID `vq_<question_id>` + flag `vertical_specific=True`
+- الأسئلة تُدرج تلقائياً بين `variant` و `buttons` في تدفق الـwizard
+- الأجوبة تُخزَّن في `wizard.answers.vertical.<question_id>` (منفصلة عن الأجوبة العامة)
+- `GET /api/websites/wizard/steps?project_id={id}` الآن يُرجع 18 step لـsalon_women (4 vq_*) و 17 لـacademy (3 vq_*) و 14 فقط للمطاعم (لا أسئلة خاصة)
+
+**2) 🎓 Courses Engine** (P2) — للـacademy vertical:
+- `engines_v2.py` ملف جديد
+- Endpoints: `GET/POST/PATCH/DELETE /client/courses/{id?}`, `GET /client/enrollments`, public `GET /public/{slug}/courses`, `POST /public/{slug}/enroll`
+- Academy vertical يُضيف تلقائياً 3 sample_courses (Python/UI-UX/Business) عند إنشاء المشروع
+- Frontend: `CoursesTab` — CRUD كامل + عرض التسجيلات مع الأسعار
+
+**3) 💳 Memberships Engine** (P2) — للـgym + sports_club:
+- Endpoints: `/client/membership-plans` (CRUD), `POST /public/{slug}/subscribe` (حساب ends_at تلقائي)، `/client/subscriptions` مع `status_computed` (active/expired)
+- Gym vertical يُضيف تلقائياً 3 خطط (شهري/ربع سنوي/سنوي VIP)
+- Frontend: `MembershipsTab` — 3 KPI cards (active/expired/revenue) + CRUD + قائمة الاشتراكات
+
+**4) 🎫 Events/Tickets Engine** (P2):
+- Endpoints: `/client/events` (CRUD مع `tickets_sold` محسوب)، public `/public/{slug}/events` + `POST /buy-ticket` (يتحقق من capacity)
+- `/client/tickets` لعرض المبيعات
+- Frontend: `EventsTab` — 3 KPI cards + progress bar لكل فعالية (sold/capacity) + CRUD
+
+**5) 💰 Gold Price Ticker** (P2) — للـjewelry:
+- `GET /api/websites/gold-prices` + `/public/{slug}/gold-prices` — جلب أسعار الذهب من gold-api.com (free, no-key)
+- يُرجع per_gram لـ24k/22k/21k/18k بالريال السعودي (1 USD = 3.75 SAR, 1 oz = 31.1g)
+- Cache TTL 10 دقائق، fallback للأسعار التقديرية عند offline
+- Section type جديد `gold_ticker` في renderer.py — شريط أعلى صفحة المجوهرات بـ live badge
+- **تم التحقق**: السعر اللحظي = 565.91 ر.س/غ لعيار 24
+
+**6) 📚 ISBN Search** (P2) — للـlibrary:
+- `GET /api/websites/isbn-search?isbn=<10_or_13_digit>` — بحث في Open Library (free API)
+- يُرجع: title, authors[], publishers[], publish_date, pages, cover, subjects[]
+- **تم التحقق**: ISBN 9780140449266 → "The Count of Monte Cristo" by Alexandre Dumas
+
+**7) 📊 Driver Weekly Performance Analytics** (P2):
+- `GET /api/websites/client/drivers/analytics?days=7|14|30` — KPIs لكل سائق
+- يحسب: orders_assigned, orders_completed, completion_rate%, avg_delivery_min (min 0-360), avg_rating (0-5), total_earnings
+- مرتّب تنازلياً بـorders_completed
+- Frontend: `DriverAnalyticsTab` — 4 stat cards + period selector + جدول KPIs بألوان حسب completion_rate
+
+**E2E verified (Feb 26, 2026 night)**:
+- ✅ 26/26 backend tests + 100% frontend
+- ✅ 16 endpoints جديدة في engines_v2
+- ✅ Wizard injection: salon_women=18 steps, academy=17, restaurant=14
+- ✅ Auto-seed: academy → 3 دورات, gym → 3 خطط
+- ✅ Conditional tabs: restaurant يرى Driver Analytics فقط، academy يرى Courses + Events، gym يرى Memberships
+- ✅ Gold ticker live (السعر اللحظي), ISBN works, Driver analytics مع KPIs
+- ✅ لا regressions
+
+**Files added**:
+- `/app/backend/modules/websites/engines_v2.py` (16 endpoints)
+- `/app/frontend/src/pages/client/Phase2Tabs.js` (4 tab components)
+
+**Files modified**:
+- `/app/backend/modules/websites/wizard.py` — vertical injection
+- `/app/backend/modules/websites/verticals.py` — sample_courses + sample_membership_plans
+- `/app/backend/modules/websites/catalog.py` — gym + academy categories
+- `/app/backend/modules/websites/category_content.py` — gym + academy configs
+- `/app/backend/modules/websites/renderer.py` — _section_gold_ticker
+- `/app/backend/modules/websites/routes.py` — wizard/steps query param, auto-seed, engines_v2 registration
+- `/app/frontend/src/pages/client/ClientDashboard.js` — 4 conditional tabs + render
+
+
 ### 🆕 Feb 26, 2026 (Evening) — TEMPLATE ARCHETYPES REWRITE (P0 — COMPLETE)
 
 **المشكلة قبل التغيير**: النظام القديم كان يُولّد ~120 "layout" لكل فئة عبر ضرب hero × arrangement × 3 ألوان، والنتيجة: قوالب متشابهة هيكلياً مع ألوان مختلفة فقط. المستخدم طلب صراحة: **"قوالب مختلفة تماماً في الشكل، لا علاقة لها بالألوان"**.
