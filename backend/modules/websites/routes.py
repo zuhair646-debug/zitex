@@ -149,8 +149,17 @@ def register_routes(app, database, auth_dep):
         layouts = list_layouts(category_id)
         # Strip heavy sections from list response; include enough for card previews
         return {"layouts": [
-            {"id": L["id"], "name": L["name"], "icon": L.get("icon", ""), "description": L.get("description", ""),
-             "theme": L.get("theme", {})}
+            {
+                "id": L["id"],
+                "name": L["name"],
+                "icon": L.get("icon", ""),
+                "description": L.get("description", ""),
+                "density": L.get("density"),
+                "hero_layout": L.get("hero_layout"),
+                "sections_count": L.get("sections_count") or len(L.get("sections") or []),
+                "section_types": [s.get("type") for s in (L.get("sections") or [])],
+                "theme": L.get("theme", {}),
+            }
             for L in layouts
         ]}
 
@@ -239,10 +248,20 @@ def register_routes(app, database, auth_dep):
             # Store layout_id for reference
             d["meta"] = {**(d.get("meta") or {}), "layout_id": layout_id}
         else:
-            tpl = get_template(category_id)
-            if not d.get("sections"):
-                d["sections"] = [s.copy() for s in tpl["sections"]]
-                d["theme"] = {**tpl["theme"], **(d.get("theme") or {})}
+            # Default: use first archetype if layout_id not provided
+            from .catalog import list_layouts as _ll
+            layouts = _ll(category_id) or []
+            if layouts:
+                L = layouts[0]
+                if not d.get("sections"):
+                    d["sections"] = [s.copy() for s in L["sections"]]
+                d["theme"] = {**(L.get("theme") or {}), **(d.get("theme") or {})}
+                d["meta"] = {**(d.get("meta") or {}), "layout_id": L["id"]}
+            else:
+                tpl = get_template(category_id)
+                if not d.get("sections"):
+                    d["sections"] = [s.copy() for s in tpl["sections"]]
+                    d["theme"] = {**tpl["theme"], **(d.get("theme") or {})}
         for s in d["sections"]:
             if not s.get("id"):
                 s["id"] = f"sec-{uuid.uuid4().hex[:8]}"
@@ -418,6 +437,46 @@ def register_routes(app, database, auth_dep):
         theme = {**(p.get("theme") or {}), **(body.theme_override or {})}
         sections = body.sections_override if body.sections_override is not None else p.get("sections")
         return {"html": render_website_to_html({**p, "theme": theme, "sections": sections})}
+
+    # ---------------- Color palettes catalog + apply (post-template step) ----------------
+    @r.get("/palettes")
+    async def _palettes_catalog():
+        """10 color palettes — picked in the wizard AFTER the user selects a template.
+        Decouples structure from color."""
+        from .variants import STYLE_VARIANTS
+        return {"palettes": [{
+            "id": v["id"],
+            "name": v["name"],
+            "primary": v["theme_override"].get("primary"),
+            "secondary": v["theme_override"].get("secondary"),
+            "accent": v["theme_override"].get("accent"),
+            "background": v["theme_override"].get("background"),
+            "font": v["theme_override"].get("font"),
+        } for v in STYLE_VARIANTS]}
+
+    class ApplyPaletteIn(BaseModel):
+        palette_id: str
+
+    @r.post("/projects/{project_id}/apply-palette")
+    async def _p_apply_palette(project_id: str, body: ApplyPaletteIn, current_user: dict = Depends(auth_dep)):
+        """Apply a color palette WITHOUT touching sections (sections stay as user picked them)."""
+        from .variants import STYLE_VARIANTS
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "Project not found")
+        palette = next((v for v in STYLE_VARIANTS if v["id"] == body.palette_id), None)
+        if not palette:
+            raise HTTPException(404, "Palette not found")
+        # 📸 Snapshot pre-change
+        new_snaps = snaps.push_snapshot(p, label=f"قبل تطبيق ألوان: {palette['name']}", origin="variant")
+        merged_theme = {**(p.get("theme") or {}), **palette["theme_override"]}
+        await database.website_projects.update_one(
+            {"id": project_id},
+            {"$set": {"theme": merged_theme, "snapshots": new_snaps, "updated_at": _iso_now()}}
+        )
+        return await database.website_projects.find_one({"id": project_id}, {"_id": 0})
 
     # ---------------- Variant apply ----------------
     class ApplyVariantIn(BaseModel):

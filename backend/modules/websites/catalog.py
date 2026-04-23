@@ -602,83 +602,55 @@ def _mutate_sections(base_sections: List[Dict[str, Any]], hero_layout: str, arra
 
 
 def list_layouts(category_id: str) -> List[Dict[str, Any]]:
-    """Return all layouts for a category — RADICALLY different via hero + arrangement combinations."""
-    from .variants import STYLE_VARIANTS
+    """Return 20 STRUCTURALLY DISTINCT templates for this category.
 
-    # 🆕 New categories inherit base templates from closest existing category
-    # so they get the full 120+ design variations without needing bespoke templates.
-    CATEGORY_ALIASES = {
-        "salon_women": "barber",
-        "bakery": "coffee",
-        "car_wash": "plumbing",
-        "sports_club": "company",
-        "library": "store",
-        "art_gallery": "portfolio",
-        "maintenance": "plumbing",
-        "jewelry": "store",
-    }
-    effective_category = CATEGORY_ALIASES.get(category_id, category_id)
+    Each template is an archetype × this category's content. No color
+    variants — colors are chosen in a separate wizard step AFTER the user
+    picks a template. Same archetype × different category = meaningfully
+    different-looking template (different hero text, different images,
+    different primary grid = menu/products/services).
+    """
+    from .template_archetypes import ARCHETYPES, NEUTRAL_THEME
+    from .category_content import get_category_config, resolve_placeholder, resolve_section_type
 
-    base_layouts: List[Dict[str, Any]] = []
-    if effective_category in BASE_TEMPLATES:
-        base_layouts.append(_base_as_layout(effective_category))
-    for layout in EXTRA_LAYOUTS.get(effective_category, []):
-        base_layouts.append(layout)
-
+    cfg = get_category_config(category_id)
     out: List[Dict[str, Any]] = []
 
-    # Radical design combinations: hero_layout × arrangement × 3 top themes
-    HERO_LAYOUTS = [
-        ("split",       "مقسّم كلاسيكي"),
-        ("centered",    "مركزي بصورة سفلية"),
-        ("magazine",    "مجلة تحريرية"),
-        ("boxed",       "بطاقة زجاجية"),
-        ("story",       "قصّة روائية"),
-        ("form",        "بانر + حجز"),
-        ("full",        "بانر كامل"),
-        ("portrait",    "عمودي"),
-    ]
-    ARRANGEMENTS = [
-        ("default",             ""),
-        ("story_first",         "+ جدول زمني"),
-        ("process_first",       "+ خطوات"),
-        ("reservation_first",   "+ نموذج حجز"),
-        ("feature_alt",         "مميزات متناوبة"),
-        ("quote_middle",        "+ اقتباس"),
-        ("horizontal_features", "مميزات أفقية"),
-        ("reversed",            "ترتيب عكسي"),
-    ]
-    TOP_STYLES = [v for v in STYLE_VARIANTS if v["id"] in ("modern", "luxury", "warm", "dark_pro", "nature", "bold", "pastel", "minimal", "classic", "urban")]
-
-    for base in base_layouts:
-        out.append(base)  # original
-        for hero_id, hero_lbl in HERO_LAYOUTS:
-            for arr_id, arr_lbl in ARRANGEMENTS:
-                # pick a style for this combo
-                for style in TOP_STYLES[:3]:
-                    merged_theme = {**base.get("theme", {}), **style["theme_override"]}
-                    mutated = _mutate_sections(base.get("sections", []), hero_id, arr_id)
-                    suffix_parts = [hero_lbl, arr_lbl, style["name"]]
-                    suffix = " · ".join([p for p in suffix_parts if p])
-                    out.append({
-                        "id": f"{base['id']}__{hero_id}__{arr_id}__{style['id']}",
-                        "name": f"{base['name']} — {suffix}",
-                        "icon": base.get("icon", ""),
-                        "description": base.get("description", ""),
-                        "theme": merged_theme,
-                        "sections": mutated,
-                        "custom_css": base.get("custom_css", ""),
-                    })
-    # Deduplicate by id
-    seen = set()
-    unique = []
-    for L in out:
-        if L["id"] in seen:
-            continue
-        seen.add(L["id"])
-        unique.append(L)
-    # Cap per-category to keep API lightweight (e.g., 80 max per category)
-    return unique[:120]
+    for arch in ARCHETYPES:
+        sections: List[Dict[str, Any]] = []
+        for idx, (section_type, style, placeholder_id) in enumerate(arch["sections"]):
+            resolved_type = resolve_section_type(section_type, cfg)
+            data = resolve_placeholder(placeholder_id, category_id, cfg)
+            if style:
+                data = {**data, "style": style}
+            sections.append({
+                "id": f"sec-{arch['id']}-{idx}",
+                "type": resolved_type,
+                "order": idx,
+                "visible": True,
+                "data": data,
+            })
+        # Append standard footer
+        sections.append({
+            "id": f"sec-{arch['id']}-footer",
+            "type": "footer",
+            "order": len(sections),
+            "visible": True,
+            "data": {"brand": cfg.get("hero_title", "موقعك").split("·")[0].strip(),
+                     "about": cfg.get("about_text", "")},
+        })
+        out.append({
+            "id": f"{category_id}__{arch['id']}",
+            "name": arch["name_ar"],
+            "icon": cfg.get("accent_emoji", "✨"),
+            "description": arch["description"],
+            "density": arch["density"],
+            "hero_layout": arch["hero_layout"],
+            "sections_count": len(sections),
+            "theme": dict(NEUTRAL_THEME),
+            "sections": sections,
+        })
+    return out
 
 
 def get_layout(category_id: str, layout_id: str) -> Dict[str, Any]:

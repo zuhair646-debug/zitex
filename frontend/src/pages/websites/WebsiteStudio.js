@@ -19,7 +19,7 @@ function CategoryPicker({ categories, onPick }) {
       <div className="text-center mb-6 max-w-xl pt-4">
         <Sparkles className="w-12 h-12 mx-auto mb-3 text-yellow-500" />
         <h2 className="text-2xl md:text-4xl font-black mb-2 bg-gradient-to-r from-yellow-300 via-yellow-500 to-orange-400 bg-clip-text text-transparent">اختر نوع موقعك</h2>
-        <p className="text-white/60 text-xs md:text-sm">{categories.length} فئة • أكثر من 120 تصميماً لكل واحدة</p>
+        <p className="text-white/60 text-xs md:text-sm">{categories.length} فئة • 20 تصميماً مختلفاً لكل واحدة</p>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4 w-full max-w-7xl">
         {categories.map((c) => (
@@ -144,22 +144,30 @@ function LayoutBrowser({ category, layouts, onBack, onConfirm, loading }) {
               <button
                 key={L.id}
                 onClick={() => setSelected(L)}
-                className={`text-right p-2 rounded-lg border transition-all ${
+                className={`text-right p-2.5 rounded-lg border transition-all ${
                   selected?.id === L.id
                     ? 'bg-yellow-500/20 border-yellow-500/70 shadow-lg shadow-yellow-500/10'
                     : 'bg-white/5 border-white/10 hover:border-yellow-400/40'
                 }`}
                 data-testid={`layout-${L.id}`}
               >
-                <div className="flex items-center gap-1.5 mb-0.5">
+                <div className="flex items-center gap-1.5 mb-1">
                   <span className="text-base">{L.icon}</span>
-                  <span className="font-bold text-xs md:text-sm truncate">{L.name}</span>
+                  <span className="font-bold text-xs md:text-sm truncate flex-1">{L.name}</span>
+                  {L.density && (
+                    <span className="text-[9px] px-1.5 py-0.5 bg-white/10 rounded-full opacity-70">{L.density}</span>
+                  )}
                 </div>
-                <div className="text-[10px] opacity-60 line-clamp-1">{L.description}</div>
-                <div className="flex gap-1 mt-1">
-                  {['primary', 'accent', 'secondary'].map((k) => (
-                    <span key={k} className="w-3 h-3 rounded-full border border-white/20" style={{ background: L.theme?.[k] || '#000' }} />
-                  ))}
+                <div className="text-[10px] opacity-60 leading-relaxed line-clamp-2">{L.description}</div>
+                <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 bg-yellow-500/15 text-yellow-300 rounded">
+                    {L.sections_count || 0} قسم
+                  </span>
+                  {L.hero_layout && (
+                    <span className="text-[9px] px-1.5 py-0.5 bg-purple-500/15 text-purple-300 rounded">
+                      hero: {L.hero_layout}
+                    </span>
+                  )}
                 </div>
               </button>
             ))}
@@ -1315,6 +1323,7 @@ export default function WebsiteStudio({ user }) {
   const [pending, setPending] = useState(null); // { step, value, html }
   const [previewDevice, setPreviewDevice] = useState('desktop'); // desktop | mobile
   const [showSnapshots, setShowSnapshots] = useState(false);
+  const [showPalettePicker, setShowPalettePicker] = useState(false);
   const buildTimer = useRef(null);
 
   useEffect(() => {
@@ -1388,9 +1397,25 @@ export default function WebsiteStudio({ user }) {
       setProject(d);
       setActiveCategory(null);
       await loadProjects();
-      toast.success(`✨ تم اعتماد تصميم ${L.name}`);
+      toast.success(`✨ تم اعتماد التصميم — اختر الألوان الآن`);
+      setShowPalettePicker(true);
     } catch (_) { toast.error('فشل إنشاء المشروع'); }
     finally { setLoading(false); }
+  };
+
+  const applyPalette = async (paletteId) => {
+    if (!project?.id) return;
+    try {
+      const r = await fetch(`${API}/api/websites/projects/${project.id}/apply-palette`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authH() },
+        body: JSON.stringify({ palette_id: paletteId }),
+      });
+      const d = await r.json();
+      setProject(d);
+      refreshPreview(d);
+      toast.success('🎨 تم تطبيق الألوان');
+    } catch (_) { toast.error('فشل التطبيق'); }
   };
 
   const answerWizard = async (value) => {
@@ -1729,6 +1754,10 @@ export default function WebsiteStudio({ user }) {
               <span className="text-base">📚</span>
               <span className="hidden md:inline text-xs">السجل</span>
             </button>
+            <button onClick={() => setShowPalettePicker(true)} disabled={!project} className="p-2 md:px-3 md:py-2 bg-gradient-to-r from-pink-500/20 to-purple-500/20 hover:from-pink-500/30 hover:to-purple-500/30 border border-pink-400/30 rounded-lg flex items-center gap-1.5 disabled:opacity-40" data-testid="palette-btn" title="غيّر الألوان">
+              <span className="text-base">🎨</span>
+              <span className="hidden md:inline text-xs">الألوان</span>
+            </button>
             {project && project.status !== 'approved' && (
               <button onClick={() => approveProject(project.id)} className="p-2 md:px-3 md:py-2 bg-gradient-to-r from-green-500/30 to-emerald-500/30 hover:from-green-500/50 hover:to-emerald-500/50 border border-green-400/40 rounded-lg flex items-center gap-1.5" data-testid="approve-btn" title="اعتماد نهائي">
                 <Check className="w-4 h-4 text-green-300" /><span className="hidden md:inline text-xs font-bold">اعتماد</span>
@@ -1824,6 +1853,101 @@ export default function WebsiteStudio({ user }) {
       {logoStudioOpen && <LogoStudioModal project={project} onClose={() => setLogoStudioOpen(false)} onApplied={onLogoApplied} />}
       {techStackOpen && <TechStackModal onClose={() => setTechStackOpen(false)} />}
       {showSnapshots && project && <SnapshotsGalleryModal project={project} onClose={() => setShowSnapshots(false)} onRestored={(p) => { setProject(p); refreshPreview(p); setShowSnapshots(false); }} />}
+      {showPalettePicker && project && <PalettePickerModal project={project} onClose={() => setShowPalettePicker(false)} onApply={async (pid) => { await applyPalette(pid); }} />}
+    </div>
+  );
+}
+
+/* ================================================================
+   🎨 PALETTE PICKER — Phase 2 color step (after template selection)
+   ================================================================ */
+function PalettePickerModal({ project, onClose, onApply }) {
+  const [palettes, setPalettes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [applying, setApplying] = useState(null);
+  const currentPrimary = (project?.theme || {}).primary;
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const r = await fetch(`${API}/api/websites/palettes`);
+        const d = await r.json();
+        setPalettes(d.palettes || []);
+      } catch (_) {}
+      finally { setLoading(false); }
+    })();
+  }, []);
+
+  const pick = async (p) => {
+    setApplying(p.id);
+    try { await onApply(p.id); } finally { setApplying(null); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 md:p-6" onClick={onClose} data-testid="palette-picker-modal">
+      <div onClick={(e) => e.stopPropagation()} className="bg-[#0e1128] border border-pink-500/30 rounded-2xl w-full max-w-3xl shadow-[0_40px_100px_rgba(236,72,153,0.25)]">
+        <div className="p-5 md:p-6 border-b border-white/10 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-xl md:text-2xl font-black bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text text-transparent mb-1">
+              🎨 اختر الألوان المناسبة لعلامتك
+            </h2>
+            <p className="text-xs md:text-sm opacity-70">تصميمك جاهز — الآن اختر المزاج اللوني. يمكنك تغييره لاحقاً في أي وقت.</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg shrink-0" data-testid="close-palette-btn"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="p-5 md:p-6">
+          {loading ? (
+            <div className="text-center py-10 opacity-60">...</div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+              {palettes.map((p) => {
+                const active = p.primary === currentPrimary;
+                const busy = applying === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => pick(p)}
+                    disabled={busy}
+                    className={`group relative rounded-2xl p-3 border-2 transition-all ${
+                      active ? 'border-pink-500 bg-pink-500/10 shadow-[0_0_20px_rgba(236,72,153,0.3)]' : 'border-white/10 hover:border-pink-400/50'
+                    }`}
+                    data-testid={`palette-${p.id}`}
+                    style={{ background: active ? undefined : `linear-gradient(135deg, ${p.primary}15, ${p.accent}05)` }}
+                  >
+                    {/* 3 big swatches */}
+                    <div className="flex gap-1 mb-2 h-14 rounded-lg overflow-hidden">
+                      <div className="flex-1" style={{ background: p.primary }} />
+                      <div className="flex-1" style={{ background: p.accent }} />
+                      <div className="flex-1" style={{ background: p.secondary }} />
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold text-sm mb-0.5 truncate">{p.name}</div>
+                      <div className="text-[10px] opacity-60">{p.font || 'Tajawal'}</div>
+                    </div>
+                    {active && (
+                      <div className="absolute top-2 left-2 bg-pink-500 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-lg">
+                        <Check className="w-3.5 h-3.5" />
+                      </div>
+                    )}
+                    {busy && (
+                      <div className="absolute inset-0 bg-black/60 rounded-2xl flex items-center justify-center">
+                        <RefreshCw className="w-5 h-5 animate-spin text-pink-400" />
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        <div className="p-4 border-t border-white/10 flex items-center justify-between gap-2 flex-wrap">
+          <div className="text-xs opacity-60">💡 تقدر تفتح هذه الشاشة في أي وقت من زر "🎨 الألوان"</div>
+          <button onClick={onClose} className="px-5 py-2 bg-gradient-to-r from-pink-500 to-purple-500 rounded-lg text-sm font-bold text-white" data-testid="palette-done-btn">
+            تم — أكمل الإعداد
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
