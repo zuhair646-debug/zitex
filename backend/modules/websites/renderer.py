@@ -120,7 +120,27 @@ def _section_products(d, theme) -> str:
 
 
 def _section_menu(d, theme) -> str:
+    style = d.get("style") or "grid"
     cats = d.get("categories", [])
+    if style == "list":
+        # Vertical list layout — ideal for restaurants/cafes
+        cats_html = ""
+        for c in cats:
+            items_html = "".join(
+                f"""<div class="menu-list-row"><div class="menu-list-name">{_esc(i.get('name',''))}</div><div class="menu-list-dots"></div><div class="menu-list-price">{_esc(i.get('price',''))} ر.س</div></div>"""
+                + (f'<div class="menu-list-desc">{_esc(i.get("desc",""))}</div>' if i.get("desc") else "")
+                for i in c.get("items", [])
+            )
+            cats_html += f"""<div class="menu-list-cat"><h3>{_esc(c.get('name',''))}</h3>{items_html}</div>"""
+        return f"""<section class="menu menu-list-style" id="menu" data-hl="menu"><div class="container"><h2>{_esc(d.get('title',''))}</h2>{cats_html}</div><style>.menu-list-style{{background:#0b0d14}}.menu-list-cat{{margin-bottom:36px}}.menu-list-cat h3{{color:#FFD700;border-bottom:2px solid rgba(255,215,0,.3);padding-bottom:8px;margin-bottom:16px;font-size:24px}}.menu-list-row{{display:flex;align-items:center;gap:8px;padding:8px 0;font-size:16px}}.menu-list-name{{font-weight:700}}.menu-list-dots{{flex:1;border-bottom:2px dotted rgba(255,255,255,.25)}}.menu-list-price{{color:#FFD700;font-weight:900;white-space:nowrap}}.menu-list-desc{{opacity:.65;font-size:13px;padding:0 4px 8px;line-height:1.6}}</style></section>"""
+    if style == "carousel":
+        items = [i for c in cats for i in c.get("items", [])]
+        cards = "".join(
+            f"""<div class="menu-car-card">{f'<img src="{_esc(i["image"])}" alt=""/>' if i.get("image") else ''}<div class="menu-car-body"><h4>{_esc(i.get('name',''))}</h4><span class="menu-car-price">{_esc(i.get('price',''))} ر.س</span></div></div>"""
+            for i in items
+        )
+        return f"""<section class="menu menu-carousel-style" id="menu" data-hl="menu"><div class="container"><h2>{_esc(d.get('title',''))}</h2><div class="menu-car-strip">{cards}</div></div><style>.menu-car-strip{{display:flex;gap:16px;overflow-x:auto;padding:16px 4px;scroll-snap-type:x mandatory}}.menu-car-strip::-webkit-scrollbar{{height:6px}}.menu-car-strip::-webkit-scrollbar-thumb{{background:rgba(255,255,255,.2);border-radius:4px}}.menu-car-card{{flex:0 0 240px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:14px;overflow:hidden;scroll-snap-align:start}}.menu-car-card img{{width:100%;height:160px;object-fit:cover;display:block}}.menu-car-body{{padding:12px;display:flex;justify-content:space-between;align-items:center}}.menu-car-body h4{{margin:0;font-size:15px}}.menu-car-price{{color:#FFD700;font-weight:900}}</style></section>"""
+    # default: grid (classic)
     cats_html = ""
     for c in cats:
         items_html = "".join(
@@ -132,13 +152,31 @@ def _section_menu(d, theme) -> str:
 
 
 def _section_gallery(d, theme) -> str:
+    style = d.get("style") or "grid"
     imgs = d.get("images", [])
+    if style == "masonry":
+        # Pinterest-style masonry via CSS columns
+        cards = "".join(f"""<img src="{_esc(u)}" alt="" style="width:100%;display:block;border-radius:10px;margin-bottom:10px;break-inside:avoid"/>""" for u in imgs)
+        return f"""<section class="gallery gallery-masonry" id="gallery" data-hl="gallery"><div class="container"><h2>{_esc(d.get('title',''))}</h2><div style="columns:3 300px;column-gap:12px">{cards}</div></div></section>"""
+    if style == "strip":
+        # Horizontal scroll strip
+        cards = "".join(f"""<div style="flex:0 0 240px;aspect-ratio:3/4;background:#000 url('{_esc(u)}') center/cover;border-radius:14px;scroll-snap-align:start"></div>""" for u in imgs)
+        return f"""<section class="gallery gallery-strip" id="gallery" data-hl="gallery"><div class="container"><h2>{_esc(d.get('title',''))}</h2><div style="display:flex;gap:14px;overflow-x:auto;padding:8px 4px;scroll-snap-type:x mandatory">{cards}</div></div></section>"""
+    # default: grid (classic)
     cards = "".join(f"""<div class="gallery-item" style="background-image:url('{_esc(u)}')"></div>""" for u in imgs)
     return f"""<section class="gallery" id="gallery" data-hl="gallery"><div class="container"><h2>{_esc(d.get('title',''))}</h2><div class="gallery-grid">{cards}</div></div></section>"""
 
 
 def _section_testimonials(d, theme) -> str:
+    style = d.get("style") or "grid"
     items = d.get("items", [])
+    if style == "carousel":
+        cards = "".join(f"""<div class="testimonial-car-card"><div class="stars">{'★' * int(i.get('rating', 5))}</div><p>"{_esc(i.get('text',''))}"</p><div class="author">— {_esc(i.get('name',''))}</div></div>""" for i in items)
+        return f"""<section class="testimonials testi-carousel" id="testimonials" data-hl="testimonials"><div class="container"><h2>{_esc(d.get('title',''))}</h2><div class="testi-strip">{cards}</div></div><style>.testi-strip{{display:flex;gap:20px;overflow-x:auto;padding:12px 4px;scroll-snap-type:x mandatory}}.testimonial-car-card{{flex:0 0 320px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:20px;scroll-snap-align:start}}.testimonial-car-card .stars{{color:#FFD700;margin-bottom:10px}}.testimonial-car-card p{{line-height:1.7}}.testimonial-car-card .author{{opacity:.7;margin-top:10px;font-size:13px}}</style></section>"""
+    if style == "quote-big":
+        cards = "".join(f"""<blockquote style="background:rgba(255,255,255,.03);border-right:4px solid #FFD700;padding:24px;margin:12px 0;border-radius:12px;font-size:18px;line-height:1.8"><div style="color:#FFD700;font-size:32px;line-height:1">"</div>{_esc(i.get('text',''))}<div style="opacity:.7;margin-top:12px;font-size:14px">— {_esc(i.get('name',''))}</div></blockquote>""" for i in items)
+        return f"""<section class="testimonials testi-quote" id="testimonials" data-hl="testimonials"><div class="container"><h2>{_esc(d.get('title',''))}</h2><div>{cards}</div></div></section>"""
+    # default: grid (cards)
     cards = "".join(f"""<div class="testimonial-card"><div class="stars">{'★' * int(i.get('rating', 5))}</div><p>{_esc(i.get('text',''))}</p><div class="author">— {_esc(i.get('name',''))}</div></div>""" for i in items)
     return f"""<section class="testimonials" id="testimonials" data-hl="testimonials"><div class="container"><h2>{_esc(d.get('title',''))}</h2><div class="testimonials-grid">{cards}</div></div></section>"""
 
