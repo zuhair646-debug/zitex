@@ -15,6 +15,48 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Feb 26, 2026 (late) — 8 NEW VERTICALS + IMAGE-RICH CATEGORY PICKER (P2 — COMPLETE)
+
+**1) 8 New Verticals** (`verticals.py` + `catalog.py` + routes mapping):
+- 💇‍♀️ **salon_women** — صالون نساء (shared booking engine with salon; categories: شعر/بشرة/أظافر/حناء/مكياج/ليزر)
+- 🍰 **bakery** — مخبز وحلويات (products + orders + custom_orders; seeded كيك/كرواسون/كنافة)
+- 🚗 **car_wash** — غسيل سيارات متنقل (bookings + location-based; seeded غسيل/تلميع/سيراميك)
+- ⚽ **sports_club** — نوادي رياضية (facility bookings + memberships; seeded ملاعب بادل/كرة قدم)
+- 📚 **library** — مكتبة وقرطاسية (products + ISBN search-ready; seeded كتب/دفاتر/قرآن)
+- 🎨 **art_gallery** — معارض فنية (products as artworks + artist field; seeded لوحات زيتية + خط عربي)
+- 🛠️ **maintenance** — فني صيانة منزلية (bookings + service_visit checkout; seeded كهرباء/سباكة/تكييف)
+- 💍 **jewelry** — مجوهرات وذهب (products + gold calculator; seeded خواتم/قلادات/أساور)
+
+**Category Aliases** في `list_layouts()`: كل vertical جديد يرث 120 تصميم من أقرب BASE_TEMPLATE موجود (salon_women→barber, bakery→coffee, car_wash→plumbing, sports_club→company, library→store, art_gallery→portfolio, maintenance→plumbing, jewelry→store). **النتيجة**: 20 فئة × 120 تصميم = **2,400 تصميم فريد**.
+
+**Client Dashboard conditional tabs** محدّثة:
+- `hasBookings` تشمل: salon, salon_women, pets, medical, gym, car_wash, sports_club, maintenance
+- `hasProducts` تشمل: ecommerce, bakery, library, art_gallery, jewelry
+- `hasOrders` تشمل: restaurant, ecommerce, bakery, library, jewelry
+
+**2) 🖼️ Image-Rich Category Picker** في `WebsiteStudio`:
+- كل فئة لها صورة Unsplash احترافية مناسبة (مطعم = لقطة طعام، حلاقة = كرسي حلاقة، مجوهرات = ذهب، إلخ)
+- كروت aspect-4/5 مع صورة خلفية + gradient قراءة + لون brand على الـhover (mix-blend-overlay)
+- أيقونة في بادج ملوّن (top-right)، badge لعدد التصاميم (top-left)، اسم ضخم + سهم انتقال متحرك
+- Hover: lift -1px + shadow ذهبي + background scale 1.1 (500ms transition)
+- Grid: 2→3→4→5 columns حسب شاشة الجهاز
+
+**E2E verified (Feb 26, 2026)**:
+- ✅ 20 categories كلها تُرجع 120 layout + image URL (2400 تصميم كلياً)
+- ✅ 17 verticals في `/api/websites/verticals`
+- ✅ Bakery/Jewelry/Library/Art_Gallery → auto-seed 3 products
+- ✅ Salon_Women/Car_Wash/Sports_Club/Maintenance → auto-seed 3-4 services
+- ✅ Frontend picker يعرض 20 بطاقة بصور + hover animations
+- ✅ 100% backend + 100% frontend + No regressions
+
+**Files modified**:
+- `/app/backend/modules/websites/catalog.py` — CATEGORIES array بـ20 فئة + `image` لكل واحدة + CATEGORY_ALIASES
+- `/app/backend/modules/websites/verticals.py` — 8 VERTICALS جديدة (كاملة مع wizard_questions + sample_services/products + dashboard_tabs)
+- `/app/backend/modules/websites/routes.py` — `_category_to_vertical` محدّث بالـ8 الجديدة
+- `/app/frontend/src/pages/websites/WebsiteStudio.js` — CategoryPicker معاد تصميمه بـImage Cards
+- `/app/frontend/src/pages/client/ClientDashboard.js` — conditional tabs محدّثة للـverticals الجديدة
+
+
 ### 🆕 Feb 26, 2026 — SECTION VARIANTS + SNAPSHOTS + DRAG POSITIONING (P0/P1 — COMPLETE)
 
 **1) Section-level Style Variants** (`/backend/modules/websites/section_variants.py` — جديد):
