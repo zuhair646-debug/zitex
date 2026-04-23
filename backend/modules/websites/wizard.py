@@ -22,6 +22,49 @@ from typing import List, Dict, Any, Optional
 
 
 # ---------------------------------------------------------------------------
+# Vertical-specific question injection
+# ---------------------------------------------------------------------------
+def _vertical_steps(vertical_id: Optional[str]) -> List[Dict[str, Any]]:
+    """Return dynamic steps generated from the vertical's wizard_questions.
+    Each question becomes a step with id `vq_<question_id>`.
+    """
+    if not vertical_id:
+        return []
+    try:
+        from .verticals import get_vertical
+    except Exception:
+        return []
+    v = get_vertical(vertical_id) or {}
+    out: List[Dict[str, Any]] = []
+    for q in (v.get("wizard_questions") or []):
+        chips = [{"id": str(i), "label": x, "value": x} for i, x in enumerate(q.get("chips") or [])]
+        out.append({
+            "id": f"vq_{q.get('id','unknown')}",
+            "title": q.get("q", "سؤال"),
+            "question": q.get("q", "سؤال"),
+            "chips": chips,
+            "render": "chips" if chips else "free_text",
+            "applies": f"vq_{q.get('id','unknown')}",
+            "vertical_specific": True,
+        })
+    return out
+
+
+def _merged_steps(project: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """Return STEPS with vertical-specific questions spliced in right after 'variant'."""
+    vertical_id = ((project or {}).get("vertical")) if project else None
+    v_steps = _vertical_steps(vertical_id)
+    if not v_steps:
+        return STEPS
+    out: List[Dict[str, Any]] = []
+    for s in STEPS:
+        out.append(s)
+        if s["id"] == "variant":
+            out.extend(v_steps)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Step definitions
 # ---------------------------------------------------------------------------
 STEPS: List[Dict[str, Any]] = [
@@ -268,21 +311,22 @@ def default_wizard_state() -> Dict[str, Any]:
     }
 
 
-def get_step(step_id: str) -> Optional[Dict[str, Any]]:
-    for s in STEPS:
+def get_step(step_id: str, project: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+    for s in _merged_steps(project):
         if s["id"] == step_id:
             return s
     return None
 
 
-def next_step_id(current: str, answers: Dict[str, Any]) -> Optional[str]:
+def next_step_id(current: str, answers: Dict[str, Any], project: Optional[Dict[str, Any]] = None) -> Optional[str]:
     """Return the next step id after `current`, applying conditional skips."""
-    ids = [s["id"] for s in STEPS]
+    all_steps = _merged_steps(project)
+    ids = [s["id"] for s in all_steps]
     try:
         idx = ids.index(current)
     except ValueError:
-        return STEPS[0]["id"]
-    for s in STEPS[idx + 1:]:
+        return all_steps[0]["id"]
+    for s in all_steps[idx + 1:]:
         cond = s.get("condition")
         if cond and not cond(answers):
             continue
@@ -290,20 +334,20 @@ def next_step_id(current: str, answers: Dict[str, Any]) -> Optional[str]:
     return None  # end
 
 
-def get_chips_for_step(step_id: str) -> List[Dict[str, Any]]:
-    s = get_step(step_id)
+def get_chips_for_step(step_id: str, project: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    s = get_step(step_id, project)
     return (s or {}).get("chips", []) or []
 
 
-def get_question_for_step(step_id: str) -> str:
-    s = get_step(step_id)
+def get_question_for_step(step_id: str, project: Optional[Dict[str, Any]] = None) -> str:
+    s = get_step(step_id, project)
     return (s or {}).get("question", "")
 
 
-def steps_metadata() -> List[Dict[str, Any]]:
+def steps_metadata(project: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     """Public list (without python callables)."""
     out = []
-    for s in STEPS:
+    for s in _merged_steps(project):
         out.append({k: v for k, v in s.items() if k != "condition"})
     return out
 
@@ -367,10 +411,16 @@ def apply_answer(project: Dict[str, Any], step_id: str, value: Any) -> Dict[str,
             project["approved_at"] = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
     elif step_id == "review":
         ans["review"] = value
+    elif step_id.startswith("vq_"):
+        # Vertical-specific free-form answer — stored in `answers.vertical.<id>`
+        key = step_id[3:]
+        vert_map = dict(ans.get("vertical") or {})
+        vert_map[key] = value
+        ans["vertical"] = vert_map
 
     wizard["answers"] = ans
     wizard["completed"] = list(dict.fromkeys((wizard.get("completed") or []) + [step_id]))
-    nxt = next_step_id(step_id, ans)
+    nxt = next_step_id(step_id, ans, project)
     wizard["step"] = nxt or "done"
     if not nxt:
         wizard["active"] = False

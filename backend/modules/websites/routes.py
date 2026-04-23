@@ -198,8 +198,13 @@ def register_routes(app, database, auth_dep):
 
     # ---------------- Wizard meta (public) ----------------
     @r.get("/wizard/steps")
-    async def _w_steps():
-        return {"steps": steps_metadata()}
+    async def _w_steps(project_id: Optional[str] = None, current_user: dict = Depends(auth_dep)):
+        p = None
+        if project_id:
+            p = await database.website_projects.find_one(
+                {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+            )
+        return {"steps": steps_metadata(p)}
 
     # ---------------- Projects ----------------
     @r.get("/projects")
@@ -300,10 +305,14 @@ def register_routes(app, database, auth_dep):
                 d["services"] = [{**s, "created_at": now} for s in v_def["sample_services"]]
             if v_def.get("sample_products") and not d.get("products"):
                 d["products"] = [{**s, "created_at": now} for s in v_def["sample_products"]]
+            if v_def.get("sample_courses") and not d.get("courses"):
+                d["courses"] = [{**s, "created_at": now} for s in v_def["sample_courses"]]
+            if v_def.get("sample_membership_plans") and not d.get("membership_plans"):
+                d["membership_plans"] = [{**s, "created_at": now} for s in v_def["sample_membership_plans"]]
         if is_blank:
             greet = "✨ ممتاز! اخترت قالباً مخصّصاً. صف لي نشاطك بحرّية (مثل: 'متجر قطط' أو 'عيادة أسنان حديثة') وسأبني لك تصميماً ابتكارياً فوراً."
         else:
-            greet = get_question_for_step(wiz["step"])
+            greet = get_question_for_step(wiz["step"], d)
         if not d.get("chat"):
             d["chat"] = [{"role": "assistant", "content": greet}]
         await database.website_projects.insert_one(d)
@@ -586,7 +595,7 @@ def register_routes(app, database, auth_dep):
         chat.append({"role": "user", "content": human_label})
         nxt_step = p["wizard"].get("step")
         if nxt_step and nxt_step != "done":
-            chat.append({"role": "assistant", "content": get_question_for_step(nxt_step)})
+            chat.append({"role": "assistant", "content": get_question_for_step(nxt_step, p)})
         else:
             chat.append({"role": "assistant", "content": "🎉 تمّت كل الأسئلة! راجع المعاينة — لو كل شيء تمام، اضغط 'اعتماد' من القائمة."})
         p["chat"] = chat
@@ -2473,6 +2482,8 @@ color:#000;text-decoration:none;border-radius:12px;font-weight:900}}</style></he
     # ═══════════════════════════════════════════════════════════════
     from .engines import register_engines as _reg_engines
     _reg_engines(r, database, _resolve_client_project, _resolve_site_customer, realtime)
+    from .engines_v2 import register_engines_v2 as _reg_v2
+    _reg_v2(r, database, _resolve_client_project, _resolve_site_customer)
 
     app.include_router(r)
     return r

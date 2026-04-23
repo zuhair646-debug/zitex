@@ -165,6 +165,11 @@ VERTICALS = {
             {"id": "g2", "name": "اشتراك سنوي", "price": 2400, "duration_days": 365, "type": "membership"},
             {"id": "g3", "name": "مدرب شخصي", "price": 150, "duration_min": 60, "type": "session"},
         ],
+        "sample_membership_plans": [
+            {"id": "mp1", "name": "شهري أساسي", "price": 250, "period_days": 30, "benefits": ["وصول كامل للصالة", "خزانة"], "featured": False},
+            {"id": "mp2", "name": "ربع سنوي", "price": 650, "period_days": 90, "benefits": ["كل ميزات الشهري", "جلسة مدرب شخصي مجانية", "خصم على المكملات"], "featured": True},
+            {"id": "mp3", "name": "سنوي VIP", "price": 2400, "period_days": 365, "benefits": ["كل الميزات", "4 جلسات مدرب شخصي شهرياً", "دروس يوجا مجانية", "منشفة وماء"], "featured": False},
+        ],
         "sample_sections": ["hero", "memberships_pricing", "classes_schedule", "trainers_showcase", "gallery", "contact"],
     },
 
@@ -181,6 +186,11 @@ VERTICALS = {
             {"id": "subject", "q": "الموضوع التعليمي؟", "chips": ["برمجة", "لغات", "تصميم", "إدارة أعمال", "تطوير ذاتي", "دين وقرآن"]},
             {"id": "format", "q": "صيغة الكورسات؟", "chips": ["فيديو مسجل", "بث مباشر", "مختلط", "نص ومقالات"]},
             {"id": "certification", "q": "شهادات؟", "chips": ["نعم، معتمدة", "شهادة حضور", "لا"]},
+        ],
+        "sample_courses": [
+            {"id": "crs1", "title": "أساسيات البرمجة بـPython", "description": "دورة شاملة للمبتدئين — 30 درس تفاعلي", "price": 299, "duration_hours": 15, "level": "beginner", "instructor": "أحمد المحمد", "category": "برمجة"},
+            {"id": "crs2", "title": "تصميم UI/UX احترافي", "description": "من الصفر إلى احتراف Figma والـdesign systems", "price": 499, "duration_hours": 25, "level": "intermediate", "instructor": "سارة العلي", "category": "تصميم"},
+            {"id": "crs3", "title": "إدارة الأعمال الحديثة", "description": "أدوات القيادة والاستراتيجية للرواد", "price": 799, "duration_hours": 40, "level": "advanced", "instructor": "د. محمد الشهري", "category": "إدارة أعمال"},
         ],
         "sample_sections": ["hero", "courses_grid", "instructors", "testimonials", "faq", "contact"],
     },

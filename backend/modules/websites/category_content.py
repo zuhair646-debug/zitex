@@ -205,6 +205,26 @@ CATEGORY_CONFIG: Dict[str, Dict[str, Any]] = {
         "primary_grid": "services",
         "accent_emoji": "💻",
     },
+    "gym": {
+        "hero_title": "قوة · التزام · تحوّل",
+        "hero_subtitle": "معدات حديثة، مدربون محترفون، حصص جماعية — عضويتك تفتح عالماً كاملاً",
+        "hero_image": "https://images.unsplash.com/photo-1534258936925-c58bed479fcb?w=1600&q=70",
+        "cta": "اشترك الآن",
+        "about_title": "نادي متكامل",
+        "about_text": "أكثر من مجرد صالة — مجتمع يدفعك للأفضل كل يوم.",
+        "primary_grid": "services",
+        "accent_emoji": "🏋️",
+    },
+    "academy": {
+        "hero_title": "تعلّم · تطوّر · تميّز",
+        "hero_subtitle": "كورسات احترافية من خبراء، شهادات معتمدة، وصول مدى الحياة",
+        "hero_image": "https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=1600&q=70",
+        "cta": "سجّل الآن",
+        "about_title": "منصتنا التعليمية",
+        "about_text": "آلاف الطلاب، مدرّبون خبراء، ومنهج عملي يضمن تطبيقاً فعلياً لكل مهارة.",
+        "primary_grid": "services",  # courses displayed as service cards for now
+        "accent_emoji": "🎓",
+    },
     "blank": {
         "hero_title": "عنوان الصفحة",
         "hero_subtitle": "وصف قصير يلخص عملك في سطر أو اثنين",

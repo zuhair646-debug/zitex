@@ -834,6 +834,14 @@ load();setInterval(load,60000);
 }})();</script></section>"""
 
 
+def _section_gold_ticker(d, theme):
+    """Live gold price ticker — 24k/22k/21k/18k SAR per gram."""
+    return f"""<section id="gold-ticker" style="background:linear-gradient(135deg,#1a1a1a,#2a1a0a);border-bottom:2px solid #D4AF37;padding:14px 0;overflow:hidden;font-family:Tajawal,sans-serif">
+<div id="zx-gk" style="display:flex;justify-content:center;align-items:center;gap:32px;flex-wrap:wrap;font-size:14px;color:#D4AF37;font-weight:700">جاري تحميل أسعار الذهب...</div>
+<script>(function(){{async function load(){{try{{var u=window.location.pathname.split('/').filter(Boolean);var slug=u[u.length-1]||'';var r=await fetch('/api/websites/public/'+slug+'/gold-prices');var d=await r.json();var pg=d.per_gram||{{}};var items=[['24k',pg['24k']],['22k',pg['22k']],['21k',pg['21k']],['18k',pg['18k']]];var html=items.map(function(i){{return '<span style=\\"display:inline-flex;align-items:center;gap:6px\\"><span style=\\"background:rgba(212,175,55,.2);padding:3px 8px;border-radius:6px\\">'+i[0]+'</span><span>'+(i[1]||'—')+' ر.س/غ</span></span>'}}).join('');var live=d.live?'<span style=\\"color:#10b981;font-size:10px\\">● مباشر</span>':'<span style=\\"color:#888;font-size:10px\\">تقديري</span>';document.getElementById('zx-gk').innerHTML='<span style=\\"color:#D4AF37\\">💰 أسعار الذهب:</span>'+html+live;}}catch(e){{}}}};load();setInterval(load,600000);}})();</script>
+</section>"""
+
+
 def _section_stock_ticker(d, theme):
     """Top scrolling ticker of live market quotes."""
     return f"""<section id="stock-ticker-bar" style="background:#000;border-bottom:1px solid rgba(255,255,255,.1);padding:10px 0;overflow:hidden;font-family:monospace;font-size:14px;white-space:nowrap">
@@ -887,6 +895,7 @@ RENDERERS = {
     "product_grid_filters": _section_product_grid_filters,
     "stock_ticker": _section_stock_ticker,
     "hero_ticker": _section_stock_ticker,
+    "gold_ticker": _section_gold_ticker,
     "listings_grid": _section_listings_grid,
     "hero_search": _section_listings_grid,
 }

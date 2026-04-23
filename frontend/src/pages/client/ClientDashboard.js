@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { CoursesTab, MembershipsTab, EventsTab, DriverAnalyticsTab } from './Phase2Tabs';
+
 import {
   LogIn, Eye, EyeOff, LogOut, ExternalLink, Users, MessageSquare, BarChart3,
   Edit3, Save, X, RefreshCw, Check, Key, CheckCircle2, Copy, Lock, MapPin,
@@ -2315,6 +2317,10 @@ function Dashboard({ slug, token, onLogout }) {
             const hasProducts = ['ecommerce', 'bakery', 'library', 'art_gallery', 'jewelry'].includes(v);
             const hasListings = v === 'realestate';
             const hasOrders = ['restaurant', 'ecommerce', 'bakery', 'library', 'jewelry'].includes(v) || !v;
+            const hasCourses = v === 'academy';
+            const hasMemberships = ['gym', 'sports_club'].includes(v);
+            const hasEvents = ['art_gallery', 'sports_club', 'academy'].includes(v);
+            const hasDriverAnalytics = hasOrders;  // any vertical with delivery
             const base = [
               { id: 'overview', label: 'نظرة عامة', icon: BarChart3 },
             ];
@@ -2334,6 +2340,10 @@ function Dashboard({ slug, token, onLogout }) {
               base.push({ id: 'drivers', label: 'السائقون', icon: ExternalLink });
               base.push({ id: 'delivery', label: 'التوصيل', icon: MapPin });
             }
+            if (hasCourses) base.push({ id: 'courses', label: '🎓 الدورات', icon: BarChart3 });
+            if (hasMemberships) base.push({ id: 'memberships', label: '💳 العضويات', icon: Key });
+            if (hasEvents) base.push({ id: 'events', label: '🎫 الفعاليات', icon: MapPin });
+            if (hasDriverAnalytics) base.push({ id: 'driver_analytics', label: '📊 أداء السائقين', icon: BarChart3 });
             base.push(
               { id: 'customers', label: 'العملاء', icon: Users },
               { id: 'payments', label: '💳 الدفع', icon: Key },
@@ -2402,6 +2412,11 @@ function Dashboard({ slug, token, onLogout }) {
         {tab === 'loyalty' && <LoyaltyTab token={token} />}
 
         {tab === 'messages' && <MessagesTab token={token} />}
+
+        {tab === 'courses' && <CoursesTab token={token} />}
+        {tab === 'memberships' && <MembershipsTab token={token} />}
+        {tab === 'events' && <EventsTab token={token} />}
+        {tab === 'driver_analytics' && <DriverAnalyticsTab token={token} />}
 
         {tab === 'snapshots' && <SnapshotsTab token={token} onRestored={loadAll} />}
 
