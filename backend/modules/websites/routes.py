@@ -5,7 +5,7 @@ import re
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, List
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Header as _Header, Response
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
@@ -171,6 +171,63 @@ def register_routes(app, database, auth_dep):
             theme["custom_css"] = L["custom_css"]
         project = {"name": L["name"], "theme": theme, "sections": L["sections"], "meta": {"title": L["name"]}}
         return {"html": render_website_to_html(project)}
+
+    @r.get("/categories/{category_id}/layouts-gallery", response_class=Response)
+    async def _c_layouts_gallery(category_id: str):
+        """Single HTML page showing ALL archetypes in a numbered grid for visual preview."""
+        from fastapi.responses import HTMLResponse
+        layouts = list_layouts(category_id)
+        cards = ""
+        for i, L in enumerate(layouts, 1):
+            preview_url = f"/api/websites/categories/{category_id}/layouts/{L['id']}/preview-html-raw"
+            cards += f"""
+            <div class="card" data-num="{i}">
+              <div class="num">{i}</div>
+              <div class="frame-wrap">
+                <iframe src="{preview_url}" loading="lazy" sandbox="allow-same-origin"></iframe>
+              </div>
+              <div class="name">{L.get('icon','')} {L['name']}</div>
+              <div class="desc">{L.get('description','')[:80]}</div>
+            </div>"""
+        html = f"""<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>معرض القوالب</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20px}}
+.header{{text-align:center;margin-bottom:30px}}
+.header h1{{font-size:36px;font-weight:900;background:linear-gradient(135deg,#FFD700,#FF6B35);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px}}
+.header p{{opacity:.7;font-size:14px}}
+.grid{{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;max-width:1400px;margin:0 auto}}
+@media(max-width:1100px){{.grid{{grid-template-columns:repeat(3,1fr)}}}}
+@media(max-width:800px){{.grid{{grid-template-columns:repeat(2,1fr)}}}}
+.card{{background:#0e1128;border:2px solid rgba(255,215,0,.15);border-radius:14px;overflow:hidden;position:relative;transition:transform .3s,border-color .3s}}
+.card:hover{{transform:translateY(-4px);border-color:#FFD700}}
+.num{{position:absolute;top:8px;right:8px;width:38px;height:38px;background:linear-gradient(135deg,#FFD700,#FF6B35);color:#000;font-weight:900;font-size:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:0 4px 12px rgba(255,215,0,.4)}}
+.frame-wrap{{height:240px;overflow:hidden;background:#fff;position:relative}}
+.frame-wrap iframe{{border:0;width:1280px;height:1600px;transform:scale(.25);transform-origin:top right;pointer-events:none}}
+.name{{padding:10px 14px 4px;font-weight:700;font-size:14px}}
+.desc{{padding:0 14px 12px;font-size:11px;opacity:.7;line-height:1.5;height:38px;overflow:hidden}}
+</style></head><body>
+<div class="header">
+  <h1>📐 معرض القوالب — {len(layouts)} تصميم</h1>
+  <p>كل قالب رقم واضح في الزاوية. اختر الرقم وأرسله لتطبيقه على موقعك.</p>
+</div>
+<div class="grid">{cards}</div>
+</body></html>"""
+        return HTMLResponse(content=html)
+
+    @r.get("/categories/{category_id}/layouts/{layout_id}/preview-html-raw", response_class=Response)
+    async def _c_layout_preview_raw(category_id: str, layout_id: str):
+        from fastapi.responses import HTMLResponse
+        L = get_layout(category_id, layout_id)
+        theme = dict(L.get("theme") or {})
+        if L.get("custom_css"):
+            theme["custom_css"] = L["custom_css"]
+        project = {"name": L["name"], "theme": theme, "sections": L["sections"], "meta": {"title": L["name"]}}
+        return HTMLResponse(content=render_website_to_html(project))
 
     # DNA Mixer — random layout for a category
     @r.get("/categories/{category_id}/mix")
