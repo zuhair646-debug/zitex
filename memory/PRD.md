@@ -15,6 +15,53 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Feb 27, 2026 — CATEGORY-SPECIFIC IMAGE LIBRARY (P0 — COMPLETE)
+
+**شكوى المستخدم**: "في تصاميم حاط لي مثلا في قسم المطاعم حاط لي حق المكياج صورت مكياج. لا انا ابي كل القوالب الداخلية تكون خاصة في المطاعم"
+
+**Root cause**: 
+1. الـ5 themes المميزة (beauty_megamart, realestate_luxury_dark, etc.) كانت تحقن صور Unsplash **ثابتة** مباشرة في الـCSS — هذا يعني صورة مكياج ثابتة تظهر في كل فئة تستخدم القالب
+2. الـ`get_hero_image_for` كانت تستخدم `source.unsplash.com` (deprecated) — صور غير موثوقة
+3. `_default_gallery`, `_products_sample`, `_menu_sample` كلها استخدمت URLs ثابتة لا تتغير حسب الفئة
+
+**Solution implemented**:
+1. **بُني `category_images.py`** — مكتبة صور احترافية لكل فئة (8 صور مختارة لكل فئة من 25 فئة):
+   - restaurant: 8 صور أطباق ومطاعم
+   - plumbing: 8 صور أدوات سباكة وفنيين
+   - jewelry: 8 صور خواتم وساعات فاخرة
+   - cosmetics: 8 صور مكياج وعطور
+   - automotive: 8 صور سيارات معارض
+   - realestate: 8 صور مباني فاخرة
+   - وكل فئة من الـ25 لها 8 صور خاصة بها
+2. **`pick_images_for_archetype(cat_id, arch_id)`** — يختار 4 صور deterministic لكل (category, archetype) — بحيث:
+   - نفس الفئة + archetype مختلف = صور مختلفة (تنوع داخل الفئة)
+   - فئة مختلفة + نفس archetype = صور مختلفة (المطعم يأخذ صور مطعم، السباكة تأخذ صور سباكة)
+3. **استبدال tokens في الـCSS**: 
+   - الـ5 themes المميزة الآن تستخدم `{IMG_1}`, `{IMG_2}`, `{IMG_3}`, `{IMG_4}` بدلاً من URLs ثابتة
+   - `apply_archetype_theme()` يستبدل الـtokens بصور من library الفئة المناسبة
+   - `renderer.py` يقوم بـsubstitution ثاني كـsafety net
+4. **content builders محدّثة**:
+   - `_default_gallery(count, category_id)` — يستخدم library
+   - `_products_sample(cfg, large, category_id)` — كل منتج يأخذ صورة مختلفة من library
+   - `_menu_sample(cfg, category_id)` — صور أطباق من library
+   - `_services_sample(cfg, category_id)` — صور خدمات من library
+5. **`resolve_placeholder` يمرّر `category_id`** لكل content builder
+
+**E2E verified (Feb 27, 2026)**:
+- ✅ `restaurant + beauty_megamart` → صورة طبق طعام مطعم (1414235077428) — لا صور مكياج
+- ✅ `plumbing + realestate_luxury_dark` → "حلول سباكة 24/7" بصور أدوات سباكة (1615996001375) — لا صور عقارات
+- ✅ `jewelry + editorial_diagonal` → ساعة فاخرة (1602173574767)
+- ✅ `academy + organic_blobs` → طالب يكتب (1571260899304)
+- ✅ كل (category × archetype) يعطي صور **متنوعة** خاصة بالفئة
+
+**Files added/modified**:
+- ✨ `/app/backend/modules/websites/category_images.py` — جديد (200+ صور احترافية موزعة على 25 فئة)
+- `/app/backend/modules/websites/template_themes.py` — استبدال URLs ثابتة بـ`{IMG_n}` tokens + إعادة كتابة `apply_archetype_theme` و `get_hero_image_for`
+- `/app/backend/modules/websites/category_content.py` — content builders تستخدم library
+- `/app/backend/modules/websites/renderer.py` — safety substitution لـ`{IMG_n}` tokens
+- `/app/backend/modules/websites/routes.py` — meta passes category_id
+
+
 ### 🆕 Feb 27, 2026 — REVERT TABS + ADD 3 NEW CATEGORIES (P0 — COMPLETE)
 
 **شكوى المستخدم**: "التحديث الذي حصل ما هو صحيح، أفضل أن يظلوا كأقسام مذكورة، لكن في كل قسم يكون له تصميم له قوالب خاصة فيه بصور مبتكرة"

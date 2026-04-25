@@ -221,38 +221,6 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
 </body></html>"""
         return HTMLResponse(content=html)
 
-    @r.get("/premium-templates")
-    async def _premium_templates():
-        """JSON list of the 5 hand-crafted premium templates (for tab integration in the picker)."""
-        premium = [
-            {"layout_id": "store__beauty_megamart", "category_id": "store",
-             "name": "متجر الجمال الفاخر", "world": "🌸 عالم الجمال والأناقة",
-             "color": "#E91E63", "secondary": "#4A1D5C",
-             "tagline": "بنفسجي/وردي · كرت ترويجي + Timer + دوائر فئات",
-             "best_for": ["متاجر", "تجميل", "موضة", "عناية شخصية"]},
-            {"layout_id": "realestate__realestate_luxury_dark", "category_id": "realestate",
-             "name": "عقارات فاخرة كحلية", "world": "🏛️ عالم العقارات الفاخرة",
-             "color": "#B87333", "secondary": "#0A0A0A",
-             "tagline": "أسود/نحاسي · صور هندسية + نموذج بحث + شعار أسد",
-             "best_for": ["عقارات", "خدمات راقية", "استشارات"]},
-            {"layout_id": "portfolio__editorial_diagonal", "category_id": "portfolio",
-             "name": "مجلة قطرية", "world": "📰 عالم المجلات الإبداعية",
-             "color": "#00D9FF", "secondary": "#0E0E0E",
-             "tagline": "كحلي/سماوي · قطع قطرية + Serif كبير + أرقام أقسام",
-             "best_for": ["بورتفوليو", "مصممون", "وكالات إبداعية"]},
-            {"layout_id": "bakery__organic_blobs", "category_id": "bakery",
-             "name": "عضوي ترابي دافئ", "world": "🌿 عالم الطبيعة الحرفية",
-             "color": "#C65D3E", "secondary": "#FAF3E7",
-             "tagline": "ترابي/كريمي · أشكال blob عضوية + Amiri + لمسة يدوية",
-             "best_for": ["مخابز", "حلويات", "صناعات يدوية", "كافيهات"]},
-            {"layout_id": "saas__cyber_glitch", "category_id": "saas",
-             "name": "سايبر نيون مستقبلي", "world": "⚡ عالم التقنية المستقبلية",
-             "color": "#00FF88", "secondary": "#000000",
-             "tagline": "أسود/نيون · Glitch RGB + scan lines + Hex corners",
-             "best_for": ["تقنية", "SaaS", "ألعاب", "كريبتو"]},
-        ]
-        return {"templates": premium}
-
     @r.get("/categories/{category_id}/layouts/{layout_id}/preview-html-raw", response_class=Response)
     async def _c_layout_preview_raw(category_id: str, layout_id: str):
         from fastapi.responses import HTMLResponse
@@ -260,71 +228,12 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
         theme = dict(L.get("theme") or {})
         if L.get("custom_css"):
             theme["custom_css"] = L["custom_css"]
-        project = {"name": L["name"], "theme": theme, "sections": L["sections"], "meta": {"title": L["name"]}}
+        project = {
+            "name": L["name"], "theme": theme, "sections": L["sections"],
+            "meta": {"title": L["name"], "category_id": category_id, "layout_id": layout_id},
+            "template": category_id, "business_type": category_id,
+        }
         return HTMLResponse(content=render_website_to_html(project))
-
-    @r.get("/premium-showcase", response_class=Response)
-    async def _premium_showcase():
-        """Showcase the 5 premium hand-crafted templates side-by-side — each in its natural category."""
-        from fastapi.responses import HTMLResponse
-        # 5 premium templates × best-fit category
-        premium = [
-            {"cat": "store", "id": "store__beauty_megamart", "name": "متجر الجمال الفاخر", "color": "#E91E63",
-             "tag": "بنفسجي/وردي · كرت ترويجي + Timer + دوائر فئات", "world": "🌸 عالم الجمال والأناقة"},
-            {"cat": "realestate", "id": "realestate__realestate_luxury_dark", "name": "عقارات فاخرة كحلية", "color": "#B87333",
-             "tag": "أسود/نحاسي · صور هندسية + نموذج بحث + شعار أسد", "world": "🏛️ عالم العقارات الفاخرة"},
-            {"cat": "portfolio", "id": "portfolio__editorial_diagonal", "name": "مجلة قطرية", "color": "#00D9FF",
-             "tag": "كحلي/سماوي · قطع قطرية + Serif كبير + أرقام أقسام", "world": "📰 عالم المجلات الإبداعية"},
-            {"cat": "bakery", "id": "bakery__organic_blobs", "name": "عضوي ترابي دافئ", "color": "#C65D3E",
-             "tag": "ترابي/كريمي · أشكال blob عضوية + Amiri + لمسة يدوية", "world": "🌿 عالم الطبيعة الحرفية"},
-            {"cat": "saas", "id": "saas__cyber_glitch", "name": "سايبر نيون مستقبلي", "color": "#00FF88",
-             "tag": "أسود/نيون · Glitch RGB + scan lines + Hex corners", "world": "⚡ عالم التقنية المستقبلية"},
-        ]
-        cards = ""
-        for i, t in enumerate(premium, 1):
-            preview_url = f"/api/websites/categories/{t['cat']}/layouts/{t['id']}/preview-html-raw"
-            cards += f"""
-            <div class="prem-card" style="--accent:{t['color']}">
-              <div class="prem-num">{i}</div>
-              <div class="prem-frame"><iframe src="{preview_url}" loading="lazy" sandbox="allow-same-origin"></iframe></div>
-              <div class="prem-meta">
-                <div class="prem-world">{t['world']}</div>
-                <div class="prem-name">{t['name']}</div>
-                <div class="prem-tag">{t['tag']}</div>
-                <a href="{preview_url}" target="_blank" class="prem-link">افتح بحجم كامل ↗</a>
-              </div>
-            </div>"""
-        html = f"""<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>القوالب المميزة الـ5</title>
-<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
-<style>
-*{{box-sizing:border-box;margin:0;padding:0}}
-body{{font-family:'Tajawal',sans-serif;background:#0a0a0a;color:#fff;padding:30px;min-height:100vh}}
-.head{{text-align:center;margin-bottom:40px}}
-.head h1{{font-size:42px;font-weight:900;background:linear-gradient(135deg,#E91E63,#00D9FF,#00FF88);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:10px}}
-.head p{{opacity:.65;font-size:15px;max-width:680px;margin:0 auto}}
-.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:24px;max-width:1600px;margin:0 auto}}
-.prem-card{{background:#13141c;border:1px solid rgba(255,255,255,.08);border-radius:18px;overflow:hidden;position:relative;transition:transform .35s,border-color .35s,box-shadow .35s}}
-.prem-card:hover{{transform:translateY(-6px);border-color:var(--accent);box-shadow:0 25px 60px color-mix(in srgb,var(--accent) 25%,transparent)}}
-.prem-num{{position:absolute;top:14px;right:14px;width:44px;height:44px;background:var(--accent);color:#fff;font-weight:900;font-size:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:0 6px 18px color-mix(in srgb,var(--accent) 50%,transparent)}}
-.prem-frame{{height:300px;overflow:hidden;background:#fff;position:relative;border-bottom:3px solid var(--accent)}}
-.prem-frame iframe{{border:0;width:1440px;height:1800px;transform:scale(.27);transform-origin:top right;pointer-events:none}}
-.prem-meta{{padding:18px 20px}}
-.prem-world{{font-size:13px;color:var(--accent);font-weight:700;letter-spacing:1px;margin-bottom:4px}}
-.prem-name{{font-size:22px;font-weight:900;color:#fff;margin-bottom:8px}}
-.prem-tag{{font-size:13px;color:rgba(255,255,255,.55);line-height:1.7;margin-bottom:14px}}
-.prem-link{{display:inline-block;color:var(--accent);font-weight:700;font-size:13px;text-decoration:none;border-bottom:1px solid currentColor;padding-bottom:2px}}
-.prem-link:hover{{opacity:.7}}
-</style></head><body>
-<div class="head">
-  <h1>✨ خمسة قوالب مميزة — كل قالب عالم مختلف</h1>
-  <p>ليست مجرد إعادة ترتيب — كل قالب له لون أساسي، نمط أزرار، شكل صور، وخط مختلف تماماً. اختر رقم القالب الذي يعجبك وسأطبّقه على موقعك.</p>
-</div>
-<div class="grid">{cards}</div>
-</body></html>"""
-        return HTMLResponse(content=html)
 
     # DNA Mixer — random layout for a category
     @r.get("/categories/{category_id}/mix")

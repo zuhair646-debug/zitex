@@ -182,7 +182,7 @@ section:nth-child(even){background:#0c0a09;color:#fff;transform:rotate(-.3deg);m
         "custom_css": """
 body{background:#F0F9FF;color:#083344}
 .hero{background:linear-gradient(135deg,#0891B2 0%,#164E63 100%);color:#fff;clip-path:polygon(0 0,100% 0,100% 85%,0 100%);padding:120px 0 160px;position:relative}
-.hero::before{content:'';position:absolute;inset:0;background:url('https://images.unsplash.com/photo-1502082553048-f009c37129b9?w=1600&q=70') center/cover;opacity:.15}
+.hero::before{content:'';position:absolute;inset:0;background:url('{IMG_1}') center/cover;opacity:.15}
 .hero .container{position:relative;z-index:1}
 .hero h1{font-size:72px;font-weight:900}
 section{padding:80px 0!important}
@@ -200,7 +200,7 @@ section{padding:80px 0!important}
         "shadow": "0 15px 40px rgba(16,185,129,.2)",
         "custom_css": """
 body{background:#ECFDF5;color:#022C22}
-.hero{background:linear-gradient(rgba(167,243,208,.5),rgba(236,253,245,.9)),url('https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=1600&q=70') center/cover;color:#022C22;padding:60px 0}
+.hero{background:linear-gradient(rgba(167,243,208,.5),rgba(236,253,245,.9)),url('{IMG_1}') center/cover;color:#022C22;padding:60px 0}
 .hero h1{font-size:60px;font-weight:900;color:#064E3B}
 .reservation,.reservation-form{background:#fff;border-radius:24px;padding:40px;box-shadow:0 25px 60px rgba(16,185,129,.25);max-width:520px;margin:30px auto;border:2px solid #10B981}
 .reservation input,.reservation select{border:2px solid #A7F3D0;border-radius:12px;padding:14px 18px;width:100%;margin-bottom:14px;font-family:inherit}
@@ -307,7 +307,7 @@ body{background:#F0FDFA;color:#042F2E;font-size:17px;line-height:1.8}
         "custom_css": """
 body{background:#FAF5FF;color:#2E1065}
 .hero{background:linear-gradient(135deg,#7C3AED 0%,#4C1D95 100%);color:#fff;padding:120px 0;display:grid;grid-template-columns:1fr 1fr;align-items:center}
-.hero::after{content:'';background:url('https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=1600&q=70') center/cover;opacity:.4;mix-blend-mode:overlay}
+.hero::after{content:'';background:url('{IMG_2}') center/cover;opacity:.4;mix-blend-mode:overlay}
 .hero h1{font-size:80px;font-weight:900;line-height:1}
 .stats{background:#2E1065;color:#fff;padding:100px 0!important}
 .stats .value{font-size:120px;font-weight:900;color:#C4B5FD;line-height:1;letter-spacing:-4px}
@@ -393,7 +393,7 @@ header a,.site-header a,nav a{color:#fff!important;font-weight:700}
 .hero .hero-copy{background:linear-gradient(135deg,#4A1D5C 0%,#7A1F66 100%);padding:50px 36px;border-radius:24px;color:#fff;box-shadow:0 25px 60px rgba(74,29,92,.4)}
 .hero .hero-copy h1{color:#fff!important;font-size:38px!important;font-weight:900;line-height:1.15;margin-bottom:12px}
 .hero .hero-copy p{color:#FFE0EC!important;font-size:16px;line-height:1.6;margin-bottom:24px}
-.hero .hero-media{border-radius:24px;overflow:hidden;box-shadow:0 30px 70px rgba(74,29,92,.3);min-height:420px;background:url('https://images.unsplash.com/photo-1487412947147-5cebf100ffc2?w=900&q=80') center/cover;position:relative}
+.hero .hero-media{border-radius:24px;overflow:hidden;box-shadow:0 30px 70px rgba(74,29,92,.3);min-height:420px;background:url('{IMG_1}') center/cover;position:relative}
 .hero .hero-media img{display:none}
 .hero .hero-media::before{content:'⏰ 00 : 00 : 00 : 00';position:absolute;top:24px;right:24px;background:rgba(0,0,0,.6);backdrop-filter:blur(10px);padding:10px 20px;border-radius:100px;color:#fff;font-weight:900;font-size:14px;letter-spacing:2px}
 .hero .hero-media::after{content:'🛍️ تسوّق الآن';position:absolute;bottom:30px;right:30px;background:#2D0A28;color:#fff;padding:14px 28px;border-radius:100px;font-weight:900;box-shadow:0 10px 25px rgba(0,0,0,.4)}
@@ -441,8 +441,8 @@ header,.site-header,nav{background:#0A0A0A!important;border-bottom:1px solid rgb
 header a,.site-header a,nav a{color:#F5F0E8!important;letter-spacing:1.5px;font-size:13px;text-transform:uppercase;opacity:.85}
 header a:hover,.site-header a:hover{color:#D4A574!important;opacity:1}
 /* HERO — leverages built-in hero-form layout, just restyle it */
-.hero,.hero-form{background-image:linear-gradient(135deg,rgba(0,0,0,.85) 0%,rgba(20,15,10,.65) 100%),url('https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=1800&q=80')!important;background-size:cover!important;background-position:center!important;color:#F5F0E8!important;min-height:90vh;display:flex;align-items:center;position:relative;overflow:hidden;padding:60px 30px!important}
-.hero::before{content:'';position:absolute;top:0;left:0;width:55%;height:100%;background:url('https://images.unsplash.com/photo-1486325212027-8081e485255e?w=1200&q=80') center/cover;opacity:.55;clip-path:polygon(20% 0,100% 0,100% 100%,0 100%);filter:contrast(1.25) brightness(.55) sepia(.2);pointer-events:none}
+.hero,.hero-form{background-image:linear-gradient(135deg,rgba(0,0,0,.85) 0%,rgba(20,15,10,.65) 100%),url('{IMG_1}')!important;background-size:cover!important;background-position:center!important;color:#F5F0E8!important;min-height:90vh;display:flex;align-items:center;position:relative;overflow:hidden;padding:60px 30px!important}
+.hero::before{content:'';position:absolute;top:0;left:0;width:55%;height:100%;background:url('{IMG_2}') center/cover;opacity:.55;clip-path:polygon(20% 0,100% 0,100% 100%,0 100%);filter:contrast(1.25) brightness(.55) sepia(.2);pointer-events:none}
 .hero::after{content:'🦁';position:absolute;top:24px;left:50%;transform:translateX(-50%);width:60px;height:60px;display:flex;align-items:center;justify-content:center;font-size:30px;background:radial-gradient(circle,#B87333,#7a4a1f);border:2px solid #D4A574;border-radius:50%;box-shadow:0 0 30px rgba(184,115,51,.6);z-index:10}
 .hero .container{position:relative;z-index:2;max-width:1280px}
 .hero-form-grid{grid-template-columns:1.2fr 1fr!important;gap:60px!important}
@@ -492,7 +492,7 @@ footer{background:#000!important;border-top:1px solid rgba(184,115,51,.3)!import
 body{background:#0E0E0E;color:#F5F5F0;font-family:'Reem Kufi',serif}
 /* Hero — diagonal split image + text */
 .hero{background:#0E0E0E;color:#F5F5F0;min-height:100vh;display:flex;align-items:center;position:relative;overflow:hidden;padding:0}
-.hero::before{content:'';position:absolute;top:0;right:0;width:55%;height:100%;background:url('https://images.unsplash.com/photo-1518998053901-5348d3961a04?w=1400&q=80') center/cover;clip-path:polygon(20% 0,100% 0,100% 100%,0 100%);filter:contrast(1.15) saturate(.85)}
+.hero::before{content:'';position:absolute;top:0;right:0;width:55%;height:100%;background:url('{IMG_1}') center/cover;clip-path:polygon(20% 0,100% 0,100% 100%,0 100%);filter:contrast(1.15) saturate(.85)}
 .hero::after{content:'';position:absolute;top:0;right:0;width:55%;height:100%;background:linear-gradient(135deg,rgba(0,217,255,.15) 0%,transparent 50%);clip-path:polygon(20% 0,100% 0,100% 100%,0 100%)}
 .hero .container{position:relative;z-index:2;max-width:1200px;padding:0 60px;width:100%}
 .hero h1{font-size:104px;font-weight:900;line-height:.95;letter-spacing:-3px;font-family:'Playfair Display','Reem Kufi',serif;color:#F5F5F0;max-width:55%;text-shadow:0 0 60px rgba(0,0,0,.5)}
@@ -547,7 +547,7 @@ header a,.site-header a{color:#3D2817!important;font-family:'Amiri',serif;font-w
 .hero h1{font-family:'Amiri',serif;font-size:84px;font-weight:700;line-height:1.05;color:#3D2817;letter-spacing:-1px;margin-bottom:24px}
 .hero h1::after{content:'';display:block;width:120px;height:4px;background:linear-gradient(90deg,#C65D3E,#95A572);margin-top:24px;border-radius:100px}
 .hero h2{font-size:22px;color:#7A4226;font-style:italic;margin-bottom:30px;line-height:1.6;font-weight:400}
-.hero::after{content:'';position:absolute;top:50%;left:0;transform:translateY(-50%);width:45%;height:75%;background:url('https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=900&q=80') center/cover;border-radius:60% 40% 35% 65% / 55% 35% 65% 45%;box-shadow:0 30px 80px rgba(198,93,62,.35);animation:blob-shift 15s ease-in-out infinite}
+.hero::after{content:'';position:absolute;top:50%;left:0;transform:translateY(-50%);width:45%;height:75%;background:url('{IMG_1}') center/cover;border-radius:60% 40% 35% 65% / 55% 35% 65% 45%;box-shadow:0 30px 80px rgba(198,93,62,.35);animation:blob-shift 15s ease-in-out infinite}
 @keyframes blob-shift{0%,100%{border-radius:60% 40% 35% 65% / 55% 35% 65% 45%}33%{border-radius:40% 60% 65% 35% / 35% 65% 35% 65%}66%{border-radius:50% 50% 45% 55% / 65% 50% 50% 35%}}
 /* Buttons — extra rounded organic */
 .btn,.btn-primary{background:#C65D3E!important;color:#FAF3E7!important;border-radius:100px;padding:18px 42px;font-weight:700;border:0;font-size:16px;font-family:'Amiri',serif;box-shadow:0 12px 30px rgba(198,93,62,.35);transition:all .3s}
@@ -594,7 +594,7 @@ header a,.site-header a{color:#00FF88!important;text-transform:uppercase;font-si
 header a:hover,.site-header a:hover{color:#FF0099!important;text-shadow:0 0 10px #FF0099}
 /* HERO — full glitch */
 .hero{background:#000;color:#00FF88;min-height:100vh;display:flex;align-items:center;position:relative;overflow:hidden;padding:80px 40px}
-.hero::before{content:'';position:absolute;inset:0;background:url('https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1800&q=80') center/cover;opacity:.25;mix-blend-mode:lighten;filter:hue-rotate(80deg) saturate(2)}
+.hero::before{content:'';position:absolute;inset:0;background:url('{IMG_1}') center/cover;opacity:.25;mix-blend-mode:lighten;filter:hue-rotate(80deg) saturate(2)}
 .hero .container{position:relative;z-index:2;max-width:1100px;margin:0 auto;width:100%}
 .hero h1{font-size:120px;font-weight:900;line-height:.95;color:#00FF88;text-transform:uppercase;letter-spacing:-3px;text-shadow:3px 0 0 #FF0099,-3px 0 0 #00D9FF,0 0 40px rgba(0,255,136,.6);font-family:'Cairo','Courier New',monospace;animation:glitch 4s infinite}
 @keyframes glitch{0%,90%,100%{text-shadow:3px 0 0 #FF0099,-3px 0 0 #00D9FF,0 0 40px rgba(0,255,136,.6)}92%{text-shadow:-3px 0 0 #FF0099,3px 0 0 #00D9FF,0 0 40px rgba(0,255,136,.6);transform:translate(2px,0)}94%{text-shadow:5px 0 0 #FF0099,-5px 0 0 #00D9FF;transform:translate(-2px,1px)}}
@@ -631,28 +631,25 @@ footer::before{content:'> SYSTEM ONLINE_';display:block;text-align:center;color:
 
 # ─── Hero image library — 20 unique queries × multiple categories ────
 def get_hero_image_for(category_id: str, archetype_id: str) -> str:
-    """Return a unique Unsplash URL — different image for each (category, archetype) pair."""
-    theme = ARCHETYPE_THEMES.get(archetype_id, {})
-    q = theme.get("hero_image_q", "modern")
-    # Map category to subject keyword for hero query
-    cat_kw = {
-        "restaurant": "restaurant+food", "coffee": "cafe+coffee", "store": "shop+products",
-        "barber": "barber+hairstyle", "salon_women": "salon+beauty", "pets": "pet+animals",
-        "clinic": "clinic+medical", "bakery": "bakery+bread", "car_wash": "car+wash",
-        "sports_club": "sports+club", "library": "library+books", "art_gallery": "art+gallery",
-        "maintenance": "tools+workshop", "jewelry": "jewelry+gold",
-        "plumbing": "plumbing+tools", "electrical": "electric+work",
-        "company": "office+business", "portfolio": "creative+portfolio",
-        "saas": "tech+saas+screens", "blank": "abstract+modern",
-        "gym": "gym+fitness", "academy": "education+classroom",
-        "cosmetics": "cosmetics+makeup+beauty", "automotive": "luxury+cars+showroom",
-        "realestate": "luxury+real+estate+architecture",
-    }.get(category_id, "modern")
-    return f"https://source.unsplash.com/1600x900/?{cat_kw},{q}"
+    """Return a unique image URL from the curated category library — different image
+    for each (category, archetype) pair, deterministic so renders are stable."""
+    try:
+        from .category_images import pick_images_for_archetype
+        imgs = pick_images_for_archetype(category_id, archetype_id, count=1)
+        return imgs[0]
+    except Exception:
+        # Fallback to source.unsplash query
+        cat_kw = {
+            "restaurant": "restaurant+food", "coffee": "cafe+coffee", "store": "shop+products",
+            "cosmetics": "cosmetics+makeup", "automotive": "luxury+cars", "realestate": "luxury+architecture",
+        }.get(category_id, "modern")
+        return f"https://source.unsplash.com/1600x900/?{cat_kw}"
 
 
 def apply_archetype_theme(archetype_id: str, category_id: str, base_theme: dict) -> dict:
-    """Merge per-archetype palette + font + hero image + custom CSS into the base theme."""
+    """Merge per-archetype palette + font + hero image + custom CSS into the base theme.
+    Also pre-fills {IMG_1}..{IMG_4} placeholders in custom_css with category-specific
+    photos so each archetype within the same category shows different relevant imagery."""
     spec = ARCHETYPE_THEMES.get(archetype_id)
     if not spec:
         return base_theme
@@ -669,8 +666,19 @@ def apply_archetype_theme(archetype_id: str, category_id: str, base_theme: dict)
         "radius": spec.get("radius", theme.get("radius")),
     })
     hero_img = get_hero_image_for(category_id, archetype_id)
-    custom = (spec.get("custom_css") or "").replace("IMG", hero_img)
-    # Append per-archetype CSS to theme.custom_css
+    custom = spec.get("custom_css") or ""
+    # Pre-substitute {IMG_n} tokens with category-specific images (BEFORE generic IMG to avoid breaking them)
+    try:
+        from .category_images import pick_images_for_archetype
+        imgs = pick_images_for_archetype(category_id, archetype_id, count=4)
+        custom = (custom.replace("{IMG_1}", imgs[0])
+                        .replace("{IMG_2}", imgs[1])
+                        .replace("{IMG_3}", imgs[2])
+                        .replace("{IMG_4}", imgs[3]))
+    except Exception:
+        pass
+    # Generic IMG token (legacy) — replaced AFTER {IMG_n} so it doesn't corrupt them
+    custom = custom.replace("url(IMG)", f"url({hero_img})").replace("(IMG)", f"({hero_img})")
     existing_css = theme.get("custom_css") or ""
     theme["custom_css"] = existing_css + "\n" + custom
     theme["_archetype_theme_name"] = spec.get("name", archetype_id)

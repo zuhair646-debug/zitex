@@ -8,7 +8,7 @@ genuinely different-looking template tuned to that business.
 """
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -300,53 +300,55 @@ CATEGORY_CONFIG: Dict[str, Dict[str, Any]] = {
 
 # ──────────────────────────────────────────────────────────────────────
 # Placeholder content builders (return section data dicts)
+# All builders accept category_id so images come from the curated library
 # ──────────────────────────────────────────────────────────────────────
-def _menu_sample(cfg: Dict[str, Any]) -> Dict[str, Any]:
+def _cat_imgs(category_id: str, count: int = 8) -> List[str]:
+    """Return curated images for a category (or fallback)."""
+    try:
+        from .category_images import get_category_images
+        lib = get_category_images(category_id)
+        return (lib * ((count // len(lib)) + 1))[:count]  # tile if needed
+    except Exception:
+        return ["https://images.unsplash.com/photo-1557804506-669a67965ba0?w=800&q=70"] * count
+
+
+def _menu_sample(cfg: Dict[str, Any], category_id: str = "blank") -> Dict[str, Any]:
     emoji = cfg.get("accent_emoji", "🍽️")
-    img = "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=600&q=70"
+    imgs = _cat_imgs(category_id, 5)
     return {"title": f"{emoji} قائمتنا المختارة", "categories": [
         {"name": "الأكثر طلباً", "items": [
-            {"name": "الطبق الخاص", "price": "95", "desc": "وصفة البيت — لا تفوّتها", "image": img},
-            {"name": "الطبق المميز", "price": "75", "desc": "بمذاق لا يقاوم", "image": img},
-            {"name": "الطبق الكلاسيكي", "price": "55", "desc": "تقليدي وأصيل"},
+            {"name": "الطبق الخاص", "price": "95", "desc": "وصفة البيت — لا تفوّتها", "image": imgs[0]},
+            {"name": "الطبق المميز", "price": "75", "desc": "بمذاق لا يقاوم", "image": imgs[1]},
+            {"name": "الطبق الكلاسيكي", "price": "55", "desc": "تقليدي وأصيل", "image": imgs[2]},
         ]},
         {"name": "المشروبات", "items": [
-            {"name": "مشروب البيت", "price": "25", "desc": "تركيبة خاصة"},
-            {"name": "قهوة مختصة", "price": "20"},
+            {"name": "مشروب البيت", "price": "25", "desc": "تركيبة خاصة", "image": imgs[3]},
+            {"name": "قهوة مختصة", "price": "20", "image": imgs[4]},
         ]},
     ]}
 
 
-def _services_sample(cfg: Dict[str, Any]) -> Dict[str, Any]:
+def _services_sample(cfg: Dict[str, Any], category_id: str = "blank") -> Dict[str, Any]:
     emoji = cfg.get("accent_emoji", "✂️")
+    imgs = _cat_imgs(category_id, 4)
     return {"title": f"{emoji} خدماتنا", "items": [
-        {"name": "الخدمة الأساسية", "desc": "وصف الخدمة الأولى", "icon": "⭐"},
-        {"name": "الخدمة المميزة", "desc": "وصف الخدمة الثانية", "icon": "✨"},
-        {"name": "الخدمة الفاخرة", "desc": "وصف الخدمة الثالثة", "icon": "💎"},
-        {"name": "خدمة VIP", "desc": "تجربة استثنائية كاملة", "icon": "👑"},
+        {"name": "الخدمة الأساسية", "desc": "وصف الخدمة الأولى", "icon": "⭐", "image": imgs[0]},
+        {"name": "الخدمة المميزة", "desc": "وصف الخدمة الثانية", "icon": "✨", "image": imgs[1]},
+        {"name": "الخدمة الفاخرة", "desc": "وصف الخدمة الثالثة", "icon": "💎", "image": imgs[2]},
+        {"name": "خدمة VIP", "desc": "تجربة استثنائية كاملة", "icon": "👑", "image": imgs[3]},
     ]}
 
 
-def _products_sample(cfg: Dict[str, Any], large: bool = False) -> Dict[str, Any]:
+def _products_sample(cfg: Dict[str, Any], large: bool = False, category_id: str = "blank") -> Dict[str, Any]:
     emoji = cfg.get("accent_emoji", "🛒")
-    img = "https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=600&q=70"
     count = 8 if large else 4
-    items = [{"name": f"منتج {i+1}", "price": str(50 + i * 20), "image": img, "stock": 15 - i} for i in range(count)]
+    imgs = _cat_imgs(category_id, count)
+    items = [{"name": f"منتج {i+1}", "price": str(50 + i * 20), "image": imgs[i], "stock": 15 - i} for i in range(count)]
     return {"title": f"{emoji} منتجاتنا", "items": items}
 
 
-def _default_gallery(count: int = 6) -> Dict[str, Any]:
-    base = [
-        "https://images.unsplash.com/photo-1555396273-367ea4eb4db5",
-        "https://images.unsplash.com/photo-1540189549336-e6e99c3679fe",
-        "https://images.unsplash.com/photo-1482049016688-2d3e1b311543",
-        "https://images.unsplash.com/photo-1504674900247-0877df9cc836",
-        "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38",
-        "https://images.unsplash.com/photo-1559339352-11d035aa65de",
-        "https://images.unsplash.com/photo-1555939594-58d7cb561ad1",
-        "https://images.unsplash.com/photo-1546069901-ba9599a7e63c",
-    ]
-    return {"title": "معرض الصور", "images": [f"{u}?w=800&q=70" for u in base[:count]]}
+def _default_gallery(count: int = 6, category_id: str = "blank") -> Dict[str, Any]:
+    return {"title": "معرض الصور", "images": _cat_imgs(category_id, count)}
 
 
 def _testimonials(count: int = 3) -> Dict[str, Any]:
@@ -525,10 +527,10 @@ def resolve_placeholder(placeholder_id: str, category_id: str, cfg: Dict[str, An
         primary = cfg.get("primary_grid", "services")
         large = pid == "{primary_content_large}"
         if primary == "menu":
-            return _menu_sample(cfg)
+            return _menu_sample(cfg, category_id)
         if primary == "products":
-            return _products_sample(cfg, large=large)
-        return _services_sample(cfg)
+            return _products_sample(cfg, large=large, category_id=category_id)
+        return _services_sample(cfg, category_id)
 
     # Static placeholders
     MAP = {
@@ -569,8 +571,8 @@ def resolve_placeholder(placeholder_id: str, category_id: str, cfg: Dict[str, An
         "features_alt_3": lambda: _features("alt_3"),
         "features_cards_4": lambda: _features("cards_4"),
 
-        "gallery_6": lambda: _default_gallery(6),
-        "gallery_8": lambda: _default_gallery(8),
+        "gallery_6": lambda: _default_gallery(6, category_id),
+        "gallery_8": lambda: _default_gallery(8, category_id),
 
         "testimonials_3": lambda: _testimonials(3),
         "testimonials_5": lambda: _testimonials(5),

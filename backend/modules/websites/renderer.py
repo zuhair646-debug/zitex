@@ -92,6 +92,23 @@ def render_website_to_html(project: Dict[str, Any]) -> str:
     meta = project.get("meta", {})
     title = _esc(meta.get("title") or project.get("name") or "موقعي")
 
+    # 🆕 Replace {IMG_1}/{IMG_2}/{IMG_3} tokens in custom_css with category-specific photos
+    # so each archetype gets relevant imagery (no more makeup photos in restaurant templates).
+    try:
+        from .category_images import pick_images_for_archetype
+        cat_id = project.get("template") or project.get("business_type") or meta.get("category_id") or "blank"
+        arch_id = (meta.get("layout_id") or "").split("__", 1)[-1] or "default"
+        imgs = pick_images_for_archetype(cat_id, arch_id, count=4)
+        css = theme.get("custom_css", "")
+        if css and "{IMG_" in css:
+            css = (css.replace("{IMG_1}", imgs[0])
+                      .replace("{IMG_2}", imgs[1])
+                      .replace("{IMG_3}", imgs[2])
+                      .replace("{IMG_4}", imgs[3]))
+            theme = {**theme, "custom_css": css}
+    except Exception:
+        pass
+
     body_parts: List[str] = []
     for sec in sections:
         if not sec.get("visible", True):
