@@ -331,6 +331,38 @@ ARCHETYPES: List[Dict[str, Any]] = [
             ("contact", None, "contact_card"),
         ],
     },
+    # ═══════════════════════════════════════════════════════════════
+    # 🆕 Premium reference templates (based on user-supplied designs)
+    # ═══════════════════════════════════════════════════════════════
+    {
+        "id": "beauty_megamart",
+        "name_ar": "متجر الجمال الفاخر",
+        "description": "متجر بنفسجي/وردي بصدارة 3 أعمدة + دوائر فئات + شريط خدمات (مستوحى من Original Hubs).",
+        "hero_layout": "promo_grid",
+        "density": "rich",
+        "sections": [
+            ("hero", None, "hero_promo_grid"),
+            ("team", "circles", "team_6"),  # rendered as category circles via CSS
+            ("features", None, "features_cards_4"),  # services band
+            ("products", "grid", "{primary_content_large}"),
+            ("testimonials", "carousel", "testimonials_3"),
+            ("contact", None, "contact_card"),
+        ],
+    },
+    {
+        "id": "realestate_luxury_dark",
+        "name_ar": "عقارات فاخرة كحلية",
+        "description": "أسود فاخر + نحاسي + نموذج بحث عقارات على Hero — مستوحى من Patriot Dubai.",
+        "hero_layout": "form_overlay",
+        "density": "luxury",
+        "sections": [
+            ("hero", None, "hero_with_form"),
+            ("gallery", "grid", "gallery_8"),  # Lifestyle gallery
+            ("team", "rows", "team_3"),  # Real Estate Specialists
+            ("features", None, "features_cards_4"),  # Exclusive Projects
+            ("contact", None, "contact_card"),
+        ],
+    },
 ]
 
 
