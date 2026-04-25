@@ -363,6 +363,51 @@ ARCHETYPES: List[Dict[str, Any]] = [
             ("contact", None, "contact_card"),
         ],
     },
+    {
+        "id": "editorial_diagonal",
+        "name_ar": "مجلة قطرية",
+        "description": "تخطيط قطري حاد — صور مقطوعة بزوايا قطرية، أرقام أقسام كبيرة، خط Serif فاخر.",
+        "hero_layout": "diagonal",
+        "density": "editorial",
+        "sections": [
+            ("hero", None, "hero_diagonal"),
+            ("about", None, "about_short"),
+            ("{primary_grid}", "grid", "{primary_content}"),
+            ("gallery", "masonry", "gallery_6"),
+            ("quote", None, "quote_big"),
+            ("contact", None, "contact_card"),
+        ],
+    },
+    {
+        "id": "organic_blobs",
+        "name_ar": "عضوي ترابي",
+        "description": "أشكال عضوية انسيابية — صور بحدود غير منتظمة، ألوان طبيعية ترابية، روح يدوية.",
+        "hero_layout": "organic",
+        "density": "warm",
+        "sections": [
+            ("hero", None, "hero_organic"),
+            ("about", None, "about_elegant"),
+            ("{primary_grid}", "grid", "{primary_content}"),
+            ("testimonials", "grid", "testimonials_3"),
+            ("gallery", "grid", "gallery_6"),
+            ("contact", None, "contact_card"),
+        ],
+    },
+    {
+        "id": "cyber_glitch",
+        "name_ar": "سايبر نيون",
+        "description": "مستقبلي نيون — خلفيات سوداء، تأثيرات glitch، خطوط مونوسبيس، قطع زوايا hexagonal.",
+        "hero_layout": "glitch",
+        "density": "futuristic",
+        "sections": [
+            ("hero", None, "hero_glitch"),
+            ("stats", None, "stats_4"),
+            ("{primary_grid}", "grid", "{primary_content}"),
+            ("features", None, "features_cards_4"),
+            ("cta", None, "cta_band"),
+            ("contact", None, "contact_card"),
+        ],
+    },
 ]
 
 

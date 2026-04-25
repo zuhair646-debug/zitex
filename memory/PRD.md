@@ -15,6 +15,42 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Feb 27, 2026 — 5 PREMIUM HAND-CRAFTED TEMPLATES (P0 — COMPLETE)
+
+طلب المستخدم: **"ابي قوالب مختلفة تماماً، كل قالب يحكي عالم ثاني، صور مبتكرة، ألوان أساسية مختلفة، طرق أزرار مختلفة"**.
+
+تم بناء **5 قوالب مميزة** كل واحد بهوية بصرية فريدة لا تشبه الآخرين:
+
+| # | id | اسم القالب | اللون الأساسي | الميزة البصرية الفريدة |
+|---|----|-----|---|----|
+| 1 | `beauty_megamart` | متجر الجمال الفاخر | بنفسجي #4A1D5C + وردي #E91E63 | Hero مقسم: صورة + كرت بنفسجي، Timer overlay، Badge "عروض حصرية"، شريط خدمات داكن، دوائر فئات بحدود وردية |
+| 2 | `realestate_luxury_dark` | عقارات فاخرة كحلية | أسود #0A0A0A + نحاسي #B87333 | شعار أسد 🦁 دائري، خلفية معمارية بقطع قطري، نموذج بحث overlay، أزرار نحاسية، Filters سيبيا، شبكة Lifestyle gallery |
+| 3 | `editorial_diagonal` | مجلة قطرية | كحلي #0E0E0E + سماوي #00D9FF | Hero بقطع قطري حاد بين أسود وصورة، خط Playfair Serif كبير 104px، أرقام أقسام كبيرة (01,02,03)، أزرار مستطيلة outlined |
+| 4 | `organic_blobs` | عضوي ترابي دافئ | ترابي #C65D3E + كريمي #FAF3E7 | صور بأشكال blob عضوية متغيّرة (animation 15s)، خط Amiri serif، أزرار pill شديدة الاستدارة، Footer rounded-top |
+| 5 | `cyber_glitch` | سايبر نيون مستقبلي | أسود #000 + نيون أخضر #00FF88 + فوشيا #FF0099 | Glitch RGB shadow على العناوين، scan lines overlay، grid background، أزرار hexagonal بزوايا مقطوعة، خط Courier mono، animation blink |
+
+**نقاط مهمة**:
+- كل قالب له `palette` خاصة (5 ألوان) — العميل يقدر يغيّرها لاحقاً من خطوة الألوان
+- كل قالب له `font` مختلف (Tajawal/Reem Kufi/Playfair/Amiri/Cairo+Courier)
+- أشكال الصور مختلفة: مستطيلة كاردة (1)، مقصوصة قطرياً (2,3)، blob عضوية (4)، ذات clip-path زاوية (5)
+- أنماط الأزرار: pill داكن (1)، pill نحاسي (2)، outlined مستطيل (3)، pill مدوّر تماماً (4)، hex زاوي (5)
+- كل تأثير بصري حقيقي في CSS (animations, gradients, clip-path, filters, shadows)
+
+**Endpoint جديد**: `GET /api/websites/premium-showcase` — صفحة معرض تعرض الـ5 قوالب المميزة جنباً إلى جنب بمعاينات حية للمقارنة + روابط فتح كامل.
+
+**E2E verified (Feb 27, 2026)**:
+- ✅ كل قالب يُولّد HTML 40-45KB بنجاح
+- ✅ خمسة عوالم بصرية مختلفة (التحقق بأخذ screenshot لكل قالب على حدة)
+- ✅ المعرض المميز يعرض الجميع في 5 بطاقات مع badge ولون أساسي
+- ✅ Lint passes
+
+**Files modified**:
+- `/app/backend/modules/websites/template_themes.py` — أُضيف 5 themes غنية بـcustom CSS مفصّل لكل قالب
+- `/app/backend/modules/websites/template_archetypes.py` — أُضيف 3 archetypes جديدة (editorial_diagonal, organic_blobs, cyber_glitch) — beauty_megamart و realestate_luxury_dark كانتا موجودتين سابقاً
+- `/app/backend/modules/websites/category_content.py` — أُضيف 4 hero placeholders جديدة (hero_promo_grid, hero_diagonal, hero_organic, hero_glitch) + configs للفئات الناقصة (realestate, stocks, medical, ecommerce)
+- `/app/backend/modules/websites/routes.py` — أُضيف `/premium-showcase` endpoint للمعرض المرئي
+
+
 ### 🆕 Feb 26, 2026 (deep night) — RENDERER REFACTORING (Backlog — COMPLETE)
 
 تم تقسيم `renderer.py` (1,436 سطر مونوليث) إلى **9 ملفات focused**:

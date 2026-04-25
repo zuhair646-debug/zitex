@@ -235,6 +235,46 @@ CATEGORY_CONFIG: Dict[str, Dict[str, Any]] = {
         "primary_grid": "services",
         "accent_emoji": "✨",
     },
+    "realestate": {
+        "hero_title": "استثمر في عقارات دبي مع باتريوت",
+        "hero_subtitle": "نساعدك في إيجاد عقارك المثالي — شقق، فلل، مشاريع حصرية، ومناطق راقية",
+        "hero_image": "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=1600&q=70",
+        "cta": "اطلب استشارة",
+        "about_title": "متخصصو العقارات",
+        "about_text": "خبراء عقاريون يقدمون لك المشورة المتخصصة لتحقيق أفضل عائد استثماري.",
+        "primary_grid": "products",  # listings as products
+        "accent_emoji": "🏛️",
+    },
+    "stocks": {
+        "hero_title": "استثمار ذكي · بأمان",
+        "hero_subtitle": "محاكاة تداول احترافية، تحليلات لحظية، وتوصيات من نخبة المتخصصين",
+        "hero_image": "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=1600&q=70",
+        "cta": "ابدأ الآن",
+        "about_title": "منصتنا الاستثمارية",
+        "about_text": "نقدم لك أدوات احترافية لتحليل الأسواق واتخاذ قرارات مدروسة.",
+        "primary_grid": "services",
+        "accent_emoji": "📈",
+    },
+    "medical": {
+        "hero_title": "صحتك · أولويتنا",
+        "hero_subtitle": "أطباء متخصصون، تقنيات حديثة، ورعاية شاملة من القلب",
+        "hero_image": "https://images.unsplash.com/photo-1538108149393-fbbd81895907?w=1600&q=70",
+        "cta": "احجز موعد",
+        "about_title": "عن العيادة",
+        "about_text": "خبرة تمتد لسنوات في تقديم رعاية طبية متميزة بأحدث المعايير.",
+        "primary_grid": "services",
+        "accent_emoji": "🏥",
+    },
+    "ecommerce": {
+        "hero_title": "تسوّق · بسهولة وأمان",
+        "hero_subtitle": "آلاف المنتجات، شحن سريع، أسعار تنافسية، وضمان رضى العميل",
+        "hero_image": "https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=1600&q=70",
+        "cta": "تسوّق الآن",
+        "about_title": "تجربة تسوّق فريدة",
+        "about_text": "نختار لك بعناية أفضل المنتجات من علامات موثوقة بأسعار لا تُقاوم.",
+        "primary_grid": "products",
+        "accent_emoji": "🛒",
+    },
 }
 
 
@@ -490,6 +530,15 @@ def resolve_placeholder(placeholder_id: str, category_id: str, cfg: Dict[str, An
                                "cta_text": cfg["cta"], "image": cfg["hero_image"], "layout": "boxed"},
         "hero_with_form": lambda: {"title": cfg["hero_title"], "subtitle": cfg["hero_subtitle"],
                                    "cta_text": cfg["cta"], "image": cfg["hero_image"], "layout": "form"},
+        # 🆕 5 premium template hero placeholders — use existing layouts, override visually via CSS
+        "hero_promo_grid": lambda: {"title": cfg["hero_title"], "subtitle": cfg["hero_subtitle"],
+                                    "cta_text": cfg["cta"], "image": cfg["hero_image"], "layout": "split"},
+        "hero_diagonal": lambda: {"title": cfg["hero_title"], "subtitle": cfg["hero_subtitle"],
+                                  "cta_text": cfg["cta"], "image": cfg["hero_image"], "layout": "split"},
+        "hero_organic": lambda: {"title": cfg["hero_title"], "subtitle": cfg["hero_subtitle"],
+                                 "cta_text": cfg["cta"], "image": cfg["hero_image"], "layout": "split"},
+        "hero_glitch": lambda: {"title": cfg["hero_title"], "subtitle": cfg["hero_subtitle"],
+                                "cta_text": cfg["cta"], "image": cfg["hero_image"], "layout": "portrait"},
 
         "about_short": lambda: _about("short") | {"title": cfg.get("about_title", "نبذة"),
                                                   "text": cfg.get("about_text", "")},
