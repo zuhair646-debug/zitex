@@ -1411,7 +1411,21 @@ export default function WebsiteStudio({ user }) {
       const d = await r.json();
       setProject(d);
       refreshPreview(d);
-      toast.success('🎨 تم تطبيق الألوان');
+      // 🆕 Auto-advance the wizard so the chat starts asking next questions (buttons, fonts, extras, whatsapp, etc.)
+      try {
+        const cur = d?.wizard?.step;
+        if (cur === 'variant' || cur === 'colors') {
+          const r2 = await fetch(`${API}/api/websites/projects/${project.id}/wizard/answer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authH() },
+            body: JSON.stringify({ step: cur, value: paletteId }),
+          });
+          const d2 = await r2.json();
+          setProject(d2);
+        }
+      } catch (_) { /* ignore — palette still applied */ }
+      setShowPalettePicker(false);
+      toast.success('🎨 تم تطبيق الألوان — الآن أكمل المعالج (الأزرار، الخط، الإضافات...)');
     } catch (_) { toast.error('فشل التطبيق'); }
   };
 
