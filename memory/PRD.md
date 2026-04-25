@@ -15,6 +15,31 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Feb 27, 2026 — WIZARD AUTO-ADVANCE + E2E PASSING (P0 — COMPLETE)
+
+**شكوى المستخدم**: "لما نختار القالب يوقف ما يبدأ يسأل شنو مثلا تحتاج شنو الواتس آب الى أخر الإضافات هذي كلها وقف صار ما يسأل أبيك ترجعها"
+
+**Root cause**: عند اختيار palette من PalettePickerModal، الألوان كانت تُطبّق لكن `wizard.step` كان يبقى عند "variant" — فلا يبدأ يسأل عن (الأزرار، الخط، الإضافات، واتساب، إلخ).
+
+**Fix in `WebsiteStudio.js:applyPalette()`**:
+- بعد `apply-palette`، يستدعي `wizard/answer` تلقائياً مع `step="variant"` ليتقدم الـwizard للـnext step
+- يُغلق modal وتظهر toast "أكمل المعالج (الأزرار، الخط، الإضافات...)"
+
+**E2E Testing — Backend 100% (17/17 passed)** — `/app/test_reports/iteration_15.json`:
+- ✅ 25 فئة (cosmetics, automotive, realestate جديدة)
+- ✅ 25 قالب لكل فئة
+- ✅ Image library مرتبط صحيح (restaurant→restaurant photos, plumbing→plumbing photos)
+- ✅ Wizard flow E2E: variant → buttons → colors → typography → vertical questions → branding → payment → extras → final_confirm
+- ✅ Floating widgets تظهر في HTML النهائي (zx-whatsapp, zx-sticky-phone, zx-countdown)
+- ✅ Realestate auto-seed 3 listings مع commission_pct
+- ✅ Cosmetics & Automotive verticals بـdashboard_tabs و wizard_questions الصحيحة
+- ✅ Final build preview احترافي
+
+**Files modified**:
+- `/app/frontend/src/pages/websites/WebsiteStudio.js` — `applyPalette` يُحرّك الـwizard للأمام
+- (راجع iteration_15.json لتفاصيل كل اختبار)
+
+
 ### 🆕 Feb 27, 2026 — CATEGORY-SPECIFIC IMAGE LIBRARY (P0 — COMPLETE)
 
 **شكوى المستخدم**: "في تصاميم حاط لي مثلا في قسم المطاعم حاط لي حق المكياج صورت مكياج. لا انا ابي كل القوالب الداخلية تكون خاصة في المطاعم"
