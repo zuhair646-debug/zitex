@@ -645,6 +645,8 @@ def get_hero_image_for(category_id: str, archetype_id: str) -> str:
         "company": "office+business", "portfolio": "creative+portfolio",
         "saas": "tech+saas+screens", "blank": "abstract+modern",
         "gym": "gym+fitness", "academy": "education+classroom",
+        "cosmetics": "cosmetics+makeup+beauty", "automotive": "luxury+cars+showroom",
+        "realestate": "luxury+real+estate+architecture",
     }.get(category_id, "modern")
     return f"https://source.unsplash.com/1600x900/?{cat_kw},{q}"
 

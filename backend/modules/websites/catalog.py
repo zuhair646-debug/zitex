@@ -509,6 +509,13 @@ CATEGORIES: List[Dict[str, Any]] = [
      "image": "https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=600&q=70"},
     {"id": "saas",       "name": "SaaS / تطبيقات",   "icon": "💻", "color": "#10B981",
      "image": "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&q=70"},
+    # 🆕 New categories — Feb 27, 2026
+    {"id": "cosmetics",  "name": "مكياج وعطور",       "icon": "💄", "color": "#E91E63",
+     "image": "https://images.unsplash.com/photo-1487412947147-5cebf100ffc2?w=600&q=70"},
+    {"id": "automotive", "name": "معارض سيارات",       "icon": "🏎️", "color": "#DC2626",
+     "image": "https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=600&q=70"},
+    {"id": "realestate", "name": "دلّال عقارات",        "icon": "🏛️", "color": "#B87333",
+     "image": "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=600&q=70"},
     {"id": "blank",      "name": "مخصّص / فارغ",       "icon": "✨", "color": "#FFD700",
      "image": "https://images.unsplash.com/photo-1557804506-669a67965ba0?w=600&q=70"},
 ]

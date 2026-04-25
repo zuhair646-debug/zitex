@@ -13,94 +13,15 @@ const authH = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` 
 /* ================================================================
    CATEGORY PICKER — first stage of empty state
    ================================================================ */
-function CategoryPicker({ categories, onPick, onPickPremium }) {
-  const [tab, setTab] = useState('premium');  // 'premium' | 'all'
-  const [premium, setPremium] = useState([]);
-
-  useEffect(() => {
-    fetch(`${API}/api/websites/premium-templates`)
-      .then((r) => r.json()).then((d) => setPremium(d.templates || []))
-      .catch(() => {});
-  }, []);
-
+function CategoryPicker({ categories, onPick }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-start p-4 md:p-6 overflow-y-auto" data-testid="category-picker">
-      <div className="text-center mb-5 max-w-xl pt-4">
+      <div className="text-center mb-6 max-w-xl pt-4">
         <Sparkles className="w-12 h-12 mx-auto mb-3 text-yellow-500" />
-        <h2 className="text-2xl md:text-4xl font-black mb-2 bg-gradient-to-r from-yellow-300 via-yellow-500 to-orange-400 bg-clip-text text-transparent">اختر بداية موقعك</h2>
-        <p className="text-white/60 text-xs md:text-sm">قوالب مميزة احترافية أو ابدأ من فئتك المفضلة</p>
+        <h2 className="text-2xl md:text-4xl font-black mb-2 bg-gradient-to-r from-yellow-300 via-yellow-500 to-orange-400 bg-clip-text text-transparent">اختر نوع موقعك</h2>
+        <p className="text-white/60 text-xs md:text-sm">{categories.length} فئة • داخل كل فئة قوالب مبتكرة بصور وألوان وإطارات مختلفة</p>
       </div>
-
-      {/* Tabs */}
-      <div className="inline-flex gap-1 p-1 bg-white/5 rounded-2xl border border-white/10 mb-6" data-testid="picker-tabs">
-        <button
-          onClick={() => setTab('premium')}
-          className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${tab==='premium' ? 'bg-gradient-to-r from-pink-500 to-cyan-400 text-white shadow-lg shadow-pink-500/30' : 'text-white/70 hover:text-white'}`}
-          data-testid="tab-premium"
-        >
-          ⭐ القوالب المميزة <span className="text-[10px] opacity-80">(5)</span>
-        </button>
-        <button
-          onClick={() => setTab('all')}
-          className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${tab==='all' ? 'bg-gradient-to-r from-yellow-400 to-orange-400 text-black shadow-lg shadow-yellow-500/30' : 'text-white/70 hover:text-white'}`}
-          data-testid="tab-all"
-        >
-          🗂️ كل الفئات <span className="text-[10px] opacity-80">({categories.length})</span>
-        </button>
-      </div>
-
-      {tab === 'premium' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 w-full max-w-7xl" data-testid="premium-grid">
-          {premium.map((t, i) => (
-            <button
-              key={t.layout_id}
-              onClick={() => onPickPremium(t)}
-              className="group relative overflow-hidden rounded-2xl border-2 border-white/10 hover:-translate-y-1 transition-all duration-300 bg-slate-900 text-right"
-              style={{ '--accent': t.color }}
-              data-testid={`premium-card-${t.layout_id}`}
-            >
-              {/* Number badge */}
-              <div
-                className="absolute top-3 right-3 z-20 w-11 h-11 rounded-full flex items-center justify-center text-lg font-black text-white shadow-xl"
-                style={{ background: t.color, boxShadow: `0 8px 25px ${t.color}66` }}
-              >
-                {i + 1}
-              </div>
-              {/* Live preview iframe */}
-              <div className="h-72 overflow-hidden bg-white relative border-b-4" style={{ borderColor: t.color }}>
-                <iframe
-                  src={`${API}/api/websites/categories/${t.category_id}/layouts/${t.layout_id}/preview-html-raw`}
-                  className="border-0 pointer-events-none"
-                  style={{ width: '1440px', height: '1800px', transform: 'scale(0.32)', transformOrigin: 'top right' }}
-                  loading="lazy"
-                  sandbox="allow-same-origin"
-                  title={t.name}
-                />
-                {/* Hover overlay */}
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-t from-black/85 via-black/30 to-transparent flex items-end justify-center pb-4">
-                  <span className="px-5 py-2.5 rounded-full text-sm font-bold text-white shadow-2xl" style={{ background: t.color }}>
-                    اختر هذا القالب ←
-                  </span>
-                </div>
-              </div>
-              {/* Meta */}
-              <div className="p-4">
-                <div className="text-xs font-bold mb-1" style={{ color: t.color }}>{t.world}</div>
-                <div className="text-xl font-black text-white mb-1.5">{t.name}</div>
-                <div className="text-[12px] text-white/60 leading-relaxed mb-2.5">{t.tagline}</div>
-                <div className="flex flex-wrap gap-1">
-                  {(t.best_for || []).map((b) => (
-                    <span key={b} className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/70">{b}</span>
-                  ))}
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {tab === 'all' && (
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4 w-full max-w-7xl" data-testid="all-categories-grid">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4 w-full max-w-7xl">
         {categories.map((c) => (
           <button
             key={c.id}
@@ -108,7 +29,6 @@ function CategoryPicker({ categories, onPick, onPickPremium }) {
             className="group relative overflow-hidden rounded-2xl border border-white/10 hover:border-yellow-400/70 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-yellow-500/20 aspect-[4/5] bg-slate-900"
             data-testid={`category-card-${c.id}`}
           >
-            {/* Background image */}
             {c.image && (
               <div
                 className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110"
@@ -116,14 +36,12 @@ function CategoryPicker({ categories, onPick, onPickPremium }) {
                 aria-hidden
               />
             )}
-            {/* Gradient overlay — darker at bottom for legibility, tinted with brand color on hover */}
             <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-black/10 group-hover:via-black/30" />
             <div
               className="absolute inset-0 opacity-0 group-hover:opacity-40 transition-opacity mix-blend-overlay"
               style={{ background: `linear-gradient(135deg, ${c.color}, transparent 70%)` }}
               aria-hidden
             />
-            {/* Content */}
             <div className="absolute inset-0 flex flex-col justify-between p-3 md:p-4 text-right">
               <div className="flex items-start justify-between">
                 <div
@@ -149,7 +67,6 @@ function CategoryPicker({ categories, onPick, onPickPremium }) {
           </button>
         ))}
       </div>
-      )}
     </div>
   );
 }
@@ -1483,31 +1400,6 @@ export default function WebsiteStudio({ user }) {
     finally { setLoading(false); }
   };
 
-  const confirmPremium = async (T) => {
-    /* T = { layout_id, category_id, name, ... } */
-    if (!T?.layout_id || !T?.category_id) return;
-    setLoading(true);
-    try {
-      const r = await fetch(`${API}/api/websites/projects`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authH() },
-        body: JSON.stringify({
-          name: T.name,
-          template: T.category_id,
-          business_type: T.category_id,
-          meta: { layout_id: T.layout_id, premium: true },
-        }),
-      });
-      const d = await r.json();
-      setProject(d);
-      setActiveCategory(null);
-      await loadProjects();
-      toast.success(`⭐ تم اختيار قالب مميز — يمكنك الآن تخصيص الألوان والمحتوى`);
-      setShowPalettePicker(true);
-    } catch (_) { toast.error('فشل إنشاء المشروع'); }
-    finally { setLoading(false); }
-  };
-
   const applyPalette = async (paletteId) => {
     if (!project?.id) return;
     try {
@@ -1949,7 +1841,7 @@ export default function WebsiteStudio({ user }) {
             loading={loading}
           />
         ) : (
-          <CategoryPicker categories={categories} onPick={setActiveCategory} onPickPremium={confirmPremium} />
+          <CategoryPicker categories={categories} onPick={setActiveCategory} />
         )
       )}
 

@@ -198,18 +198,35 @@ VERTICALS = {
     # ────────────────────────────────────────────────────────────────
     "realestate": {
         "id": "realestate",
-        "name_ar": "عقارات",
-        "icon": "🏠",
-        "color": "#065F46",
-        "features": ["listings", "mortgage_calculator"],
+        "name_ar": "دلّال عقارات",
+        "icon": "🏛️",
+        "color": "#B87333",
+        "features": ["listings", "commission_calculator", "mortgage_calculator", "lead_capture"],
         "checkout_type": "inquiry",
-        "dashboard_tabs": ["listings", "inquiries", "agents", "payments"],
+        "dashboard_tabs": ["listings", "inquiries", "commissions", "agents", "payments"],
         "wizard_questions": [
-            {"id": "listing_type", "q": "نوع العقارات؟", "chips": ["شقق", "فلل", "أراضي", "تجاري", "مزارع", "الكل"]},
+            {"id": "agent_role", "q": "دورك في السوق؟", "chips": ["دلّال مستقل", "مكتب وساطة", "مطوّر عقاري", "مزيج"]},
+            {"id": "listing_type", "q": "نوع العقارات اللي تسوّقها؟", "chips": ["شقق", "فلل", "أراضي", "تجاري", "مزارع", "كل الأنواع"]},
             {"id": "transaction", "q": "بيع/إيجار/الاثنين؟", "chips": ["بيع فقط", "إيجار فقط", "الاثنين"]},
-            {"id": "areas", "q": "المناطق؟", "chips": ["الرياض", "جدة", "الدمام", "مكة", "كل السعودية"]},
+            {"id": "areas", "q": "المناطق التي تغطيها؟", "chips": ["الرياض", "جدة", "الدمام", "مكة", "كل السعودية", "الخليج"]},
+            {"id": "commission_pct", "q": "نسبة العمولة الافتراضية؟", "chips": ["2.5%", "3%", "5%", "تتفاوض"]},
+            {"id": "lead_priority", "q": "أهم شيء عندك؟", "chips": ["عرض العقارات بطريقة فاخرة", "حساب العمولات تلقائياً", "التقاط leads بسرعة", "كلهم"]},
         ],
-        "sample_sections": ["hero_search", "listings_grid", "map_view", "mortgage_calculator", "agents", "contact"],
+        "sample_listings": [
+            {"id": "rl1", "title": "فيلا فاخرة - حي السفارات", "price": 2500000, "transaction": "بيع",
+             "type": "فيلا", "city": "الرياض", "district": "السفارات", "area_sqm": 450,
+             "bedrooms": 5, "bathrooms": 6, "commission_pct": 2.5,
+             "image": "https://images.unsplash.com/photo-1613490493576-7fde63acd811?w=600&q=70"},
+            {"id": "rl2", "title": "شقة بإطلالة بحرية", "price": 850000, "transaction": "بيع",
+             "type": "شقة", "city": "جدة", "district": "الكورنيش", "area_sqm": 180,
+             "bedrooms": 3, "bathrooms": 3, "commission_pct": 2.5,
+             "image": "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=600&q=70"},
+            {"id": "rl3", "title": "أرض تجارية - طريق الملك", "price": 1800000, "transaction": "بيع",
+             "type": "أرض", "city": "الرياض", "district": "العليا", "area_sqm": 600,
+             "bedrooms": 0, "bathrooms": 0, "commission_pct": 3.0,
+             "image": "https://images.unsplash.com/photo-1501183638710-841dd1904471?w=600&q=70"},
+        ],
+        "sample_sections": ["hero_search", "listings_grid", "commission_summary", "map_view", "agents_card", "contact"],
     },
 
     # ════════════════════════════════════════════════════════════════
@@ -388,6 +405,59 @@ VERTICALS = {
             {"id": "j3", "name": "إسورة فضة", "price": 450, "stock": 15, "category": "أساور"},
         ],
         "sample_sections": ["hero", "gold_ticker", "product_grid_filters", "categories_grid", "gold_calculator", "contact"],
+    },
+
+    # ════════════════════════════════════════════════════════════════
+    # 🆕 Feb 27, 2026 — Cosmetics & Automotive verticals
+    # ════════════════════════════════════════════════════════════════
+    "cosmetics": {
+        "id": "cosmetics",
+        "name_ar": "مكياج وعطور",
+        "icon": "💄",
+        "color": "#E91E63",
+        "features": ["products", "orders", "wishlists"],
+        "checkout_type": "delivery",
+        "dashboard_tabs": ["products", "orders", "categories", "customers", "coupons", "payments"],
+        "wizard_questions": [
+            {"id": "category_focus", "q": "ما الفئات الرئيسية؟", "chips": ["مكياج", "عطور", "عناية بالبشرة", "عناية بالشعر", "أدوات تجميل", "الكل"]},
+            {"id": "brand_tier", "q": "مستوى العلامات؟", "chips": ["فاخرة عالمية", "متوسطة", "اقتصادية", "مزيج"]},
+            {"id": "delivery_speed", "q": "سرعة التوصيل؟", "chips": ["نفس اليوم", "يومين", "3-5 أيام", "حسب المنطقة"]},
+        ],
+        "sample_products": [
+            {"id": "cs1", "name": "أحمر شفاه فاخر", "price": 180, "stock": 25, "category": "مكياج"},
+            {"id": "cs2", "name": "عطر فرنسي 100ml", "price": 650, "stock": 12, "category": "عطور"},
+            {"id": "cs3", "name": "كريم ترطيب يومي", "price": 220, "stock": 40, "category": "عناية بالبشرة"},
+            {"id": "cs4", "name": "بالتة ظلال 12 لون", "price": 290, "stock": 18, "category": "مكياج"},
+        ],
+        "sample_sections": ["hero", "categories_grid", "product_grid_filters", "testimonials", "newsletter", "contact"],
+    },
+
+    "automotive": {
+        "id": "automotive",
+        "name_ar": "معارض سيارات",
+        "icon": "🏎️",
+        "color": "#DC2626",
+        "features": ["products", "test_drive_booking", "financing"],
+        "checkout_type": "inquiry",  # inquiry-based; not direct purchase
+        "dashboard_tabs": ["products", "inquiries", "test_drives", "customers", "payments"],
+        "wizard_questions": [
+            {"id": "car_types", "q": "أنواع السيارات؟", "chips": ["سيدان", "SUV", "هاتشباك", "بيك أب", "رياضية", "كل الأنواع"]},
+            {"id": "condition", "q": "حالة السيارات؟", "chips": ["جديدة فقط", "مستعملة فقط", "الاثنين", "كلاسيكية"]},
+            {"id": "financing", "q": "تقدّم تمويلاً؟", "chips": ["نعم، بنوك متعددة", "تأجير منتهي بالتمليك", "كاش فقط"]},
+            {"id": "warranty", "q": "ضمان مقدّم؟", "chips": ["3 سنوات أو 100 ألف كم", "5 سنوات", "حسب الموديل", "بدون ضمان"]},
+        ],
+        "sample_products": [
+            {"id": "ca1", "name": "تويوتا كامري 2025", "price": 125000, "stock": 4, "category": "سيدان",
+             "image": "https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?w=600&q=70",
+             "variants": [{"name": "الموديل", "options": ["GLE", "GLX-V6", "Hybrid"]}]},
+            {"id": "ca2", "name": "نيسان باترول 2024", "price": 285000, "stock": 2, "category": "SUV",
+             "image": "https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=600&q=70"},
+            {"id": "ca3", "name": "مرسيدس C200 2024", "price": 215000, "stock": 3, "category": "سيدان فاخرة",
+             "image": "https://images.unsplash.com/photo-1606664515524-ed2f786a0bd6?w=600&q=70"},
+            {"id": "ca4", "name": "هيونداي توسان 2025", "price": 92000, "stock": 6, "category": "SUV",
+             "image": "https://images.unsplash.com/photo-1502877338535-766e1452684a?w=600&q=70"},
+        ],
+        "sample_sections": ["hero", "product_grid_filters", "test_drive_booking", "financing_calculator", "testimonials", "contact"],
     },
 }
 

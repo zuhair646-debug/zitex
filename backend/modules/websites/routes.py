@@ -450,6 +450,8 @@ body{{font-family:'Tajawal',sans-serif;background:#0a0a0a;color:#fff;padding:30p
             "art_gallery": "art_gallery",
             "maintenance": "maintenance",
             "jewelry": "jewelry",
+            "cosmetics": "ecommerce",       # 💄 cosmetics use ecommerce engine (products + cart)
+            "automotive": "automotive",     # 🏎️ cars showroom — uses dedicated automotive vertical (or fallback ecommerce)
         }
         vid = _category_to_vertical.get(category_id)
         if vid:
@@ -463,6 +465,8 @@ body{{font-family:'Tajawal',sans-serif;background:#0a0a0a;color:#fff;padding:30p
                 d["courses"] = [{**s, "created_at": now} for s in v_def["sample_courses"]]
             if v_def.get("sample_membership_plans") and not d.get("membership_plans"):
                 d["membership_plans"] = [{**s, "created_at": now} for s in v_def["sample_membership_plans"]]
+            if v_def.get("sample_listings") and not d.get("listings"):
+                d["listings"] = [{**s, "created_at": now} for s in v_def["sample_listings"]]
         if is_blank:
             greet = "✨ ممتاز! اخترت قالباً مخصّصاً. صف لي نشاطك بحرّية (مثل: 'متجر قطط' أو 'عيادة أسنان حديثة') وسأبني لك تصميماً ابتكارياً فوراً."
         else:

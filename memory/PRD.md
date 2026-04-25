@@ -15,32 +15,47 @@
 - 🔒 **Images**: قريباً
 
 
-### 🆕 Feb 27, 2026 — PREMIUM TEMPLATES TAB IN CATEGORY PICKER (P0 — COMPLETE)
+### 🆕 Feb 27, 2026 — REVERT TABS + ADD 3 NEW CATEGORIES (P0 — COMPLETE)
 
-تم دمج القوالب المميزة الـ5 في الـ`CategoryPicker` بتبويبَين منفصلين:
+**شكوى المستخدم**: "التحديث الذي حصل ما هو صحيح، أفضل أن يظلوا كأقسام مذكورة، لكن في كل قسم يكون له تصميم له قوالب خاصة فيه بصور مبتكرة"
 
-**التبويبان**:
-- ⭐ **القوالب المميزة (5)** — pink/cyan gradient (افتراضي عند فتح الاستوديو) — يعرض الـ5 قوالب بمعاينات iframe حية + رقم ملون + tagline + شارات "best for"
-- 🗂️ **كل الفئات (22)** — yellow/orange gradient — الـpicker القديم بكروت الصور
+**Actions taken**:
+1. **حُذف تبويب "القوالب المميزة"** من `CategoryPicker` — رجوع للنظام الأصلي (شبكة فئات بسيطة)
+2. **حُذف معالج `confirmPremium`** من `WebsiteStudio.js`
+3. **أُضيف 3 فئات جديدة** في `catalog.py`:
+   - 💄 **cosmetics** (مكياج وعطور) — لون وردي #E91E63
+   - 🏎️ **automotive** (معارض سيارات) — لون أحمر #DC2626
+   - 🏛️ **realestate** (دلّال عقارات) — لون نحاسي #B87333
+4. **النظام التلقائي** يعرض الـ25 قالب لكل فئة (الـ20 archetypes الأصلية + الـ5 المميزة) — كل قالب بصور وإطار وترتيب أقسام مختلف
 
-**Backend**:
-- `GET /api/websites/premium-templates` — يُرجع 5 قوالب JSON (layout_id, category_id, name, color, world, tagline, best_for)
+**فلسفة realestate الجديدة (دلّال):**
+- vertical features: `["listings", "commission_calculator", "mortgage_calculator", "lead_capture"]`
+- dashboard tabs: `["listings", "inquiries", "commissions", "agents", "payments"]`
+- wizard questions جديدة (دور الدلّال، نسبة العمولة الافتراضية، أولويات التسويق)
+- `sample_listings` 3 عقارات بأسعار/عمولات حقيقية (يتم seed تلقائياً عند إنشاء المشروع)
+- ListingsEngine الموجود سابقاً يحسب العمولات تلقائياً (price × commission_pct/100)
 
-**Frontend (`WebsiteStudio.js`)**:
-- `CategoryPicker` معاد كتابته مع Tabs state + قائمة `premium` تُجلب عند load
-- كل كرت قالب: iframe scaled-down preview (300px height, 0.32 transform) + رقم في دائرة ملوّنة + hover overlay بزر "اختر هذا القالب ←"
-- معالج `confirmPremium(T)` ينشئ مشروع بـ`template=T.category_id` + `meta.layout_id=T.layout_id` + `meta.premium=true` ثم يفتح PalettePicker مباشرة
-
-**E2E verified (Feb 27, 2026)**:
-- ✅ التبويبان يظهران بشكل احترافي مع gradients مميزة
-- ✅ الـ5 كروت تعرض معاينات حية لكل قالب بدقة
-- ✅ التبديل بين التبويبَين سلس، الافتراضي = المميزة
-- ✅ كل الفئات الـ22 ما زالت تعمل عبر التبويب الثاني
-- ✅ Lint passes
+**verticals جديدة مع dashboard tabs و wizard questions**:
+- `cosmetics` — products + orders + wishlists, تخصيصات للعلامات والتوصيل
+- `automotive` — products + test_drive_booking + financing, inquiry-based checkout
 
 **Files modified**:
-- `/app/backend/modules/websites/routes.py` — endpoint `/premium-templates` (JSON list)
-- `/app/frontend/src/pages/websites/WebsiteStudio.js` — `CategoryPicker` rewrite + `confirmPremium` handler
+- `/app/backend/modules/websites/catalog.py` — أُضيف 3 فئات
+- `/app/backend/modules/websites/category_content.py` — أُضيف configs
+- `/app/backend/modules/websites/verticals.py` — أُعيد كتابة realestate كـدلّال + أُضيف cosmetics & automotive
+- `/app/backend/modules/websites/routes.py` — CATEGORY_VERTICAL aliases + sample_listings seeding
+- `/app/backend/modules/websites/template_themes.py` — image keywords للفئات الجديدة
+- `/app/frontend/src/pages/websites/WebsiteStudio.js` — حذف tabs + confirmPremium
+
+**E2E verified**:
+- ✅ 25 فئة في القائمة
+- ✅ كل فئة فيها 25 قالب
+- ✅ القوالب الجديدة لـ cosmetics/automotive/realestate تُولّد HTML 37-46KB بنجاح
+- ✅ Wizard questions ظاهرة لكل vertical جديد
+
+
+### Feb 27, 2026 — PREMIUM TEMPLATES TAB (REVERTED)
+**ملاحظة**: التبويب الذي تم بناؤه حُذف بناءً على ملاحظة المستخدم. الـ5 قوالب المميزة ما زالت متاحة كـarchetypes داخل كل فئة بشكل طبيعي.
 
 
 ### 🆕 Feb 27, 2026 — 5 PREMIUM HAND-CRAFTED TEMPLATES (P0 — COMPLETE)

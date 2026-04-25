@@ -275,6 +275,26 @@ CATEGORY_CONFIG: Dict[str, Dict[str, Any]] = {
         "primary_grid": "products",
         "accent_emoji": "🛒",
     },
+    "cosmetics": {
+        "hero_title": "جمالكِ · فنّ يُكتشف",
+        "hero_subtitle": "مكياج فاخر، عطور حصرية، وعناية كاملة من أرقى العلامات العالمية",
+        "hero_image": "https://images.unsplash.com/photo-1487412947147-5cebf100ffc2?w=1600&q=70",
+        "cta": "تسوّقي الآن",
+        "about_title": "علاماتنا الموثوقة",
+        "about_text": "نتعامل مع أفخر العلامات العالمية ونوفّر منتجات أصلية 100% بضمان كامل.",
+        "primary_grid": "products",
+        "accent_emoji": "💄",
+    },
+    "automotive": {
+        "hero_title": "اقتني سيارة أحلامك",
+        "hero_subtitle": "معرض سيارات فاخر، خيارات تمويل، ضمان شامل، وخدمة ما بعد البيع",
+        "hero_image": "https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=1600&q=70",
+        "cta": "اطلب اختبار قيادة",
+        "about_title": "وكيلك المعتمد",
+        "about_text": "أكثر من 500 سيارة جاهزة للتسليم — جديدة ومستعملة، مع خيارات تقسيط مرنة.",
+        "primary_grid": "products",
+        "accent_emoji": "🏎️",
+    },
 }
 
 
