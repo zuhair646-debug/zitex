@@ -15,6 +15,52 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Feb 26, 2026 (deep night) — RENDERER REFACTORING (Backlog — COMPLETE)
+
+تم تقسيم `renderer.py` (1,436 سطر مونوليث) إلى **9 ملفات focused**:
+
+| الملف | الأسطر | المحتوى |
+|------|--------|---------|
+| `renderer.py` | **137** | Orchestrator فقط — RENDERERS map + render_website_to_html |
+| `renderer_helpers.py` | 27 | _esc, _humanize_type, _TYPE_LABELS |
+| `content_renderer.py` | 311 | hero, about, gallery, testimonials, team, pricing, faq, contact, cta, footer, video, newsletter, stats_band, stories, banner, announce_bar, map_embed, delivery_banner, custom |
+| `ecommerce_renderer.py` | 69 | products, menu, product_grid_filters |
+| `booking_renderer.py` | 37 | reservation, booking_widget |
+| `portfolio_renderer.py` | 103 | stock_ticker, gold_ticker, listings_grid, _portfolio_overlay |
+| `dashboard_renderer.py` | 216 | _dash_panel + _section_dashboard |
+| `overlay_renderer.py` | 206 | auth_and_commerce_overlay, floating_widgets |
+| `base_css.py` | 429 | _base_css generator |
+
+**نقاط مهمة**:
+- **Pure refactoring** — صفر تغيير سلوك، كل 42 renderer مسجَّل في RENDERERS map
+- External imports المحفوظة: `render_website_to_html` و `_humanize_type`
+- التقسيم بناءً على الـdomain: ecommerce/booking/portfolio/content/dashboard/overlay
+- يحلّ مشكلة التفجّر السياقي للسطور (was: 1450 lines = high risk of search_replace conflicts)
+
+**التحقق التراجعي (Feb 26, 2026 — manual + curl)**:
+- ✅ Public render: cozy-cafe-demo → 55KB HTML مع كل sections (hero, menu, gallery, about, team, contact, footer, newsletter, stories, banner, delivery_banner, map_embed)
+- ✅ Section variants: PATCH gallery → masonry يظهر `gallery-masonry` في HTML
+- ✅ 4 archetypes رصدت أحجام مختلفة: classic_stack=34.6KB, bold_banner=34.6KB, minimal_portrait=32.3KB, product_dense=37.8KB
+- ✅ Snapshots: 8 موجودة وتعمل
+- ✅ Gold ticker live: 567.96 ر.س/غ
+- ✅ Engines_v2: courses=2, plans=2, drivers analytics=1
+- ✅ overlay_renderer: zx-auth-fab + zx-cart موجودة
+- ✅ base_css: font-family + @keyframes موجودة
+
+**Files added** (8):
+- `/app/backend/modules/websites/renderer_helpers.py`
+- `/app/backend/modules/websites/content_renderer.py`
+- `/app/backend/modules/websites/ecommerce_renderer.py`
+- `/app/backend/modules/websites/booking_renderer.py`
+- `/app/backend/modules/websites/portfolio_renderer.py`
+- `/app/backend/modules/websites/dashboard_renderer.py`
+- `/app/backend/modules/websites/overlay_renderer.py`
+- `/app/backend/modules/websites/base_css.py`
+
+**Files modified**:
+- `/app/backend/modules/websites/renderer.py` — 1436 → 137 سطر (orchestrator فقط)
+
+
 ### 🆕 Feb 26, 2026 (night) — PHASE 2 EXPANSION: Courses + Memberships + Events + Analytics + Gold + ISBN + Vertical Wizard (P1/P2 — COMPLETE)
 
 **1) 🎯 Wizard vertical-specific questions** (P1):
