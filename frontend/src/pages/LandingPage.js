@@ -54,12 +54,12 @@ const LandingPage = ({ user }) => {
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button 
                 size="lg" 
-                onClick={() => navigate(user ? '/websites' : '/register')}
+                onClick={() => navigate(user ? '/websites' : '/demo')}
                 data-testid="hero-cta-btn"
                 className="h-14 px-10 text-lg bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-black font-semibold shadow-lg shadow-amber-500/25"
               >
                 <Sparkles className="w-5 h-5 me-2" />
-                {user ? 'استوديو المواقع' : 'ابدأ مجاناً'}
+                {user ? 'استوديو المواقع' : '⚡ جرّب 60 ثانية مجاناً'}
               </Button>
               <Button 
                 size="lg" 
@@ -71,6 +71,11 @@ const LandingPage = ({ user }) => {
                 عرض الأسعار
               </Button>
             </div>
+            {!user && (
+              <p className="text-xs text-amber-300/70 mt-4 text-center" data-testid="demo-hint">
+                ✨ بدون تسجيل · بدون بطاقة ائتمان · شاهد موقعك يُولد لحظياً
+              </p>
+            )}
           </div>
         </div>
       </section>

@@ -15,6 +15,30 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Feb 27, 2026 — LIVE DEMO MODE (Conversion Booster) (P1 — COMPLETE)
+
+**Goal**: زيادة معدل التحويل بإزالة حاجز "الثقة قبل الدفع". زائر يجرّب المنصة 60 ثانية بدون تسجيل.
+
+**Implementation**:
+1. **`/app/frontend/src/pages/DemoLanding.js`** — صفحة `/demo` عامة (3 خطوات):
+   - **Step 1 — Category picker**: 5 فئات شائعة (مطعم، مكياج، عقارات، سيارات، نادي رياضي)
+   - **Step 2 — Live preview + archetype switch**: sidebar بـ6 أنماط بصرية + iframe معاينة حية بتحديث فوري + countdown timer (60 ثانية)
+   - **Step 3 — Conversion CTA**: بعد انتهاء الـtimer، يظهر "عجبك التصميم؟ احفظه" + checklist للمزايا + زر تسجيل
+2. **`/app/frontend/src/App.js`** — أُضيف Route `/demo` (public)
+3. **`/app/frontend/src/pages/LandingPage.js`** — تعديل CTA الرئيسي:
+   - For guests: "⚡ جرّب 60 ثانية مجاناً" → `/demo` (بدلاً من `/register`)
+   - For users: "استوديو المواقع" → `/websites` (كما هو)
+   - أُضيف hint: "✨ بدون تسجيل · بدون بطاقة ائتمان · شاهد موقعك يُولد لحظياً"
+
+**E2E verified (Feb 27, 2026)**:
+- ✅ صفحة `/demo` تفتح بدون auth
+- ✅ اختيار فئة → معاينة حية باستخدام `/categories/{cat}/layouts/{cat}__{arch}/preview-html-raw` (public endpoint)
+- ✅ تبديل بين 6 archetypes يحدّث الـiframe فوراً
+- ✅ Timer يعدّ تنازلياً، عند الـ0 ينتقل لشاشة CTA
+- ✅ صور مكتبة الفئة الصحيحة (مطعم→صور مطعم، ليس مكياج)
+- ✅ Lint passes
+
+
 ### 🆕 Feb 27, 2026 — WIZARD AUTO-ADVANCE + E2E PASSING (P0 — COMPLETE)
 
 **شكوى المستخدم**: "لما نختار القالب يوقف ما يبدأ يسأل شنو مثلا تحتاج شنو الواتس آب الى أخر الإضافات هذي كلها وقف صار ما يسأل أبيك ترجعها"
