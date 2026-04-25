@@ -15,6 +15,34 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Feb 27, 2026 — PREMIUM TEMPLATES TAB IN CATEGORY PICKER (P0 — COMPLETE)
+
+تم دمج القوالب المميزة الـ5 في الـ`CategoryPicker` بتبويبَين منفصلين:
+
+**التبويبان**:
+- ⭐ **القوالب المميزة (5)** — pink/cyan gradient (افتراضي عند فتح الاستوديو) — يعرض الـ5 قوالب بمعاينات iframe حية + رقم ملون + tagline + شارات "best for"
+- 🗂️ **كل الفئات (22)** — yellow/orange gradient — الـpicker القديم بكروت الصور
+
+**Backend**:
+- `GET /api/websites/premium-templates` — يُرجع 5 قوالب JSON (layout_id, category_id, name, color, world, tagline, best_for)
+
+**Frontend (`WebsiteStudio.js`)**:
+- `CategoryPicker` معاد كتابته مع Tabs state + قائمة `premium` تُجلب عند load
+- كل كرت قالب: iframe scaled-down preview (300px height, 0.32 transform) + رقم في دائرة ملوّنة + hover overlay بزر "اختر هذا القالب ←"
+- معالج `confirmPremium(T)` ينشئ مشروع بـ`template=T.category_id` + `meta.layout_id=T.layout_id` + `meta.premium=true` ثم يفتح PalettePicker مباشرة
+
+**E2E verified (Feb 27, 2026)**:
+- ✅ التبويبان يظهران بشكل احترافي مع gradients مميزة
+- ✅ الـ5 كروت تعرض معاينات حية لكل قالب بدقة
+- ✅ التبديل بين التبويبَين سلس، الافتراضي = المميزة
+- ✅ كل الفئات الـ22 ما زالت تعمل عبر التبويب الثاني
+- ✅ Lint passes
+
+**Files modified**:
+- `/app/backend/modules/websites/routes.py` — endpoint `/premium-templates` (JSON list)
+- `/app/frontend/src/pages/websites/WebsiteStudio.js` — `CategoryPicker` rewrite + `confirmPremium` handler
+
+
 ### 🆕 Feb 27, 2026 — 5 PREMIUM HAND-CRAFTED TEMPLATES (P0 — COMPLETE)
 
 طلب المستخدم: **"ابي قوالب مختلفة تماماً، كل قالب يحكي عالم ثاني، صور مبتكرة، ألوان أساسية مختلفة، طرق أزرار مختلفة"**.

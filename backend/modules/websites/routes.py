@@ -221,6 +221,38 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
 </body></html>"""
         return HTMLResponse(content=html)
 
+    @r.get("/premium-templates")
+    async def _premium_templates():
+        """JSON list of the 5 hand-crafted premium templates (for tab integration in the picker)."""
+        premium = [
+            {"layout_id": "store__beauty_megamart", "category_id": "store",
+             "name": "متجر الجمال الفاخر", "world": "🌸 عالم الجمال والأناقة",
+             "color": "#E91E63", "secondary": "#4A1D5C",
+             "tagline": "بنفسجي/وردي · كرت ترويجي + Timer + دوائر فئات",
+             "best_for": ["متاجر", "تجميل", "موضة", "عناية شخصية"]},
+            {"layout_id": "realestate__realestate_luxury_dark", "category_id": "realestate",
+             "name": "عقارات فاخرة كحلية", "world": "🏛️ عالم العقارات الفاخرة",
+             "color": "#B87333", "secondary": "#0A0A0A",
+             "tagline": "أسود/نحاسي · صور هندسية + نموذج بحث + شعار أسد",
+             "best_for": ["عقارات", "خدمات راقية", "استشارات"]},
+            {"layout_id": "portfolio__editorial_diagonal", "category_id": "portfolio",
+             "name": "مجلة قطرية", "world": "📰 عالم المجلات الإبداعية",
+             "color": "#00D9FF", "secondary": "#0E0E0E",
+             "tagline": "كحلي/سماوي · قطع قطرية + Serif كبير + أرقام أقسام",
+             "best_for": ["بورتفوليو", "مصممون", "وكالات إبداعية"]},
+            {"layout_id": "bakery__organic_blobs", "category_id": "bakery",
+             "name": "عضوي ترابي دافئ", "world": "🌿 عالم الطبيعة الحرفية",
+             "color": "#C65D3E", "secondary": "#FAF3E7",
+             "tagline": "ترابي/كريمي · أشكال blob عضوية + Amiri + لمسة يدوية",
+             "best_for": ["مخابز", "حلويات", "صناعات يدوية", "كافيهات"]},
+            {"layout_id": "saas__cyber_glitch", "category_id": "saas",
+             "name": "سايبر نيون مستقبلي", "world": "⚡ عالم التقنية المستقبلية",
+             "color": "#00FF88", "secondary": "#000000",
+             "tagline": "أسود/نيون · Glitch RGB + scan lines + Hex corners",
+             "best_for": ["تقنية", "SaaS", "ألعاب", "كريبتو"]},
+        ]
+        return {"templates": premium}
+
     @r.get("/categories/{category_id}/layouts/{layout_id}/preview-html-raw", response_class=Response)
     async def _c_layout_preview_raw(category_id: str, layout_id: str):
         from fastapi.responses import HTMLResponse
