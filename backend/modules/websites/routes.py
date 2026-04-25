@@ -261,12 +261,12 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
 
     # ---------------- Wizard meta (public) ----------------
     @r.get("/wizard/steps")
-    async def _w_steps(project_id: Optional[str] = None, current_user: dict = Depends(auth_dep)):
+    async def _w_steps(project_id: Optional[str] = None):
+        """Public — returns wizard steps metadata. project_id optional (used to merge vertical-specific steps).
+        Does NOT require auth — these are just step labels/chips, not user data."""
         p = None
         if project_id:
-            p = await database.website_projects.find_one(
-                {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
-            )
+            p = await database.website_projects.find_one({"id": project_id}, {"_id": 0})
         return {"steps": steps_metadata(p)}
 
     # ---------------- Projects ----------------

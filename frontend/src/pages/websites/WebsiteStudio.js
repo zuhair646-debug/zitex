@@ -1330,6 +1330,15 @@ export default function WebsiteStudio({ user }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 🆕 Re-fetch wizard steps when project changes — to merge vertical-specific questions (vq_*)
+  useEffect(() => {
+    if (!project?.id) return;
+    fetch(`${API}/api/websites/wizard/steps?project_id=${project.id}`)
+      .then((r) => r.json())
+      .then((d) => setWizardSteps(d.steps || []))
+      .catch(() => {});
+  }, [project?.id]);
+
   const loadProjects = async () => {
     try {
       const r = await fetch(`${API}/api/websites/projects`, { headers: authH() });
