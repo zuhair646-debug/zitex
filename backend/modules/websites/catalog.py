@@ -616,15 +616,23 @@ def list_layouts(category_id: str) -> List[Dict[str, Any]]:
     """
     from .template_archetypes import ARCHETYPES, NEUTRAL_THEME
     from .category_content import get_category_config, resolve_placeholder, resolve_section_type
+    from .template_themes import apply_archetype_theme, get_hero_image_for
 
     cfg = get_category_config(category_id)
     out: List[Dict[str, Any]] = []
 
     for arch in ARCHETYPES:
+        # Build per-archetype theme (unique palette, font, hero image, custom CSS)
+        archetype_theme = apply_archetype_theme(arch["id"], category_id, dict(NEUTRAL_THEME))
+        archetype_hero = get_hero_image_for(category_id, arch["id"])
+
         sections: List[Dict[str, Any]] = []
         for idx, (section_type, style, placeholder_id) in enumerate(arch["sections"]):
             resolved_type = resolve_section_type(section_type, cfg)
             data = resolve_placeholder(placeholder_id, category_id, cfg)
+            # Override hero image with archetype-specific image so each card looks different
+            if resolved_type == "hero":
+                data = {**data, "image": archetype_hero}
             if style:
                 data = {**data, "style": style}
             sections.append({
@@ -651,7 +659,9 @@ def list_layouts(category_id: str) -> List[Dict[str, Any]]:
             "density": arch["density"],
             "hero_layout": arch["hero_layout"],
             "sections_count": len(sections),
-            "theme": dict(NEUTRAL_THEME),
+            "theme": archetype_theme,
+            "theme_name": archetype_theme.get("_archetype_theme_name"),
+            "hero_image": archetype_theme.get("_hero_image"),
             "sections": sections,
         })
     return out

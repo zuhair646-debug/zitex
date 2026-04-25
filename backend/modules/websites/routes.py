@@ -159,6 +159,8 @@ def register_routes(app, database, auth_dep):
                 "sections_count": L.get("sections_count") or len(L.get("sections") or []),
                 "section_types": [s.get("type") for s in (L.get("sections") or [])],
                 "theme": L.get("theme", {}),
+                "theme_name": L.get("theme_name"),
+                "hero_image": L.get("hero_image"),
             }
             for L in layouts
         ]}
