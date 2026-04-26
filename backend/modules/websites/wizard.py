@@ -51,16 +51,74 @@ def _vertical_steps(vertical_id: Optional[str]) -> List[Dict[str, Any]]:
 
 
 def _merged_steps(project: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-    """Return STEPS with vertical-specific questions spliced in right after 'variant'."""
+    """Return STEPS with vertical-specific questions spliced in right after 'variant',
+    AND deep widget-style steps right after 'extras' (one per chosen extra + cart for ecom)."""
     vertical_id = ((project or {}).get("vertical")) if project else None
     v_steps = _vertical_steps(vertical_id)
-    if not v_steps:
-        return STEPS
+
+    # 🆕 Per-extra widget style steps with 3 visual options + AI custom
+    extras_chosen = (((project or {}).get("wizard") or {}).get("answers") or {}).get("extras") or []
+    if not isinstance(extras_chosen, list):
+        extras_chosen = []
+    EXTRA_TO_WIDGET = {
+        "whatsapp_float": "whatsapp",
+        "sticky_phone":   "whatsapp",   # phone shares whatsapp visual style
+        "scroll_top":     "scroll_top",
+        "book_float":     "book_float",
+        "announce_bar":   "announce_bar",
+        "rating_widget":  "whatsapp",
+    }
+    style_steps: List[Dict[str, Any]] = []
+    seen_widgets: set = set()  # dedup so we don't ask the same widget twice
+    try:
+        from .widget_styles import WIDGETS
+    except Exception:
+        WIDGETS = {}
+    for ext in extras_chosen:
+        wid = EXTRA_TO_WIDGET.get(ext)
+        if not wid or wid not in WIDGETS or wid in seen_widgets:
+            continue
+        seen_widgets.add(wid)
+        w = WIDGETS[wid]
+        variants = list((w.get("variants") or {}).items())[:3]
+        chips = [{"id": vid, "label": v.get("name_ar", vid), "value": vid} for vid, v in variants]
+        chips.append({"id": "ai_custom", "label": "🤖 صمّم لي بمزاجي (AI)", "value": "ai_custom"})
+        style_steps.append({
+            "id": f"style_{wid}",
+            "title": f"شكل {w.get('name_ar', wid)}",
+            "question": f"✨ اختر شكل {w.get('name_ar', wid)} — أو اطلب من الذكاء الاصطناعي تصميماً مخصّصاً بمزاجك:",
+            "chips": chips,
+            "render": "chips",
+            "applies": f"widget_style_{wid}",
+            "vertical_specific": True,
+            "widget_id": wid,
+        })
+    # Cart style step for any e-commerce-like vertical
+    biz = ((project or {}).get("business_type") or (project or {}).get("template") or "").lower()
+    if biz in ("store", "ecommerce", "cosmetics", "automotive", "jewelry", "bakery", "restaurant", "coffee", "pets") and "cart" in WIDGETS and "cart" not in seen_widgets:
+        seen_widgets.add("cart")
+        w = WIDGETS["cart"]
+        variants = list((w.get("variants") or {}).items())[:3]
+        chips = [{"id": vid, "label": v.get("name_ar", vid), "value": vid} for vid, v in variants]
+        chips.append({"id": "ai_custom", "label": "🤖 صمّم سلة بمزاجي (AI)", "value": "ai_custom"})
+        style_steps.append({
+            "id": "style_cart",
+            "title": "شكل السلة",
+            "question": "🛒 اختر شكل سلة التسوّق — أو اطلب من AI تصميماً مخصّصاً بمزاجك:",
+            "chips": chips,
+            "render": "chips",
+            "applies": "widget_style_cart",
+            "vertical_specific": True,
+            "widget_id": "cart",
+        })
+
     out: List[Dict[str, Any]] = []
     for s in STEPS:
         out.append(s)
         if s["id"] == "variant":
             out.extend(v_steps)
+        if s["id"] == "extras":
+            out.extend(style_steps)
     return out
 
 
@@ -417,6 +475,22 @@ def apply_answer(project: Dict[str, Any], step_id: str, value: Any) -> Dict[str,
         vert_map = dict(ans.get("vertical") or {})
         vert_map[key] = value
         ans["vertical"] = vert_map
+    elif step_id.startswith("style_"):
+        # 🆕 Per-widget style picker (e.g. style_whatsapp, style_cart) — applied to widget_styles
+        widget_id = step_id.replace("style_", "", 1)
+        styles = dict(project.get("widget_styles") or {})
+        widget_state = dict(styles.get(widget_id) or {})
+        if value == "ai_custom":
+            widget_state["variant"] = "ai_custom"
+            widget_state["awaiting_ai_brief"] = True  # frontend will prompt for description
+        else:
+            widget_state["variant"] = value
+            widget_state.pop("awaiting_ai_brief", None)
+        styles[widget_id] = widget_state
+        project["widget_styles"] = styles
+        styles_map = dict(ans.get("widget_styles") or {})
+        styles_map[widget_id] = value
+        ans["widget_styles"] = styles_map
 
     wizard["answers"] = ans
     wizard["completed"] = list(dict.fromkeys((wizard.get("completed") or []) + [step_id]))

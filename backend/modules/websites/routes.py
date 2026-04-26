@@ -434,6 +434,111 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
             raise HTTPException(404, "Project not found")
         return {"html": render_website_to_html(p), "project_id": project_id}
 
+    # ════════════════════════════════════════════════════════════════════
+    # 🆕 LIVE EDIT MODE — Reorder sections + AI custom widget design
+    # ════════════════════════════════════════════════════════════════════
+    @r.post("/projects/{project_id}/reorder-sections")
+    async def _p_reorder(project_id: str, body: Dict[str, Any], current_user: dict = Depends(auth_dep)):
+        """Apply a new section order — body.section_ids is the desired ordered list of section ids/types."""
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "Project not found")
+        ordered_ids = body.get("section_ids") or []
+        if not isinstance(ordered_ids, list) or not ordered_ids:
+            raise HTTPException(400, "section_ids must be a non-empty list")
+        secs = p.get("sections") or []
+        by_key = {(s.get("id") or s.get("type")): s for s in secs}
+        new_secs = []
+        for i, key in enumerate(ordered_ids):
+            s = by_key.get(key)
+            if s:
+                new_secs.append({**s, "order": i, "visible": True})
+        seen = set(ordered_ids)
+        for s in secs:
+            k = s.get("id") or s.get("type")
+            if k not in seen:
+                new_secs.append({**s, "order": len(new_secs)})
+        await database.website_projects.update_one(
+            {"id": project_id},
+            {"$set": {"sections": new_secs, "updated_at": _iso_now()}},
+        )
+        p["sections"] = new_secs
+        p["updated_at"] = _iso_now()
+        return p
+
+    @r.post("/projects/{project_id}/widget-ai-design")
+    async def _p_widget_ai(project_id: str, body: Dict[str, Any], current_user: dict = Depends(auth_dep)):
+        """Generate custom widget CSS via AI based on Arabic mood description."""
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "Project not found")
+        widget_id = (body.get("widget_id") or "").strip()
+        brief = (body.get("brief") or "").strip()
+        if not widget_id or not brief:
+            raise HTTPException(400, "widget_id and brief are required")
+        try:
+            from .widget_styles import WIDGETS
+            w = WIDGETS.get(widget_id)
+        except Exception:
+            w = None
+        if not w:
+            raise HTTPException(404, f"Unknown widget: {widget_id}")
+        theme = p.get("theme") or {}
+        primary = theme.get("primary", "#FFD700")
+        secondary = theme.get("secondary", "#1a1a1a")
+        prompt = (
+            f"You are a CSS designer. Generate properties for a floating action button widget '{w.get('name_ar', widget_id)}'.\n"
+            f"User mood (Arabic): \"{brief}\"\n"
+            f"Brand colors: primary={primary}, secondary={secondary}.\n"
+            "Output ONLY raw CSS property declarations (no selectors, no braces, no markdown, one per line, separated by ;).\n"
+            "Include 10-14 properties: width, height, border-radius, background (use a gradient), color, border, box-shadow, font-weight, font-size, display:flex, align-items:center, justify-content:center, cursor:pointer.\n"
+            "Size 50-60px circular or pill-shaped. Use the brand colors.\n"
+            "Example: width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#FFD700,#FF6B00);color:#000;border:2px solid rgba(255,255,255,.3);box-shadow:0 12px 30px rgba(255,215,0,.5);font-weight:900;font-size:22px;display:flex;align-items:center;justify-content:center;cursor:pointer;"
+        )
+        try:
+            import litellm
+            from litellm import acompletion
+            key = os.environ.get("EMERGENT_LLM_KEY")
+            if not key:
+                raise RuntimeError("EMERGENT_LLM_KEY missing")
+            litellm.api_base = "https://integrations.emergentagent.com/llm"
+            resp = await acompletion(
+                model="openai/gpt-4o-mini",
+                api_key=key,
+                api_base="https://integrations.emergentagent.com/llm",
+                messages=[
+                    {"role": "system", "content": "You output only valid CSS property declarations. Never markdown, never code fences."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.85,
+                max_tokens=220,
+            )
+            css = (resp.choices[0].message.content or "").strip()
+        except Exception as e:
+            raise HTTPException(500, f"AI design failed: {e}")
+        css = css.replace("```css", "").replace("```", "").strip()
+        if "{" in css:
+            css = css.split("{", 1)[1]
+        if "}" in css:
+            css = css.split("}", 1)[0]
+        css = css.strip()
+        styles = p.get("widget_styles") or {}
+        widget_state = dict(styles.get(widget_id) or {})
+        widget_state["variant"] = "ai_custom"
+        widget_state["ai_brief"] = brief
+        widget_state["ai_css"] = css
+        widget_state.pop("awaiting_ai_brief", None)
+        styles[widget_id] = widget_state
+        await database.website_projects.update_one(
+            {"id": project_id},
+            {"$set": {"widget_styles": styles, "updated_at": _iso_now()}},
+        )
+        return {"widget_id": widget_id, "css": css, "applied": True}
+
     # ---------------- Logo / Hero image generation (AI) ----------------
     @r.post("/projects/{project_id}/generate-logo")
     async def _p_generate_logo(project_id: str, body: LogoGenerateIn, current_user: dict = Depends(auth_dep)):
@@ -673,6 +778,7 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
             "wizard": p["wizard"], "chat": chat,
             "name": p.get("name"),
             "snapshots": new_snaps,
+            "widget_styles": p.get("widget_styles") or {},
             "updated_at": _iso_now(),
         }
         await database.website_projects.update_one({"id": project_id}, {"$set": update})

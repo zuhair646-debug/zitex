@@ -348,11 +348,35 @@ function ChipGroup({ chips, multi, onSingle, onMulti, loading, selected, setSele
 /* ================================================================
    INLINE STEP — rich picker rendered at the bottom of the chat
    ================================================================ */
-function InlineStepRenderer({ step, variants, loading, onAnswer, selected, setSelected }) {
+function InlineStepRenderer({ step, variants, loading, onAnswer, selected, setSelected, project }) {
+  const [aiBrief, setAiBrief] = useState('');
+  const [aiBusy, setAiBusy] = useState(false);
   if (!step) return null;
   const render = step.render || 'chips';
   const handleSingle = (v) => onAnswer(v);
   const handleMulti = (ids) => onAnswer(ids);
+
+  // 🆕 AI custom design — when user picks ai_custom in a style_<widget> step
+  const isStyleStep = step.id?.startsWith('style_');
+  const aiPicked = isStyleStep && selected === 'ai_custom';
+  const submitAi = async () => {
+    if (!aiBrief.trim() || !project?.id || !step.widget_id) return;
+    setAiBusy(true);
+    try {
+      const r = await fetch(`${API}/api/websites/projects/${project.id}/widget-ai-design`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authH() },
+        body: JSON.stringify({ widget_id: step.widget_id, brief: aiBrief }),
+      });
+      if (!r.ok) throw new Error('AI failed');
+      toast.success('🤖 تم تصميم الـwidget بمزاجك!');
+      onAnswer('ai_custom');  // advance wizard
+    } catch (_) {
+      toast.error('فشل التصميم — جرّب وصفاً آخر');
+    } finally {
+      setAiBusy(false);
+    }
+  };
 
   if (render === 'variants') {
     return <VariantPicker variants={variants} onPick={handleSingle} loading={loading} />;
@@ -363,17 +387,55 @@ function InlineStepRenderer({ step, variants, loading, onAnswer, selected, setSe
   if (step.id === 'colors')  return <ColorPicker       onPick={handleSingle} loading={loading} />;
   if (step.id === 'typography') return <FontPicker     onPick={handleSingle} loading={loading} />;
 
-  // Default chip renderer
+  // Default chip renderer + AI brief textarea when ai_custom is selected
   return (
-    <ChipGroup
-      chips={step.chips || []}
-      multi={!!step.multi}
-      loading={loading}
-      onSingle={handleSingle}
-      onMulti={handleMulti}
-      selected={selected}
-      setSelected={setSelected}
-    />
+    <div className="space-y-2">
+      <ChipGroup
+        chips={step.chips || []}
+        multi={!!step.multi}
+        loading={loading}
+        onSingle={(v) => {
+          if (v === 'ai_custom' && isStyleStep) {
+            setSelected(v);  // mark selection but don't advance — wait for brief
+            return;
+          }
+          handleSingle(v);
+        }}
+        onMulti={handleMulti}
+        selected={selected}
+        setSelected={setSelected}
+      />
+      {aiPicked && (
+        <div className="mx-3 p-3 bg-gradient-to-br from-fuchsia-500/15 to-purple-500/15 border border-fuchsia-400/30 rounded-xl" data-testid="ai-brief-box">
+          <div className="text-xs font-black text-fuchsia-200 mb-2">🤖 صف لي شكل الـwidget الذي تريده — وسأصممه لك:</div>
+          <textarea
+            value={aiBrief}
+            onChange={(e) => setAiBrief(e.target.value)}
+            placeholder="مثال: أبيها ذهبية فخمة بحدود ناعمة وتأثير glow، شكل دائري كبير لافت للنظر..."
+            className="w-full min-h-[70px] p-2 bg-black/30 border border-white/10 rounded-lg text-sm focus:border-fuchsia-400 focus:outline-none"
+            data-testid="ai-brief-input"
+            dir="rtl"
+          />
+          <div className="flex gap-2 mt-2">
+            <button
+              onClick={submitAi}
+              disabled={!aiBrief.trim() || aiBusy}
+              className="flex-1 py-2 rounded-lg bg-gradient-to-r from-fuchsia-500 to-purple-500 hover:from-fuchsia-600 hover:to-purple-600 text-sm font-black disabled:opacity-50"
+              data-testid="ai-brief-submit"
+            >
+              {aiBusy ? '⏳ يصمم...' : '✨ صمّم بالذكاء الاصطناعي'}
+            </button>
+            <button
+              onClick={() => setSelected(null)}
+              className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-xs"
+              data-testid="ai-brief-cancel"
+            >
+              ↩
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -574,6 +636,7 @@ function ChatColumn({ project, stepMeta, variants, loading, onSendText, onAnswer
             onAnswer={onAnswerStep}
             selected={selected}
             setSelected={setSelected}
+            project={project}
           />
         </div>
       )}
@@ -1320,6 +1383,7 @@ export default function WebsiteStudio({ user }) {
   const [pending, setPending] = useState(null); // { step, value, html }
   const [previewDevice, setPreviewDevice] = useState('desktop'); // desktop | mobile
   const [showSnapshots, setShowSnapshots] = useState(false);
+  const [showEditMode, setShowEditMode] = useState(false);
   const [showPalettePicker, setShowPalettePicker] = useState(false);
   const buildTimer = useRef(null);
 
@@ -1774,6 +1838,10 @@ export default function WebsiteStudio({ user }) {
               <span className="text-base">📚</span>
               <span className="hidden md:inline text-xs">السجل</span>
             </button>
+            <button onClick={() => setShowEditMode(true)} disabled={!project} className="p-2 md:px-3 md:py-2 bg-gradient-to-r from-violet-500/20 to-fuchsia-500/20 hover:from-violet-500/30 hover:to-fuchsia-500/30 border border-violet-400/30 rounded-lg flex items-center gap-1.5 disabled:opacity-40" data-testid="edit-mode-btn" title="رتّب الأقسام يدوياً">
+              <span className="text-base">✏️</span>
+              <span className="hidden md:inline text-xs">تعديل</span>
+            </button>
             <button onClick={() => setShowPalettePicker(true)} disabled={!project} className="p-2 md:px-3 md:py-2 bg-gradient-to-r from-pink-500/20 to-purple-500/20 hover:from-pink-500/30 hover:to-purple-500/30 border border-pink-400/30 rounded-lg flex items-center gap-1.5 disabled:opacity-40" data-testid="palette-btn" title="غيّر الألوان">
               <span className="text-base">🎨</span>
               <span className="hidden md:inline text-xs">الألوان</span>
@@ -1873,6 +1941,13 @@ export default function WebsiteStudio({ user }) {
       {logoStudioOpen && <LogoStudioModal project={project} onClose={() => setLogoStudioOpen(false)} onApplied={onLogoApplied} />}
       {techStackOpen && <TechStackModal onClose={() => setTechStackOpen(false)} />}
       {showSnapshots && project && <SnapshotsGalleryModal project={project} onClose={() => setShowSnapshots(false)} onRestored={(p) => { setProject(p); refreshPreview(p); setShowSnapshots(false); }} />}
+      {showEditMode && project && (
+        <EditModeModal
+          project={project}
+          onClose={() => setShowEditMode(false)}
+          onSaved={(p) => { setProject(p); refreshPreview(p); setShowEditMode(false); toast.success('✅ تم اعتماد الترتيب الجديد'); }}
+        />
+      )}
       {showPalettePicker && project && <PalettePickerModal project={project} onClose={() => setShowPalettePicker(false)} onApply={async (pid) => { await applyPalette(pid); }} />}
     </div>
   );
@@ -1965,6 +2040,143 @@ function PalettePickerModal({ project, onClose, onApply }) {
           <div className="text-xs opacity-60">💡 تقدر تفتح هذه الشاشة في أي وقت من زر "🎨 الألوان"</div>
           <button onClick={onClose} className="px-5 py-2 bg-gradient-to-r from-pink-500 to-purple-500 rounded-lg text-sm font-bold text-white" data-testid="palette-done-btn">
             تم — أكمل الإعداد
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
+   ✏️ EDIT MODE — drag-to-reorder sections, then "اعتماد" rebuilds
+   ================================================================ */
+function EditModeModal({ project, onClose, onSaved }) {
+  const [items, setItems] = useState(() =>
+    (project.sections || [])
+      .slice()
+      .sort((a, b) => (a.order || 0) - (b.order || 0))
+      .map((s) => ({ id: s.id || s.type, type: s.type, title: s.data?.title || s.type }))
+  );
+  const [dragIdx, setDragIdx] = useState(null);
+  const [overIdx, setOverIdx] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const moveItem = (from, to) => {
+    if (from === to || from < 0 || to < 0) return;
+    setItems((prev) => {
+      const copy = [...prev];
+      const [taken] = copy.splice(from, 1);
+      copy.splice(to, 0, taken);
+      return copy;
+    });
+  };
+
+  const moveBy = (idx, delta) => {
+    moveItem(idx, Math.max(0, Math.min(items.length - 1, idx + delta)));
+  };
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      const r = await fetch(`${API}/api/websites/projects/${project.id}/reorder-sections`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authH() },
+        body: JSON.stringify({ section_ids: items.map((i) => i.id) }),
+      });
+      if (!r.ok) throw new Error('reorder failed');
+      const p = await r.json();
+      onSaved(p);
+    } catch (_) {
+      toast.error('فشل اعتماد الترتيب');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Cosmetic mapping of section type → emoji/label for prettier UI
+  const TYPE_META = {
+    hero: { icon: '🎬', label: 'القسم الرئيسي (Hero)' },
+    about: { icon: '📖', label: 'عن النشاط' },
+    services: { icon: '⚙️', label: 'الخدمات' },
+    products: { icon: '🛒', label: 'المنتجات' },
+    menu: { icon: '🍽️', label: 'القائمة' },
+    gallery: { icon: '🖼️', label: 'معرض الصور' },
+    testimonials: { icon: '⭐', label: 'آراء العملاء' },
+    team: { icon: '👥', label: 'الفريق' },
+    features: { icon: '✨', label: 'الميزات' },
+    contact: { icon: '📞', label: 'تواصل معنا' },
+    footer: { icon: '🔻', label: 'التذييل' },
+    stats: { icon: '📊', label: 'إحصائيات' },
+    cta: { icon: '🎯', label: 'دعوة للعمل' },
+    quote: { icon: '💬', label: 'اقتباس' },
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose} data-testid="edit-mode-modal">
+      <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-violet-500/30 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+          <div>
+            <h3 className="text-xl font-black flex items-center gap-2">
+              <span className="text-2xl">✏️</span> رتّب أقسام الموقع بالشكل اللي تريده
+            </h3>
+            <p className="text-xs text-white/50 mt-0.5">اسحب أي قسم لأعلى/أسفل أو استخدم الأسهم — ثم اضغط "اعتماد" لإعادة البناء</p>
+          </div>
+          <button onClick={onClose} className="text-white/60 hover:text-white text-2xl leading-none" data-testid="edit-mode-close">×</button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-5 space-y-2">
+          {items.map((item, idx) => {
+            const meta = TYPE_META[item.type] || { icon: '📄', label: item.type };
+            const isDragging = dragIdx === idx;
+            const isOver = overIdx === idx && dragIdx !== null && dragIdx !== idx;
+            return (
+              <div
+                key={item.id}
+                draggable
+                onDragStart={() => setDragIdx(idx)}
+                onDragOver={(e) => { e.preventDefault(); setOverIdx(idx); }}
+                onDragLeave={() => setOverIdx(null)}
+                onDrop={(e) => { e.preventDefault(); if (dragIdx !== null) moveItem(dragIdx, idx); setDragIdx(null); setOverIdx(null); }}
+                onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
+                className={`p-3 rounded-xl border-2 flex items-center gap-3 cursor-grab active:cursor-grabbing transition-all ${
+                  isDragging ? 'opacity-40' : ''
+                } ${isOver ? 'border-fuchsia-400 bg-fuchsia-500/15 -translate-y-1' : 'border-white/10 bg-white/5 hover:border-violet-400/40'}`}
+                data-testid={`edit-section-${item.id}`}
+              >
+                <div className="text-violet-300 text-lg cursor-grab select-none" title="اسحب">⋮⋮</div>
+                <div className="text-3xl">{meta.icon}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-sm">{meta.label}</div>
+                  <div className="text-[11px] text-white/50 truncate">{item.title || item.type}</div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <button
+                    onClick={() => moveBy(idx, -1)}
+                    disabled={idx === 0}
+                    className="w-7 h-7 rounded-md bg-white/5 hover:bg-violet-500/30 disabled:opacity-30 text-sm"
+                    data-testid={`move-up-${item.id}`}
+                    title="أعلى"
+                  >▲</button>
+                  <button
+                    onClick={() => moveBy(idx, 1)}
+                    disabled={idx === items.length - 1}
+                    className="w-7 h-7 rounded-md bg-white/5 hover:bg-violet-500/30 disabled:opacity-30 text-sm"
+                    data-testid={`move-down-${item.id}`}
+                    title="أسفل"
+                  >▼</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="border-t border-white/10 p-4 flex gap-3 bg-black/30">
+          <button onClick={onClose} className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 font-bold text-sm" data-testid="edit-mode-cancel">إلغاء</button>
+          <button
+            onClick={save}
+            disabled={busy}
+            className="flex-[2] py-3 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 font-black text-sm disabled:opacity-50"
+            data-testid="edit-mode-save"
+          >
+            {busy ? '⏳ جارٍ الإعادة...' : '✅ اعتماد الترتيب وإعادة البناء'}
           </button>
         </div>
       </div>

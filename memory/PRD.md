@@ -15,6 +15,52 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Feb 27, 2026 — DEEP STYLES + LIVE EDIT MODE + AI CUSTOM WIDGET (P0 — COMPLETE)
+
+ثلاث ميزات كبيرة بناءً على طلب المستخدم:
+
+#### 1️⃣ Deep Wizard Style Steps
+بعد سؤال الإضافات (extras: واتساب/سلة/تقييم/إلخ)، الـwizard الآن يضيف **سؤال إضافي لكل إضافة مختارة** يعرض **3 أشكال + خيار رابع "🤖 صمّم لي بمزاجي (AI)"**.
+
+- `style_whatsapp` (3 variants + ai_custom)
+- `style_scroll_top`, `style_book_float`, `style_announce_bar`
+- `style_cart` — يُضاف تلقائياً لأي vertical تجاري (store, ecommerce, restaurant, إلخ)
+
+التنفيذ: `wizard.py:_merged_steps()` يحقن style steps ديناميكياً بعد `extras`. `apply_answer` يكتب القيمة في `widget_styles[wid].variant`. الـDB save يحفظ `widget_styles`.
+
+#### 2️⃣ AI Custom Widget Design
+عند اختيار `ai_custom`، الـUI يفتح **textarea** للوصف بالعربي. الـbackend يستدعي **Emergent LLM (gpt-4o-mini)** ليولّد CSS مخصّص يحترم palette الموقع.
+
+- Endpoint: `POST /api/websites/projects/{id}/widget-ai-design`
+- Body: `{ widget_id, brief }` (مثال: "أبيها ذهبية فخمة بـglow")
+- Returns: `{ widget_id, css, applied: true }` — يُحفظ في `widget_styles[wid].ai_css`
+- Frontend: `InlineStepRenderer` يكتشف `ai_custom` ويعرض textarea مع زر "✨ صمّم بالذكاء الاصطناعي"
+
+تم التحقق E2E: المستخدم وصف "عصرية بنفسجية فاخرة" → AI ولّد `linear-gradient(#5A2E91,#1a1f3a)` بـcolor:#FFD700 ⚡
+
+#### 3️⃣ Live Edit Mode (Drag-to-Reorder Sections)
+زر جديد **✏️ تعديل** في header الـStudio يفتح modal:
+- يعرض كل أقسام الموقع بـicons (🎬 Hero، 🛒 Products، 📞 Contact، إلخ)
+- **سحب وإفلات** أو أزرار ▲▼ لإعادة الترتيب
+- زر "✅ اعتماد الترتيب وإعادة البناء" → POST `/reorder-sections` → يحفظ ويُحدّث preview
+
+**Endpoint**: `POST /api/websites/projects/{id}/reorder-sections` body: `{ section_ids: [...] }`. حقن inline في الـsections مع توليد order جديد. الأقسام غير المذكورة تُضاف في النهاية (no data loss).
+
+**Component جديد**: `EditModeModal` في `WebsiteStudio.js` (~120 سطر) — TYPE_META map للـemojis/labels، draggable/onDragStart/onDrop يدوي بدون مكتبة خارجية.
+
+**Files modified**:
+- `/app/backend/modules/websites/wizard.py` — `_merged_steps` يحقن style steps + `apply_answer` يعالج `style_*` steps
+- `/app/backend/modules/websites/routes.py` — endpoints `reorder-sections` و `widget-ai-design` + DB save لـ`widget_styles`
+- `/app/frontend/src/pages/websites/WebsiteStudio.js` — زر edit-mode-btn، state `showEditMode`، `EditModeModal` component، `InlineStepRenderer` يدعم `ai_custom` بـtextarea
+
+**E2E verified**:
+- ✅ 5 deep style steps تظهر بعد `extras` (whatsapp/scroll_top/book_float/announce_bar/cart) كل واحد بـ4 chips (3 variants + ai_custom)
+- ✅ اختيار variant يحفظ `widget_styles.<id>.variant` في DB
+- ✅ AI custom design يُولّد CSS مناسب للـbrief بنحو 5 ثوانٍ
+- ✅ Reorder sections ينعكس فوراً في `sections` array
+- ✅ Lint passes (Python + JavaScript)
+
+
 ### 🆕 Feb 27, 2026 — LIVE DEMO MODE (Conversion Booster) (P1 — COMPLETE)
 
 **Goal**: زيادة معدل التحويل بإزالة حاجز "الثقة قبل الدفع". زائر يجرّب المنصة 60 ثانية بدون تسجيل.
