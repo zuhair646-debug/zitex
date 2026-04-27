@@ -16,30 +16,39 @@
 
 
 
-### 🆕 Feb 28, 2026 — STOREFRONT SHIPPING CHECKOUT INTEGRATION + COD MARKUP (P0/Revenue — COMPLETE ✅)
+### 🆕 Feb 28, 2026 — STOREFRONT SHIPPING CHECKOUT + COD MARKUP + INSURANCE + TRACKING (P0/Revenue — COMPLETE ✅)
 
-استكمال نظام الشحن الذكي بربطه بالـ checkout في الواجهة الأمامية للمتاجر المُولَّدة + ميزة هامش COD لزيادة الإيرادات.
+نظام شحن شامل end-to-end مع 3 ميزات إيرادات/UX إضافية.
 
 #### Backend
-- **NEW** `POST /api/websites/public/{slug}/shipping/quote` — endpoint عام (بدون auth) يستقبل `{country, city, cart_subtotal, weight_kg}` ويُرجع خيارات الشحن المرتّبة حسب السعر + `cod_markup_enabled` + `cod_markup_sar`. Auto-detect country من IP إذا لم يُمرَّر.
-- **EXTENDED** `OrderCreateIn` model: أُضيفت 6 حقول للشحن: `city, country, shipping_provider, shipping_provider_name, shipping_fee, shipping_eta`.
-- **HARDENED** `_order_create`: يُعيد الحساب server-side عند استلام `shipping_provider` لمنع تلاعب العميل بالتكلفة. يحفظ metadata الشحن على الطلب: `shipping_provider, shipping_provider_name, shipping_eta, shipping_city, shipping_country, cod_markup_applied`.
-- **🆕 COD MARKUP** (Revenue feature): حقلان جديدان في `shipping_settings`: `cod_markup_enabled` (bool) + `cod_markup_sar` (float). الهامش يُطبَّق server-side فقط عندما (1) العميل اختار COD، (2) المزوّد يدعم COD، (3) صاحب المتجر فعّل الميزة. الهامش لا يُطبَّق على الشحن المجاني.
-- **PRESERVED** التدفق القديم (haversine + delivery_settings) يعمل عند عدم تمرير `shipping_provider`.
+- **Public quote endpoint** `POST /api/websites/public/{slug}/shipping/quote` — يستقبل `{country, city, cart_subtotal, weight_kg}`، يُرجع خيارات الشحن المرتّبة + cod_markup_enabled + insurance_enabled. Auto-detect country من IP.
+- **OrderCreateIn** موسّع بـ 7 حقول جديدة: `city, country, shipping_provider, shipping_provider_name, shipping_fee, shipping_eta, insurance_opted`.
+- **`_order_create` server-side hardening**:
+  - يُعيد حساب رسوم الشحن من PROVIDER_BY_ID لمنع تلاعب العميل
+  - يُطبّق COD markup فقط عند: `supports_cod && payment=cod && enabled && fee>0`
+  - يحسب insurance_fee = `max(min_sar, subtotal*pct/100)` فقط عند `insurance_opted && insurance_enabled`
+  - يحفظ على الطلب: `shipping_provider, shipping_provider_name, shipping_eta, shipping_city, shipping_country, cod_markup_applied, insurance_fee, tracking_number`
+- **Tracking**: `PATCH /api/websites/client/orders/{id}` يقبل `tracking_number`. `GET /public/{slug}/orders/my` يُرجع كل طلب مع `tracking_url` (مُولّد من `tracking_url_template`).
+- **shipping_settings** الحقول النهائية: `enabled_providers, custom_rates, store_city, local_delivery_enabled, local_delivery_fee, local_delivery_eta_hours, free_shipping_above_sar, cod_markup_enabled, cod_markup_sar, insurance_enabled, insurance_percent, insurance_min_sar`.
 
 #### Frontend
-- **Storefront** (overlay_renderer.py): Modal الـ checkout الآن يعرض: City + Country (auto-detect)، خيارات شحن radio مع badge `+X عند COD`، COD indicator، breakdown ديناميكي يتحدّث عند تغيير طريقة الدفع. `zxLoadShipping()` debounce 400ms.
-- **Client Dashboard** (ClientDashboard.js → ShippingTab): بطاقة جديدة "💵 هامش الدفع عند الاستلام (COD)" مع toggle + input للقيمة بالـ ر.س + شرح يوضّح للمستخدم كيف تزيد الإيرادات.
+- **Storefront** (`overlay_renderer.py`):
+  - Modal الـ checkout: City + Country (auto-detect) → خيارات شحن radio مع badges (موصى به / +X COD / يدعم COD) → checkbox تأمين اختياري → breakdown ديناميكي (المنتجات + الشحن + 🛡️ التأمين = الإجمالي)
+  - "طلباتي" يعرض لكل طلب: حالة، شركة الشحن، ETA، **زر "📍 تتبّع الشحنة"** يفتح صفحة الشركة
+- **Client Dashboard** (`ClientDashboard.js`):
+  - تبويب الشحن: 3 بطاقات (التوصيل الداخلي، الشركات، **💵 COD Markup أصفر/برتقالي**، **🛡️ Insurance أزرق**) + معاينة حية
+  - تبويب الطلبات: حقل **رقم التتبع (AWB)** بجانب كل طلب لمزوّد شحن، يُحفظ تلقائياً عند الـ blur/Enter
 
-#### اختبار
-- Backend: 13/13 اختبار نجح (iteration_17.json) للشحن الأساسي + اختبار يدوي لميزة COD markup (طلب smsa+cod = 25+7=32؛ طلب smsa+stripe = 25 بدون markup) ✅.
-- Frontend: Screenshot يدوي يؤكد الـ UI.
+#### اختبار E2E
+- iteration_17: 13/13 الشحن الأساسي ✅
+- iteration_18: 19 جديد + 13 regression = **32/32 نجح 100%** (`test_shipping_features_v2.py`)
+- اختبار يدوي: COD markup مطبّق، insurance بحدّ أدنى يعمل، tracking URL يولّد رابط SMSA الصحيح ✅
 
-#### الملفات المعدلة في هذا التحديث
-- `/app/backend/modules/websites/routes.py` (OrderCreateIn extended, public shipping/quote, _order_create updated مع COD markup logic)
-- `/app/backend/modules/websites/overlay_renderer.py` (zxCheckout, zxLoadShipping, zxPickShip + COD badge & dynamic recalc, zxRefreshTotals, zxSubmitOrder)
-- `/app/frontend/src/pages/client/ClientDashboard.js` (بطاقة COD Markup في ShippingTab)
-- `/app/backend/tests/test_shipping_system.py` (13 pytest cases — الشحن الأساسي)
+#### Files
+- `/app/backend/modules/websites/routes.py` (config + public quote + OrderCreateIn + _order_create + tracking endpoint + orders/my enrichment)
+- `/app/backend/modules/websites/overlay_renderer.py` (zxCheckout, zxLoadShipping, zxPickShip, zxSubmitOrder, zxMyOrders, zxRefreshTotals)
+- `/app/frontend/src/pages/client/ClientDashboard.js` (ShippingTab COD + Insurance cards, OrdersTab tracking input)
+- `/app/backend/tests/test_shipping_system.py`, `/app/backend/tests/test_shipping_features_v2.py`
 
 
 ### 🆕 Feb 27, 2026 — DEEP STYLES + LIVE EDIT MODE + AI CUSTOM WIDGET (P0 — COMPLETE)
