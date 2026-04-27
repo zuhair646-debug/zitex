@@ -2339,6 +2339,7 @@ function Dashboard({ slug, token, onLogout }) {
               base.push({ id: 'livemap', label: '🗺️ خريطة حية', icon: MapPin });
               base.push({ id: 'drivers', label: 'السائقون', icon: ExternalLink });
               base.push({ id: 'delivery', label: 'التوصيل', icon: MapPin });
+              base.push({ id: 'shipping', label: '📦 الشحن', icon: MapPin });
             }
             if (hasCourses) base.push({ id: 'courses', label: '🎓 الدورات', icon: BarChart3 });
             if (hasMemberships) base.push({ id: 'memberships', label: '💳 العضويات', icon: Key });
@@ -2406,6 +2407,7 @@ function Dashboard({ slug, token, onLogout }) {
         {tab === 'customers' && <CustomersTab token={token} />}
         {tab === 'drivers' && <DriversTab token={token} />}
         {tab === 'delivery' && <DeliverySettingsTab token={token} slug={slug} />}
+        {tab === 'shipping' && <ShippingTab token={token} slug={slug} />}
         {tab === 'payments' && <PaymentGatewaysTab token={token} />}
         {tab === 'widgets' && <WidgetCustomizerTab token={token} slug={slug} />}
         {tab === 'coupons' && <CouponsTab token={token} />}
@@ -2506,4 +2508,196 @@ export default function ClientDashboardPage() {
   return token
     ? <Dashboard slug={slug} token={token} onLogout={() => setToken('')} />
     : <LoginCard slug={slug} onLoggedIn={setToken} />;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   📦 SHIPPING TAB — تفعيل/تعطيل شركات الشحن السعودية + أسعار مخصصة
+   ════════════════════════════════════════════════════════════════════ */
+function ShippingTab({ token, slug }) {
+  const [providers, setProviders] = useState([]);
+  const [config, setConfig] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [previewCity, setPreviewCity] = useState('الرياض');
+  const [previewCountry, setPreviewCountry] = useState('SA');
+  const [previewQuote, setPreviewQuote] = useState(null);
+
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+
+  const projectId = slug;  // assumes slug == project id; if not, adjust to fetch project by slug
+
+  useEffect(() => {
+    fetch(`${API}/api/websites/shipping/providers`).then(r => r.json()).then(d => setProviders(d.providers || []));
+    fetch(`${API}/api/websites/projects/${projectId}/shipping/config`, { headers })
+      .then(r => r.json()).then(setConfig).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+
+  const toggleProvider = (pid) => {
+    if (!config) return;
+    const enabled = new Set(config.enabled_providers || []);
+    if (enabled.has(pid)) enabled.delete(pid); else enabled.add(pid);
+    setConfig({ ...config, enabled_providers: Array.from(enabled) });
+  };
+
+  const updateRate = (pid, key, value) => {
+    if (!config) return;
+    const customRates = { ...(config.custom_rates || {}) };
+    customRates[pid] = { ...(customRates[pid] || {}), [key]: parseFloat(value) || 0 };
+    setConfig({ ...config, custom_rates: customRates });
+  };
+
+  const saveConfig = async () => {
+    setBusy(true);
+    try {
+      const r = await fetch(`${API}/api/websites/projects/${projectId}/shipping/config`, {
+        method: 'PUT', headers, body: JSON.stringify(config),
+      });
+      if (!r.ok) throw new Error();
+      toast.success('✅ تم حفظ إعدادات الشحن');
+    } catch (_) { toast.error('فشل الحفظ'); }
+    finally { setBusy(false); }
+  };
+
+  const previewQuoteFn = async () => {
+    try {
+      const r = await fetch(`${API}/api/websites/projects/${projectId}/shipping/quote`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ country: previewCountry, city: previewCity, weight_kg: 2, cart_subtotal: 100 }),
+      });
+      const d = await r.json();
+      setPreviewQuote(d);
+    } catch (_) { toast.error('فشل المعاينة'); }
+  };
+
+  if (!config) return <div className="p-6 text-white/50">جارٍ التحميل...</div>;
+
+  const enabled = new Set(config.enabled_providers || []);
+
+  return (
+    <div className="space-y-6 p-4 md:p-6" data-testid="shipping-tab">
+      <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border border-blue-400/30 rounded-2xl p-5">
+        <h2 className="text-2xl font-black mb-1 flex items-center gap-2"><span>📦</span> نظام الشحن الذكي</h2>
+        <p className="text-sm text-white/60">يكتشف موقع العميل تلقائياً ويعرض خيارات الشحن المناسبة (داخلي / محلي / دولي)</p>
+      </div>
+
+      {/* Local delivery */}
+      <div className="bg-white/5 border border-white/10 rounded-xl p-5">
+        <h3 className="font-black text-lg mb-3 flex items-center gap-2"><span>🛵</span> التوصيل الداخلي (نفس مدينتك)</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label className="block">
+            <span className="text-xs text-white/60">مدينة المتجر</span>
+            <input type="text" value={config.store_city || ''} onChange={(e) => setConfig({...config, store_city: e.target.value})}
+              className="w-full mt-1 px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm" placeholder="مثل: جدة" data-testid="store-city-input" />
+          </label>
+          <label className="block">
+            <span className="text-xs text-white/60">سعر التوصيل الداخلي (ر.س)</span>
+            <input type="number" value={config.local_delivery_fee || 0} onChange={(e) => setConfig({...config, local_delivery_fee: parseFloat(e.target.value) || 0})}
+              className="w-full mt-1 px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm" data-testid="local-fee-input" />
+          </label>
+          <label className="block">
+            <span className="text-xs text-white/60">شحن مجاني فوق (ر.س) — 0 = معطّل</span>
+            <input type="number" value={config.free_shipping_above_sar || 0} onChange={(e) => setConfig({...config, free_shipping_above_sar: parseFloat(e.target.value) || 0})}
+              className="w-full mt-1 px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm" data-testid="free-shipping-input" />
+          </label>
+          <label className="flex items-center gap-2 mt-5">
+            <input type="checkbox" checked={!!config.local_delivery_enabled} onChange={(e) => setConfig({...config, local_delivery_enabled: e.target.checked})} data-testid="local-enabled-toggle" />
+            <span className="text-sm">تفعيل التوصيل الداخلي</span>
+          </label>
+        </div>
+      </div>
+
+      {/* Providers */}
+      <div className="bg-white/5 border border-white/10 rounded-xl p-5">
+        <h3 className="font-black text-lg mb-3 flex items-center gap-2"><span>🚚</span> شركات الشحن (سعودي + دولي)</h3>
+        <div className="space-y-3">
+          {providers.map((p) => {
+            const isEnabled = enabled.has(p.id);
+            const customRates = (config.custom_rates || {})[p.id] || {};
+            const baseFee = customRates.base_fee ?? p.default_rates.base_fee;
+            const extraFee = customRates.extra_kg_fee ?? p.default_rates.extra_kg_fee;
+            const isIntl = p.coverage.includes('INTL') || p.coverage.length > 1;
+            return (
+              <div key={p.id} className={`p-4 rounded-xl border-2 transition-all ${isEnabled ? 'border-emerald-400/50 bg-emerald-500/5' : 'border-white/10 bg-white/[.02]'}`} data-testid={`shipping-row-${p.id}`}>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="text-3xl">{p.icon}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-black">{p.name_ar}</div>
+                    <div className="text-[11px] text-white/50">
+                      {isIntl ? '🌍 دولي + سعودي' : '🇸🇦 سعودي'} ·
+                      {p.supports_cod ? ' 💵 الدفع عند الاستلام' : ''} ·
+                      {p.supports_returns ? ' ↩️ المرتجعات' : ''}
+                    </div>
+                  </div>
+                  <label className="cursor-pointer">
+                    <input type="checkbox" checked={isEnabled} onChange={() => toggleProvider(p.id)} className="sr-only" data-testid={`toggle-${p.id}`} />
+                    <div className={`w-12 h-6 rounded-full p-0.5 transition-colors ${isEnabled ? 'bg-emerald-500' : 'bg-white/10'}`}>
+                      <div className={`w-5 h-5 rounded-full bg-white transition-transform ${isEnabled ? 'translate-x-6' : ''}`} />
+                    </div>
+                  </label>
+                </div>
+                {isEnabled && (
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/5">
+                    <label className="block">
+                      <span className="text-[11px] text-white/50">سعر أساسي (ر.س / 5كغ)</span>
+                      <input type="number" value={baseFee} onChange={(e) => updateRate(p.id, 'base_fee', e.target.value)}
+                        className="w-full mt-1 px-2 py-1.5 bg-black/40 border border-white/10 rounded-md text-xs" data-testid={`base-fee-${p.id}`} />
+                    </label>
+                    <label className="block">
+                      <span className="text-[11px] text-white/50">سعر كل كغ إضافي (ر.س)</span>
+                      <input type="number" value={extraFee} onChange={(e) => updateRate(p.id, 'extra_kg_fee', e.target.value)}
+                        className="w-full mt-1 px-2 py-1.5 bg-black/40 border border-white/10 rounded-md text-xs" data-testid={`extra-fee-${p.id}`} />
+                    </label>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Save bar */}
+      <div className="sticky bottom-4 flex gap-3">
+        <button onClick={saveConfig} disabled={busy}
+          className="flex-1 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 font-black disabled:opacity-50" data-testid="save-shipping-btn">
+          {busy ? '⏳ جارٍ الحفظ...' : '✅ حفظ إعدادات الشحن'}
+        </button>
+      </div>
+
+      {/* Live preview */}
+      <div className="bg-gradient-to-br from-violet-500/10 to-pink-500/10 border border-violet-400/30 rounded-xl p-5">
+        <h3 className="font-black text-lg mb-3">🔍 معاينة خيارات الشحن (كما سيراها العميل)</h3>
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          <select value={previewCountry} onChange={(e) => setPreviewCountry(e.target.value)} className="px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm" data-testid="preview-country">
+            <option value="SA">🇸🇦 السعودية</option>
+            <option value="AE">🇦🇪 الإمارات</option>
+            <option value="KW">🇰🇼 الكويت</option>
+            <option value="US">🇺🇸 أمريكا</option>
+          </select>
+          <input type="text" value={previewCity} onChange={(e) => setPreviewCity(e.target.value)}
+            className="px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm" placeholder="المدينة" data-testid="preview-city" />
+          <button onClick={previewQuoteFn} className="py-2 rounded-lg bg-violet-500 hover:bg-violet-600 text-sm font-bold" data-testid="preview-quote-btn">معاينة</button>
+        </div>
+        {previewQuote?.options?.length > 0 && (
+          <div className="space-y-2">
+            {previewQuote.options.map((o, i) => (
+              <div key={i} className={`p-3 rounded-lg border flex items-center gap-3 ${o.is_recommended ? 'border-emerald-400/50 bg-emerald-500/10' : 'border-white/10 bg-black/20'}`}>
+                <span className="text-2xl">{o.icon}</span>
+                <div className="flex-1">
+                  <div className="font-bold text-sm">{o.provider_name} {o.is_recommended && '⭐'}</div>
+                  <div className="text-[11px] text-white/50">{o.delivery_eta}</div>
+                </div>
+                <div className="text-left">
+                  {o.is_free ? <span className="font-black text-emerald-400">🆓 مجاني</span>
+                    : <span className="font-black">{o.fee_sar} ر.س</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {previewQuote && previewQuote.options?.length === 0 && (
+          <div className="text-center py-4 text-white/50 text-sm">لا توجد خيارات شحن متاحة لهذا الموقع — فعّل شركة على الأقل</div>
+        )}
+      </div>
+    </div>
+  );
 }

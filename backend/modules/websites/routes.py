@@ -5,7 +5,7 @@ import re
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, List
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Header as _Header, Response
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Header as _Header, Response, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
@@ -538,6 +538,111 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
             {"$set": {"widget_styles": styles, "updated_at": _iso_now()}},
         )
         return {"widget_id": widget_id, "css": css, "applied": True}
+
+    # ════════════════════════════════════════════════════════════════════
+    # 🆕 SHIPPING SYSTEM — 6 Saudi providers + Geo-aware quote engine
+    # ════════════════════════════════════════════════════════════════════
+    @r.get("/shipping/providers")
+    async def _shipping_providers():
+        """Public — list all available shipping providers (for dashboard UI)."""
+        from .shipping import get_all_providers_summary
+        return {"providers": get_all_providers_summary()}
+
+    @r.get("/projects/{project_id}/shipping/config")
+    async def _shipping_config_get(project_id: str, current_user: dict = Depends(auth_dep)):
+        """Get the shipping configuration for a store."""
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "Project not found")
+        cfg = p.get("shipping_settings") or {
+            "enabled_providers": ["smsa", "aramex", "saudi_post"],
+            "custom_rates": {},
+            "store_city": "جدة",
+            "local_delivery_enabled": True,
+            "local_delivery_fee": 15,
+            "local_delivery_eta_hours": "2-4",
+            "free_shipping_above_sar": 200,
+        }
+        return cfg
+
+    @r.put("/projects/{project_id}/shipping/config")
+    async def _shipping_config_put(
+        project_id: str, body: Dict[str, Any], current_user: dict = Depends(auth_dep)
+    ):
+        """Update shipping config — owner toggles which providers are enabled, sets custom rates."""
+        p = await database.website_projects.find_one(
+            {"id": project_id, "user_id": current_user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "Project not found")
+        allowed_keys = {
+            "enabled_providers", "custom_rates", "store_city",
+            "local_delivery_enabled", "local_delivery_fee",
+            "local_delivery_eta_hours", "free_shipping_above_sar",
+        }
+        cfg = dict(p.get("shipping_settings") or {})
+        for k, v in body.items():
+            if k in allowed_keys:
+                cfg[k] = v
+        await database.website_projects.update_one(
+            {"id": project_id},
+            {"$set": {"shipping_settings": cfg, "updated_at": _iso_now()}},
+        )
+        return cfg
+
+    @r.post("/projects/{project_id}/shipping/quote")
+    async def _shipping_quote(project_id: str, body: Dict[str, Any], request: Request):
+        """
+        Public — at checkout time, returns available shipping options with prices/ETAs.
+        Body: { country?: "SA", city?: "جدة", weight_kg?: 1.5, cart_subtotal?: 240, ip?: auto }
+        Auto-detects country/city from IP if not provided.
+        """
+        p = await database.website_projects.find_one({"id": project_id}, {"_id": 0})
+        if not p:
+            raise HTTPException(404, "Project not found")
+        from .shipping import calculate_shipping_quote, detect_country_from_ip
+
+        country = (body.get("country") or "").strip().upper()
+        city = (body.get("city") or "").strip()
+        weight = float(body.get("weight_kg") or 1.0)
+        subtotal = float(body.get("cart_subtotal") or 0)
+
+        # Geolocation fallback — get from request IP
+        if not country:
+            client_ip = (request.client.host if request.client else "") or ""
+            try:
+                xff = request.headers.get("x-forwarded-for")
+                if xff:
+                    client_ip = xff.split(",")[0].strip()
+            except Exception:
+                pass
+            country, city_from_ip = detect_country_from_ip(client_ip)
+            if not city:
+                city = city_from_ip or ""
+
+        cfg = p.get("shipping_settings") or {
+            "enabled_providers": ["smsa", "aramex", "saudi_post"],
+            "store_city": "جدة",
+            "local_delivery_enabled": True,
+            "local_delivery_fee": 15,
+            "local_delivery_eta_hours": "2-4",
+            "free_shipping_above_sar": 200,
+        }
+        options = calculate_shipping_quote(
+            project_settings=cfg,
+            customer_country=country,
+            customer_city=city,
+            weight_kg=weight,
+            cart_subtotal=subtotal,
+        )
+        return {
+            "country": country,
+            "city": city,
+            "weight_kg": weight,
+            "options": options,
+        }
 
     # ---------------- Logo / Hero image generation (AI) ----------------
     @r.post("/projects/{project_id}/generate-logo")
