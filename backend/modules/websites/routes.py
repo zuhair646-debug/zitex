@@ -1650,6 +1650,13 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
         coupon_code: Optional[str] = ""
         redeem_points: Optional[int] = 0
         payment_method: Optional[str] = "cod"
+        # 🆕 Shipping fields
+        city: Optional[str] = ""
+        country: Optional[str] = ""
+        shipping_provider: Optional[str] = ""        # e.g. "smsa", "aramex", "local_delivery"
+        shipping_provider_name: Optional[str] = ""    # display name in Arabic
+        shipping_fee: Optional[float] = None          # client-quoted fee (re-validated server-side)
+        shipping_eta: Optional[str] = ""
 
     class DriverCreateIn(BaseModel):
         name: str
@@ -1723,18 +1730,116 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
         data = await _resolve_site_customer(slug, authorization or "")
         return _cust_safe(data["customer"])
 
+    # ---- 🆕 PUBLIC shipping quote (by slug) — used at storefront checkout ----
+    @r.post("/public/{slug}/shipping/quote")
+    async def _public_shipping_quote(slug: str, body: Dict[str, Any], request: Request):
+        """
+        Public — at storefront checkout, returns available shipping options with prices/ETAs.
+        Body: { country?: "SA", city?: "جدة", weight_kg?: 1.5, cart_subtotal?: 240 }
+        Auto-detects country/city from IP if not provided.
+        """
+        p = await database.website_projects.find_one(
+            {"slug": slug, "status": "approved"},
+            {"_id": 0, "id": 1, "shipping_settings": 1, "delivery_settings": 1},
+        )
+        if not p:
+            raise HTTPException(404, "الموقع غير متاح")
+        from .shipping import calculate_shipping_quote, detect_country_from_ip
+
+        country = (body.get("country") or "").strip().upper()
+        city = (body.get("city") or "").strip()
+        weight = float(body.get("weight_kg") or 1.0)
+        subtotal = float(body.get("cart_subtotal") or 0)
+
+        if not country:
+            client_ip = (request.client.host if request.client else "") or ""
+            try:
+                xff = request.headers.get("x-forwarded-for")
+                if xff:
+                    client_ip = xff.split(",")[0].strip()
+            except Exception:
+                pass
+            detected_country, detected_city = detect_country_from_ip(client_ip)
+            country = detected_country
+            if not city:
+                city = detected_city or ""
+
+        cfg = p.get("shipping_settings") or {
+            "enabled_providers": ["smsa", "aramex", "saudi_post"],
+            "store_city": "جدة",
+            "local_delivery_enabled": True,
+            "local_delivery_fee": 15,
+            "local_delivery_eta_hours": "2-4",
+            "free_shipping_above_sar": 200,
+        }
+        options = calculate_shipping_quote(
+            project_settings=cfg,
+            customer_country=country,
+            customer_city=city,
+            weight_kg=weight,
+            cart_subtotal=subtotal,
+        )
+        return {
+            "country": country,
+            "city": city,
+            "weight_kg": weight,
+            "options": options,
+            "store_city": cfg.get("store_city") or "",
+        }
+
     # ---- orders (customer-side) ----
     @r.post("/public/{slug}/orders")
     async def _order_create(slug: str, body: OrderCreateIn, authorization: str = _Header(None)):
         data = await _resolve_site_customer(slug, authorization or "")
         subtotal = sum((i.price or 0) * (i.qty or 1) for i in body.items)
-        # 🆕 Auto-compute delivery fee via Haversine if site has delivery_settings
-        s = (data["project"].get("delivery_settings") or {"base_fee": 10, "fee_per_km": 2, "free_delivery_above": 200})
-        km = _haversine_km(s.get("base_lat"), s.get("base_lng"), body.lat, body.lng) if s.get("base_lat") else 0
-        auto_fee = float(s.get("base_fee", 10)) + km * float(s.get("fee_per_km", 2))
-        if s.get("free_delivery_above") and subtotal >= float(s["free_delivery_above"]):
-            auto_fee = 0
-        fee = float(body.delivery_fee or 0) or round(auto_fee, 2)
+        # 🆕 Shipping fee resolution:
+        # If a shipping_provider was selected at checkout, re-quote server-side and trust the cheapest match
+        # Otherwise, fall back to legacy haversine local delivery logic
+        shipping_provider = (body.shipping_provider or "").strip()
+        shipping_provider_name = (body.shipping_provider_name or "").strip()
+        shipping_eta = (body.shipping_eta or "").strip()
+        shipping_fee = 0.0
+        km = 0.0
+        if shipping_provider:
+            # Re-quote on server to prevent client-side fee tampering
+            from .shipping import calculate_shipping_quote
+            cfg = data["project"].get("shipping_settings") or {
+                "enabled_providers": ["smsa", "aramex", "saudi_post"],
+                "store_city": "جدة",
+                "local_delivery_enabled": True,
+                "local_delivery_fee": 15,
+                "local_delivery_eta_hours": "2-4",
+                "free_shipping_above_sar": 200,
+            }
+            try:
+                opts = calculate_shipping_quote(
+                    project_settings=cfg,
+                    customer_country=(body.country or "SA"),
+                    customer_city=(body.city or ""),
+                    weight_kg=1.0,
+                    cart_subtotal=subtotal,
+                )
+                match = next((o for o in opts if o["provider_id"] == shipping_provider), None)
+                if match:
+                    shipping_fee = float(match["fee_sar"])
+                    if not shipping_provider_name:
+                        shipping_provider_name = match.get("provider_name", "")
+                    if not shipping_eta:
+                        shipping_eta = match.get("delivery_eta", "")
+                else:
+                    # Provider not available for this location — fall back to client-quoted (clamped)
+                    shipping_fee = max(0.0, float(body.shipping_fee or 0))
+            except Exception:
+                shipping_fee = max(0.0, float(body.shipping_fee or 0))
+            fee = round(shipping_fee, 2)
+        else:
+            # Legacy: Auto-compute delivery fee via Haversine if site has delivery_settings
+            s = (data["project"].get("delivery_settings") or {"base_fee": 10, "fee_per_km": 2, "free_delivery_above": 200})
+            km = _haversine_km(s.get("base_lat"), s.get("base_lng"), body.lat, body.lng) if s.get("base_lat") else 0
+            auto_fee = float(s.get("base_fee", 10)) + km * float(s.get("fee_per_km", 2))
+            if s.get("free_delivery_above") and subtotal >= float(s["free_delivery_above"]):
+                auto_fee = 0
+            fee = float(body.delivery_fee or 0) or round(auto_fee, 2)
         # 🆕 Apply coupon
         discount = 0
         coupon_used = None
@@ -1789,6 +1894,12 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
             "note": (body.note or "")[:500],
             "status": "pending",
             "driver_id": None,
+            # 🆕 Shipping metadata
+            "shipping_provider": shipping_provider,
+            "shipping_provider_name": shipping_provider_name,
+            "shipping_eta": shipping_eta,
+            "shipping_city": (body.city or "")[:80],
+            "shipping_country": (body.country or "")[:8],
         }
         # Update customer points balance
         new_pts = max(0, int(data["customer"].get("points") or 0) - redeemed_points + earned_points)
