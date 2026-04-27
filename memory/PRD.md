@@ -15,6 +15,33 @@
 - 🔒 **Images**: قريباً
 
 
+
+### 🆕 Feb 28, 2026 — STOREFRONT SHIPPING CHECKOUT INTEGRATION (P0 — COMPLETE ✅)
+
+استكمال نظام الشحن الذكي بربطه بالـ checkout في الواجهة الأمامية للمتاجر المُولَّدة.
+
+#### Backend
+- **NEW** `POST /api/websites/public/{slug}/shipping/quote` — endpoint عام (بدون auth) يستقبل `{country, city, cart_subtotal, weight_kg}` ويُرجع خيارات الشحن المرتّبة حسب السعر. Auto-detect country من IP إذا لم يُمرَّر.
+- **EXTENDED** `OrderCreateIn` model: أُضيفت 6 حقول للشحن: `city, country, shipping_provider, shipping_provider_name, shipping_fee, shipping_eta`.
+- **HARDENED** `_order_create`: يُعيد الحساب server-side عند استلام `shipping_provider` لمنع تلاعب العميل بالتكلفة. يحفظ metadata الشحن على الطلب: `shipping_provider, shipping_provider_name, shipping_eta, shipping_city, shipping_country`.
+- **PRESERVED** التدفق القديم (haversine + delivery_settings) يعمل عند عدم تمرير `shipping_provider`.
+
+#### Frontend (overlay_renderer.py — Storefront Modal)
+- نموذج Checkout الآن فيه: City + Country (auto-detect)، قائمة خيارات شحن radio، Recommended badge، COD indicator، breakdown ديناميكي (المنتجات + الشحن = الإجمالي).
+- `zxLoadShipping()` debounce 400ms عند تغيير المدينة/الدولة.
+- `zxPickShip(idx)` يحدّث الإجمالي فوراً.
+- `zxSubmitOrder` يُرسل بيانات الشحن المختارة مع الطلب.
+
+#### اختبار
+- Backend: 13/13 اختبار نجح (iteration_17.json) — quote endpoint, same-city local delivery, free-shipping threshold, INTL routing, server-side re-quote, metadata persistence, dashboard config GET/PUT, legacy haversine fallback, IP detection, weight pricing, 404 handling.
+- Frontend: Screenshot manual يؤكد ظهور الـ modal بكامل عناصره.
+
+#### الملفات المعدلة
+- `/app/backend/modules/websites/routes.py` (OrderCreateIn extended, public shipping/quote, _order_create updated)
+- `/app/backend/modules/websites/overlay_renderer.py` (zxCheckout, zxLoadShipping, zxPickShip, zxSubmitOrder)
+- `/app/backend/tests/test_shipping_system.py` (NEW — 13 pytest cases)
+
+
 ### 🆕 Feb 27, 2026 — DEEP STYLES + LIVE EDIT MODE + AI CUSTOM WIDGET (P0 — COMPLETE)
 
 ثلاث ميزات كبيرة بناءً على طلب المستخدم:
