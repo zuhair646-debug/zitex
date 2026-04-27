@@ -16,38 +16,55 @@
 
 
 
-### 🆕 Feb 28, 2026 — STOREFRONT SHIPPING CHECKOUT + COD MARKUP + INSURANCE + TRACKING (P0/Revenue — COMPLETE ✅)
+### 🆕 Feb 28, 2026 — STOREFRONT SHIPPING + 5 REVENUE/UX FEATURES (P0/Revenue — COMPLETE ✅)
 
-نظام شحن شامل end-to-end مع 3 ميزات إيرادات/UX إضافية.
+نظام شحن شامل end-to-end + 5 ميزات بناء على نفس النواة:
+
+#### الميزات
+1. **🚚 Storefront Checkout Integration** — City/Country auto-detect → خيارات شحن radio → totals ديناميكية
+2. **💵 COD Markup** — هامش تلقائي على الدفع عند الاستلام (مع server-side guard)
+3. **🛡️ Shipping Insurance** — checkbox اختياري بـ % + min، صيغة `max(min, sub*pct/100)`
+4. **📍 Shipment Tracking** — owner يحفظ AWB، العميل يفتح صفحة الشركة مباشرة
+5. **📲 WhatsApp Auto-notify on Tracking** — حفظ AWB يفتح واتساب جاهز للعميل مع رابط التتبع
+6. **🏬 Pickup من المتجر** — خيار مجاني (الاستلام من المتجر) مع عنوان وساعات العمل
 
 #### Backend
-- **Public quote endpoint** `POST /api/websites/public/{slug}/shipping/quote` — يستقبل `{country, city, cart_subtotal, weight_kg}`، يُرجع خيارات الشحن المرتّبة + cod_markup_enabled + insurance_enabled. Auto-detect country من IP.
-- **OrderCreateIn** موسّع بـ 7 حقول جديدة: `city, country, shipping_provider, shipping_provider_name, shipping_fee, shipping_eta, insurance_opted`.
-- **`_order_create` server-side hardening**:
-  - يُعيد حساب رسوم الشحن من PROVIDER_BY_ID لمنع تلاعب العميل
-  - يُطبّق COD markup فقط عند: `supports_cod && payment=cod && enabled && fee>0`
-  - يحسب insurance_fee = `max(min_sar, subtotal*pct/100)` فقط عند `insurance_opted && insurance_enabled`
-  - يحفظ على الطلب: `shipping_provider, shipping_provider_name, shipping_eta, shipping_city, shipping_country, cod_markup_applied, insurance_fee, tracking_number`
-- **Tracking**: `PATCH /api/websites/client/orders/{id}` يقبل `tracking_number`. `GET /public/{slug}/orders/my` يُرجع كل طلب مع `tracking_url` (مُولّد من `tracking_url_template`).
-- **shipping_settings** الحقول النهائية: `enabled_providers, custom_rates, store_city, local_delivery_enabled, local_delivery_fee, local_delivery_eta_hours, free_shipping_above_sar, cod_markup_enabled, cod_markup_sar, insurance_enabled, insurance_percent, insurance_min_sar`.
+- `shipping_settings` keys: `enabled_providers, custom_rates, store_city, local_delivery_*, free_shipping_above_sar, cod_markup_*, insurance_*, pickup_enabled, pickup_address, pickup_hours`
+- `OrderCreateIn` extended fields: `city, country, shipping_provider, shipping_provider_name, shipping_fee, shipping_eta, insurance_opted`
+- Server-side re-quote في `_order_create` لمنع تلاعب العميل
+- `PATCH /client/orders/{id}` يقبل `tracking_number` ويُولّد رابط واتساب جاهز مع رابط التتبع
+- `GET /public/{slug}/orders/my` يُرجع كل طلب مع `tracking_url` مولّد من template
+- Pickup option مدمج في `calculate_shipping_quote` كأول خيار
 
 #### Frontend
-- **Storefront** (`overlay_renderer.py`):
-  - Modal الـ checkout: City + Country (auto-detect) → خيارات شحن radio مع badges (موصى به / +X COD / يدعم COD) → checkbox تأمين اختياري → breakdown ديناميكي (المنتجات + الشحن + 🛡️ التأمين = الإجمالي)
-  - "طلباتي" يعرض لكل طلب: حالة، شركة الشحن، ETA، **زر "📍 تتبّع الشحنة"** يفتح صفحة الشركة
-- **Client Dashboard** (`ClientDashboard.js`):
-  - تبويب الشحن: 3 بطاقات (التوصيل الداخلي، الشركات، **💵 COD Markup أصفر/برتقالي**، **🛡️ Insurance أزرق**) + معاينة حية
-  - تبويب الطلبات: حقل **رقم التتبع (AWB)** بجانب كل طلب لمزوّد شحن، يُحفظ تلقائياً عند الـ blur/Enter
+- **Storefront** (`overlay_renderer.py`): Checkout modal كامل + "طلباتي" مع زر تتبع
+- **Client Dashboard ShippingTab**: 4 cards (Pickup أخضر، COD برتقالي، Insurance أزرق، Providers رمادي) + معاينة حية
+- **Client Dashboard OrdersTab**: حقل AWB لكل طلب + WhatsApp تلقائي عند الحفظ
 
-#### اختبار E2E
-- iteration_17: 13/13 الشحن الأساسي ✅
-- iteration_18: 19 جديد + 13 regression = **32/32 نجح 100%** (`test_shipping_features_v2.py`)
-- اختبار يدوي: COD markup مطبّق، insurance بحدّ أدنى يعمل، tracking URL يولّد رابط SMSA الصحيح ✅
+#### 🆕 Source Code Downloader
+- **Module جديد**: `/app/backend/modules/source/routes.py` (owner-only)
+- API endpoints: `GET /api/source/manifest`, `GET /api/source/file?path=...`, `GET /api/source/info?path=...`
+- Security: whitelist + path-traversal guard + blocked patterns (.env, .git, node_modules, test_credentials, .pytest_cache)
+- **UI page**: `/source` (route protected, owner-only) — يعرض الـ 181 ملف في tree منظّم بـ 3 أزرار لكل ملف:
+  - 👁️ عرض (يفتح في تبويب جديد)
+  - 📋 نسخ (إلى الحافظة مباشرة)
+  - ⬇️ تنزيل (يحفظ على الجهاز)
+- بحث filtering + grouping by folder
+
+#### اختبار
+- iteration_18: 32/32 (19 جديد + 13 regression) ✅
+- اختبار يدوي E2E ناجح: COD markup، Insurance، Tracking URL، WhatsApp link، Pickup option، Source endpoints (manifest + 403 blocking + path traversal 400)
 
 #### Files
-- `/app/backend/modules/websites/routes.py` (config + public quote + OrderCreateIn + _order_create + tracking endpoint + orders/my enrichment)
-- `/app/backend/modules/websites/overlay_renderer.py` (zxCheckout, zxLoadShipping, zxPickShip, zxSubmitOrder, zxMyOrders, zxRefreshTotals)
-- `/app/frontend/src/pages/client/ClientDashboard.js` (ShippingTab COD + Insurance cards, OrdersTab tracking input)
+- `/app/backend/modules/websites/routes.py`
+- `/app/backend/modules/websites/shipping.py`
+- `/app/backend/modules/websites/overlay_renderer.py`
+- `/app/backend/modules/source/__init__.py` (NEW)
+- `/app/backend/modules/source/routes.py` (NEW)
+- `/app/backend/server.py` (registered source module)
+- `/app/frontend/src/pages/SourceBrowser.js` (NEW)
+- `/app/frontend/src/App.js` (added /source route)
+- `/app/frontend/src/pages/client/ClientDashboard.js`
 - `/app/backend/tests/test_shipping_system.py`, `/app/backend/tests/test_shipping_features_v2.py`
 
 

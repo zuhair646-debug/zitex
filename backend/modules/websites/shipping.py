@@ -208,6 +208,30 @@ def calculate_shipping_quote(
     is_same_city = is_sa and store_city and customer_city and store_city.strip() in customer_city.strip()
     
     # ──────────────────────────────────────────────────────────────────
+    # 0️⃣ الاستلام من المتجر (Pickup) — مجاني، أسرع خيار
+    # ──────────────────────────────────────────────────────────────────
+    pickup_enabled = bool(project_settings.get("pickup_enabled"))
+    if pickup_enabled:
+        pickup_addr = (project_settings.get("pickup_address") or "").strip()
+        pickup_hours = (project_settings.get("pickup_hours") or "").strip()
+        eta_text = pickup_hours if pickup_hours else "جاهز خلال ساعة"
+        options.append({
+            "provider_id": "pickup",
+            "provider_name": "الاستلام من المتجر",
+            "icon": "🏬",
+            "logo": None,
+            "fee_sar": 0.0,
+            "delivery_eta": eta_text,
+            "delivery_days_min": 0,
+            "delivery_days_max": 0,
+            "service_type": "pickup",
+            "supports_cod": True,
+            "is_recommended": False,
+            "is_free": True,
+            "pickup_address": pickup_addr,
+        })
+    
+    # ──────────────────────────────────────────────────────────────────
     # 1️⃣ توصيل داخلي (نفس المدينة) — لو مفعّل في إعدادات المتجر
     # ──────────────────────────────────────────────────────────────────
     if is_same_city and local_delivery_enabled:

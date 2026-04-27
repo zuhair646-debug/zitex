@@ -542,11 +542,16 @@ function OrdersTab({ token }) {
   // 🆕 Save tracking number (independent of status changes)
   const saveTracking = async (id, currentStatus, tracking_number) => {
     try {
-      await fetch(`${API}/api/websites/client/orders/${id}`, {
+      const r = await fetch(`${API}/api/websites/client/orders/${id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authH(token) },
         body: JSON.stringify({ status: currentStatus, tracking_number }),
       });
+      const d = await r.json();
       toast.success('✅ تم حفظ رقم التتبع');
+      // 🆕 Auto-open WhatsApp to notify the customer with the tracking link
+      if (d.whatsapp_link && tracking_number) {
+        window.open(d.whatsapp_link, '_blank');
+      }
       load();
     } catch (_) { toast.error('فشل'); }
   };
@@ -2688,6 +2693,40 @@ function ShippingTab({ token, slug }) {
             );
           })}
         </div>
+      </div>
+
+      {/* 🆕 Pickup option — let customer pick up from store (free) */}
+      <div className="bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border border-emerald-400/30 rounded-xl p-5" data-testid="pickup-card">
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div>
+            <h3 className="font-black text-lg flex items-center gap-2"><span>🏬</span> الاستلام من المتجر</h3>
+            <p className="text-xs text-white/60 mt-1">يعرض للعميل خياراً مجانياً ليأتي ويستلم بنفسه. مفيد للمنتجات الصغيرة، الأطعمة، أو العملاء قرب المتجر.</p>
+          </div>
+          <label className="cursor-pointer flex-shrink-0">
+            <input type="checkbox" checked={!!config.pickup_enabled} onChange={(e) => setConfig({...config, pickup_enabled: e.target.checked})} className="sr-only" data-testid="pickup-toggle" />
+            <div className={`w-12 h-6 rounded-full p-0.5 transition-colors ${config.pickup_enabled ? 'bg-emerald-500' : 'bg-white/10'}`}>
+              <div className={`w-5 h-5 rounded-full bg-white transition-transform ${config.pickup_enabled ? 'translate-x-6' : ''}`} />
+            </div>
+          </label>
+        </div>
+        {config.pickup_enabled && (
+          <div className="space-y-3">
+            <label className="block">
+              <span className="text-xs text-white/60">عنوان الاستلام</span>
+              <input type="text" value={config.pickup_address || ''}
+                onChange={(e) => setConfig({...config, pickup_address: e.target.value})}
+                placeholder="مثل: جدة، حي الروضة، شارع الأمير سلطان، مبنى رقم 12"
+                className="w-full mt-1 px-3 py-2 bg-black/30 border border-emerald-400/30 rounded-lg text-sm" data-testid="pickup-address-input" />
+            </label>
+            <label className="block">
+              <span className="text-xs text-white/60">ساعات العمل / مدة التحضير</span>
+              <input type="text" value={config.pickup_hours || ''}
+                onChange={(e) => setConfig({...config, pickup_hours: e.target.value})}
+                placeholder="مثل: السبت-الخميس 9ص-10م | جاهز خلال ساعة"
+                className="w-full mt-1 px-3 py-2 bg-black/30 border border-emerald-400/30 rounded-lg text-sm" data-testid="pickup-hours-input" />
+            </label>
+          </div>
+        )}
       </div>
 
       {/* 🆕 COD Markup — extra revenue knob */}

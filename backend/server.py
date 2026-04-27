@@ -2908,6 +2908,15 @@ try:
 except Exception as _be:
     logging.getLogger(__name__).error(f"Failed to register billing module: {_be}", exc_info=True)
 
+# ============== SOURCE CODE DOWNLOADER (owner-only) ==============
+try:
+    from modules.source.routes import init_routes as init_source_routes
+    _source_router = init_source_routes(db, get_current_user)
+    app.include_router(_source_router, prefix="/api")
+    logging.getLogger(__name__).info("Source module registered")
+except Exception as _se:
+    logging.getLogger(__name__).error(f"Failed to register source module: {_se}", exc_info=True)
+
 # ============== VISUAL DESIGNER APIS ==============
 class DesignElement(BaseModel):
     id: str

@@ -569,6 +569,9 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
             "insurance_enabled": False,
             "insurance_percent": 2.0,
             "insurance_min_sar": 10.0,
+            "pickup_enabled": False,
+            "pickup_address": "",
+            "pickup_hours": "",
         }
         return cfg
 
@@ -588,6 +591,7 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
             "local_delivery_eta_hours", "free_shipping_above_sar",
             "cod_markup_enabled", "cod_markup_sar",
             "insurance_enabled", "insurance_percent", "insurance_min_sar",
+            "pickup_enabled", "pickup_address", "pickup_hours",
         }
         cfg = dict(p.get("shipping_settings") or {})
         for k, v in body.items():
@@ -2009,9 +2013,28 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
         # 🆕 Build a WhatsApp link for the owner to notify the customer (1-tap)
         order = next((o for o in (p.get("orders") or []) if o.get("id") == order_id), None)
         wa = None
-        if order and order.get("customer_phone") and body.status in _ORDER_STATUS_MSGS:
-            msg = f"طلبك رقم #{order_id[:8]} في {p.get('name','موقعنا')}\n{_ORDER_STATUS_MSGS[body.status]}"
-            wa = _wa_link(order["customer_phone"], msg)
+        if order and order.get("customer_phone"):
+            # 🆕 Tracking-aware message — when a tracking_number was just saved, include the deep-link
+            if body.tracking_number is not None and body.tracking_number.strip():
+                from .shipping import PROVIDER_BY_ID
+                pid = (order.get("shipping_provider") or "").strip()
+                tn = body.tracking_number.strip()
+                tracking_url = ""
+                if pid in PROVIDER_BY_ID:
+                    tmpl = PROVIDER_BY_ID[pid].get("tracking_url_template") or ""
+                    if tmpl:
+                        tracking_url = tmpl.replace("{tracking}", tn)
+                lines = [
+                    f"📦 طلبك رقم #{order_id[:8]} في {p.get('name','موقعنا')}",
+                    f"🚚 شحنته الآن عبر {order.get('shipping_provider_name') or pid}",
+                    f"رقم التتبع: {tn}",
+                ]
+                if tracking_url:
+                    lines.append(f"تتبّع الشحنة: {tracking_url}")
+                wa = _wa_link(order["customer_phone"], "\n".join(lines))
+            elif body.status in _ORDER_STATUS_MSGS:
+                msg = f"طلبك رقم #{order_id[:8]} في {p.get('name','موقعنا')}\n{_ORDER_STATUS_MSGS[body.status]}"
+                wa = _wa_link(order["customer_phone"], msg)
         # 🛰️ broadcast status/assignment change
         try:
             await realtime.broadcast_all(p["slug"], "order_status", {

@@ -101,6 +101,7 @@ def _auth_and_commerce_overlay(slug) -> str:
       '<select id="zx-ord-country" style="width:100%;padding:10px 12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:10px;color:#fff;font-family:inherit;font-size:14px;margin-bottom:10px"><option value="SA">🇸🇦 السعودية</option><option value="AE">🇦🇪 الإمارات</option><option value="KW">🇰🇼 الكويت</option><option value="BH">🇧🇭 البحرين</option><option value="OM">🇴🇲 عُمان</option><option value="QA">🇶🇦 قطر</option><option value="EG">🇪🇬 مصر</option><option value="JO">🇯🇴 الأردن</option><option value="INTL">🌍 دولة أخرى</option></select></div></div>'+
       '<label>🚚 خيارات الشحن</label>'+
       '<div id="zx-ord-ship" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"><div style="opacity:.6;font-size:12px;padding:10px;text-align:center;background:rgba(255,255,255,.04);border-radius:10px">أدخل المدينة لعرض خيارات الشحن</div></div>'+
+      '<div id="zx-ord-pickup-info" style="display:none;margin-bottom:10px"></div>'+
       '<div id="zx-ord-ins" style="display:none;padding:10px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);border-radius:10px;margin-bottom:10px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="zx-ord-ins-cb" onchange="window.zxRefreshTotals&&window.zxRefreshTotals()" style="accent-color:#3b82f6;margin:0"/><span style="font-size:13px"><b>🛡️ تأمين الشحنة</b> <span id="zx-ord-ins-amt" style="opacity:.85"></span><div style="font-size:11px;opacity:.65">استبدال أو إعادة المبلغ كاملاً عند تلف/فقدان الشحنة.</div></span></label></div>'+
       '<label>ملاحظات (اختياري)</label><textarea id="zx-ord-note" rows="2" placeholder="مثال: بدون بصل"></textarea>'+
       '<label>💳 طريقة الدفع</label><select id="zx-ord-pay" onchange="window.zxRefreshTotals&&window.zxRefreshTotals()">'+payOpts+'</select>'+
@@ -167,6 +168,14 @@ def _auth_and_commerce_overlay(slug) -> str:
     if(insRow)insRow.style.display=insOpted?"flex":"none";
     if(insV)insV.textContent=insFee?(insFee.toFixed(2)+" ر.س"):"—";
     var tt=$("#zx-tot-total");if(tt)tt.textContent=(sub+totalFee+insFee).toFixed(2)+" ر.س";
+    // 🆕 Pickup address hint
+    var pkBox=$("#zx-ord-pickup-info");
+    if(pkBox){{
+      if(opt.provider_id==="pickup"){{
+        pkBox.style.display="block";
+        pkBox.innerHTML='<div style="padding:10px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:10px;font-size:12px"><b>🏬 الاستلام من المتجر</b><br><span style="opacity:.85">'+(opt.pickup_address||"اتصل بنا لمعرفة العنوان")+'</span>'+(opt.delivery_eta?'<div style="font-size:11px;opacity:.7;margin-top:4px">⏱️ '+opt.delivery_eta+'</div>':'')+'</div>';
+      }}else{{pkBox.style.display="none";pkBox.innerHTML="";}}
+    }}
   }};
   window.zxRefreshTotals=function(){{
     if(typeof window.__zxShipIdx==="number")window.zxPickShip(window.__zxShipIdx);
