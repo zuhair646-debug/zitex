@@ -114,6 +114,50 @@ export default function SourceBrowser({ user }) {
     return Array.from(m.entries()).sort();
   }, [filtered]);
 
+  const downloadZipAll = async () => {
+    try {
+      toast.info('⏳ جاري تحضير ZIP كامل المشروع...');
+      const r = await fetch(`${API}/api/source/zip`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `zitex-${new Date().toISOString().slice(0, 10)}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      toast.success('✅ تم تحميل ZIP كامل المشروع');
+    } catch (e) {
+      toast.error('فشل تحميل ZIP: ' + e.message);
+    }
+  };
+
+  const downloadZipFolder = async (prefix) => {
+    try {
+      toast.info(`⏳ جاري تحضير ZIP لـ ${prefix}...`);
+      const r = await fetch(`${API}/api/source/zip-folder?prefix=${encodeURIComponent(prefix)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `zitex-${prefix.replace(/\//g, '-').replace(/-$/, '')}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      toast.success(`✅ تم تحميل ZIP لـ ${prefix}`);
+    } catch (e) {
+      toast.error('فشل تحميل ZIP: ' + e.message);
+    }
+  };
+
   if (error) {
     return (
       <div className="min-h-screen bg-[#0a0b14] text-white flex items-center justify-center p-8">
@@ -136,6 +180,40 @@ export default function SourceBrowser({ user }) {
             استخدم <b>👁️ عرض</b> لفتح الملف في تبويب جديد، <b>📋 نسخ</b> لنسخه مباشرة، أو <b>⬇️ تنزيل</b> لحفظه على جهازك.
           </p>
         </div>
+
+        {/* 🆕 Bulk ZIP downloads */}
+        <div className="bg-gradient-to-br from-emerald-500/15 to-cyan-500/15 border border-emerald-400/40 rounded-2xl p-5 mb-6" data-testid="zip-section">
+          <div className="flex items-start gap-3 flex-wrap">
+            <div className="text-4xl flex-shrink-0">🚀</div>
+            <div className="flex-1 min-w-[200px]">
+              <h3 className="font-black text-lg text-emerald-300">تنزيل المشروع كاملاً (ZIP)</h3>
+              <p className="text-xs text-white/65 mt-1 mb-3">
+                طريقة أسرع — حمّل كل الكود ملف <b>ZIP</b> واحد بدلاً من النسخ ملف ملف.
+                بعدها فُكّ الضغط ثم ادفع الكل دفعة واحدة إلى GitHub، أو ارفعه مباشرة إلى Railway/Vercel.
+                ملف <code className="text-yellow-300">DEPLOY.md</code> داخل الـ ZIP فيه التعليمات الكاملة بالعربي.
+              </p>
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={downloadZipAll}
+                  className="px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white font-black rounded-xl text-sm transition-all"
+                  data-testid="zip-all-btn"
+                >📦 تنزيل كل المشروع (ZIP)</button>
+                <button
+                  onClick={() => downloadZipFolder('backend/')}
+                  className="px-4 py-2.5 bg-white/10 hover:bg-white/20 font-bold rounded-xl text-sm transition-all"
+                  data-testid="zip-backend-btn"
+                >🐍 backend فقط</button>
+                <button
+                  onClick={() => downloadZipFolder('frontend/src/')}
+                  className="px-4 py-2.5 bg-white/10 hover:bg-white/20 font-bold rounded-xl text-sm transition-all"
+                  data-testid="zip-frontend-btn"
+                >⚛️ frontend/src فقط</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="text-center text-xs text-white/40 mb-3">— أو تصفّح ملف ملف —</div>
 
         <div className="sticky top-0 z-10 bg-[#0a0b14]/90 backdrop-blur-md py-3 mb-4 border-b border-white/10">
           <div className="flex gap-3 items-center">

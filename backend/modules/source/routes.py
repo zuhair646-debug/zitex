@@ -10,10 +10,12 @@ Security:
 - يمنع أي محاولة path traversal (..)
 """
 from fastapi import APIRouter, HTTPException, Depends, Query
-from fastapi.responses import PlainTextResponse, JSONResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 from pathlib import Path
 from typing import List, Dict, Any
-import os
+import io
+import zipfile
+import time
 import mimetypes
 
 
@@ -33,12 +35,12 @@ ALLOWED_PREFIXES = (
     "backend/requirements.txt",
     "backend/.env.example",
     "README.md",
+    "DEPLOY.md",
     "memory/PRD.md",
 )
 
 # Hard-blocked patterns — sensitive files / build artifacts / large dirs
 BLOCKED_SUBSTRINGS = (
-    ".env",          # all .env files (secrets)
     ".git/",
     "node_modules/",
     "__pycache__/",
@@ -49,6 +51,7 @@ BLOCKED_SUBSTRINGS = (
     ".pyc",
     ".key",
     ".pem",
+    ".zip",            # never include leftover zip artifacts
     "test_credentials",
     "credentials.json",
     "service-account",
@@ -60,8 +63,10 @@ def _safe_resolve(rel_path: str) -> Path:
     """Resolve a relative path under /app safely. Raise 400 on traversal or 403 on blocked, 404 on missing."""
     if not rel_path or ".." in rel_path or rel_path.startswith("/"):
         raise HTTPException(400, "Invalid path")
-    # Block sensitive
     norm = rel_path.replace("\\", "/")
+    # Block secret .env files (but allow .env.example, .env.template)
+    if norm.endswith("/.env") or norm == ".env":
+        raise HTTPException(403, "Blocked: .env file")
     for bad in BLOCKED_SUBSTRINGS:
         if bad in norm:
             raise HTTPException(403, f"Blocked path: {bad}")
@@ -74,6 +79,12 @@ def _safe_resolve(rel_path: str) -> Path:
     if not full.exists():
         raise HTTPException(404, "File not found")
     return full
+
+
+def _is_secret_env(rel_path: str) -> bool:
+    """Returns True iff this is an actual secret .env (not .env.example/.template)."""
+    p = rel_path.replace("\\", "/")
+    return p.endswith("/.env") or p == ".env"
 
 
 def init_routes(database, auth_dep) -> APIRouter:
@@ -105,6 +116,8 @@ def init_routes(database, auth_dep) -> APIRouter:
                     continue
                 rel = str(fp.relative_to(root)).replace("\\", "/")
                 if any(bad in rel for bad in BLOCKED_SUBSTRINGS):
+                    continue
+                if _is_secret_env(rel):
                     continue
                 try:
                     sz = fp.stat().st_size
@@ -158,5 +171,88 @@ def init_routes(database, auth_dep) -> APIRouter:
             "lines": lines,
             "mtime": int(st.st_mtime),
         }
+
+    # ─────────────────────────────────────────────────────────────────
+    # ZIP exports — bulk download whole project or specific folder
+    # ─────────────────────────────────────────────────────────────────
+    def _build_zip(prefix_filter: str = "") -> bytes:
+        """
+        Walk the allowed prefixes (optionally restricted to a single one) and
+        zip every safe file into an in-memory archive. Returns the bytes.
+        """
+        root = Path("/app")
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
+            for prefix in ALLOWED_PREFIXES:
+                if prefix_filter and not prefix.startswith(prefix_filter):
+                    continue
+                full = root / prefix
+                if full.is_file():
+                    rel = prefix
+                    if any(bad in rel for bad in BLOCKED_SUBSTRINGS) or _is_secret_env(rel):
+                        continue
+                    try:
+                        zf.write(full, arcname=rel)
+                    except Exception:
+                        pass
+                    continue
+                if not full.is_dir():
+                    continue
+                for fp in full.rglob("*"):
+                    if not fp.is_file():
+                        continue
+                    rel = str(fp.relative_to(root)).replace("\\", "/")
+                    if prefix_filter and not rel.startswith(prefix_filter):
+                        continue
+                    if any(bad in rel for bad in BLOCKED_SUBSTRINGS) or _is_secret_env(rel):
+                        continue
+                    try:
+                        if fp.stat().st_size > 5 * 1024 * 1024:
+                            continue
+                        zf.write(fp, arcname=rel)
+                    except Exception:
+                        continue
+        return buf.getvalue()
+
+    @r.get("/zip")
+    async def _zip_all(current_user: dict = Depends(auth_dep)):
+        """Owner-only — full project ZIP, ready to push to GitHub or upload to a server."""
+        if current_user.get("role") != "owner":
+            raise HTTPException(403, "Owner access only")
+        data = _build_zip()
+        ts = time.strftime("%Y%m%d-%H%M%S")
+        return StreamingResponse(
+            io.BytesIO(data),
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f'attachment; filename="zitex-{ts}.zip"',
+                "Content-Length": str(len(data)),
+            },
+        )
+
+    @r.get("/zip-folder")
+    async def _zip_folder(
+        prefix: str = Query(..., description="Folder prefix (e.g. 'backend/' or 'frontend/src/')"),
+        current_user: dict = Depends(auth_dep),
+    ):
+        """Owner-only — ZIP of a single folder/prefix."""
+        if current_user.get("role") != "owner":
+            raise HTTPException(403, "Owner access only")
+        prefix = prefix.strip().rstrip("/") + "/"
+        if not any(p.startswith(prefix) or prefix.startswith(p) for p in ALLOWED_PREFIXES):
+            raise HTTPException(400, "Prefix not in allowed source tree")
+        data = _build_zip(prefix_filter=prefix)
+        if not data or len(data) < 22:  # empty zip header is 22 bytes
+            raise HTTPException(404, "No files matched this prefix")
+        ts = time.strftime("%Y%m%d-%H%M%S")
+        safe = prefix.replace("/", "-").rstrip("-") or "all"
+        return StreamingResponse(
+            io.BytesIO(data),
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f'attachment; filename="zitex-{safe}-{ts}.zip"',
+                "Content-Length": str(len(data)),
+            },
+        )
 
     return r
