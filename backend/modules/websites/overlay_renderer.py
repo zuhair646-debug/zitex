@@ -102,7 +102,7 @@ def _auth_and_commerce_overlay(slug) -> str:
       '<label>🚚 خيارات الشحن</label>'+
       '<div id="zx-ord-ship" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"><div style="opacity:.6;font-size:12px;padding:10px;text-align:center;background:rgba(255,255,255,.04);border-radius:10px">أدخل المدينة لعرض خيارات الشحن</div></div>'+
       '<label>ملاحظات (اختياري)</label><textarea id="zx-ord-note" rows="2" placeholder="مثال: بدون بصل"></textarea>'+
-      '<label>💳 طريقة الدفع</label><select id="zx-ord-pay">'+payOpts+'</select>'+
+      '<label>💳 طريقة الدفع</label><select id="zx-ord-pay" onchange="window.zxRefreshTotals&&window.zxRefreshTotals()">'+payOpts+'</select>'+
       '<div id="zx-ord-totals" style="margin:10px 0;padding:10px;background:rgba(234,179,8,.08);border:1px solid rgba(234,179,8,.2);border-radius:10px;font-size:13px"><div style="display:flex;justify-content:space-between"><span>المنتجات</span><b id="zx-tot-sub">'+sub.toFixed(2)+' ر.س</b></div><div style="display:flex;justify-content:space-between;margin-top:4px"><span>الشحن</span><b id="zx-tot-ship">—</b></div><div style="display:flex;justify-content:space-between;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.1);font-size:15px;color:#eab308"><span>الإجمالي</span><b id="zx-tot-total">'+sub.toFixed(2)+' ر.س</b></div></div>'+
       '<div id="zx-ord-err"></div>'+
       '<button class="zx-btn" onclick="window.zxSubmitOrder()">✓ تأكيد الطلب</button>');
@@ -123,6 +123,7 @@ def _auth_and_commerce_overlay(slug) -> str:
     try{{
       var r=await fetch(API+"/public/"+SLUG+"/shipping/quote",{{method:"POST",headers:{{"Content-Type":"application/json"}},body:JSON.stringify({{city:city,country:country,cart_subtotal:window.__zxSub||0,weight_kg:1}})}});
       var d=await r.json();
+      window.__zxCodMarkup=d.cod_markup_enabled?(parseFloat(d.cod_markup_sar)||0):0;
       if(!d.options||!d.options.length){{box.innerHTML='<div style="opacity:.7;font-size:12px;padding:10px;text-align:center;background:rgba(239,68,68,.08);border-radius:10px">⚠️ لا تتوفر خيارات شحن لموقعك. تحقّق من المدينة/الدولة.</div>';return;}}
       // Auto-fill detected city if empty
       if(!city&&d.city){{var ce=$("#zx-ord-city");if(ce)ce.value=d.city;}}
@@ -130,17 +131,24 @@ def _auth_and_commerce_overlay(slug) -> str:
       box.innerHTML=d.options.map(function(o,idx){{
         var lbl=o.is_free?'<span style="color:#22c55e;font-weight:900">مجاني</span>':'<b style="color:#eab308">'+o.fee_sar+' ر.س</b>';
         var rec=o.is_recommended?'<span style="font-size:9px;background:#22c55e;color:#000;padding:1px 6px;border-radius:99px;font-weight:900;margin-right:4px">⭐ موصى به</span>':'';
-        return '<label style="display:flex;align-items:center;gap:10px;padding:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;cursor:pointer"><input type="radio" name="zx-ship" value="'+idx+'" '+(idx===0?"checked":"")+' onchange="window.zxPickShip('+idx+')" style="margin:0;accent-color:#eab308"/><span style="font-size:18px">'+(o.icon||"📦")+'</span><div style="flex:1"><div style="font-weight:900;font-size:13px">'+o.provider_name+rec+'</div><div style="font-size:11px;opacity:.65">'+o.delivery_eta+(o.supports_cod?' · يدعم COD':'')+'</div></div><div>'+lbl+'</div></label>';
+        var codHint=(window.__zxCodMarkup>0&&o.supports_cod)?'<span style="font-size:9px;background:rgba(234,179,8,.18);color:#fde047;padding:1px 6px;border-radius:99px;margin-right:4px">+'+window.__zxCodMarkup+' عند COD</span>':'';
+        return '<label style="display:flex;align-items:center;gap:10px;padding:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;cursor:pointer"><input type="radio" name="zx-ship" value="'+idx+'" '+(idx===0?"checked":"")+' onchange="window.zxPickShip('+idx+')" style="margin:0;accent-color:#eab308"/><span style="font-size:18px">'+(o.icon||"📦")+'</span><div style="flex:1"><div style="font-weight:900;font-size:13px">'+o.provider_name+rec+codHint+'</div><div style="font-size:11px;opacity:.65">'+o.delivery_eta+(o.supports_cod?' · يدعم COD':'')+'</div></div><div>'+lbl+'</div></label>';
       }}).join("");
       window.__zxShipOpts=d.options;window.zxPickShip(0);
     }}catch(e){{box.innerHTML='<div style="font-size:12px;padding:10px;background:rgba(239,68,68,.08);color:#fca5a5;border-radius:10px">'+(e.message||"تعذّر جلب خيارات الشحن")+'</div>';}}
   }};
   window.zxPickShip=function(idx){{
     var opt=(window.__zxShipOpts||[])[idx];if(!opt)return;
-    window.__zxShip=opt;
+    window.__zxShip=opt;window.__zxShipIdx=idx;
     var sub=window.__zxSub||0;var fee=opt.fee_sar||0;
-    var st=$("#zx-tot-ship");if(st)st.textContent=opt.is_free?"مجاني":(fee+" ر.س");
-    var tt=$("#zx-tot-total");if(tt)tt.textContent=(sub+fee).toFixed(2)+" ر.س";
+    var pay=($("#zx-ord-pay")||{{}}).value||"cod";
+    var markup=(pay==="cod"&&opt.supports_cod&&!opt.is_free)?(window.__zxCodMarkup||0):0;
+    var totalFee=fee+markup;
+    var st=$("#zx-tot-ship");if(st)st.textContent=opt.is_free?"مجاني":(totalFee+" ر.س"+(markup>0?" (شامل +"+markup+" COD)":""));
+    var tt=$("#zx-tot-total");if(tt)tt.textContent=(sub+totalFee).toFixed(2)+" ر.س";
+  }};
+  window.zxRefreshTotals=function(){{
+    if(typeof window.__zxShipIdx==="number")window.zxPickShip(window.__zxShipIdx);
   }};
   window.zxGetLoc=function(){{
     if(!navigator.geolocation){{$("#zx-ord-loc").textContent="متصفحك لا يدعم تحديد الموقع";return;}}

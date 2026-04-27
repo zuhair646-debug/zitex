@@ -16,30 +16,30 @@
 
 
 
-### 🆕 Feb 28, 2026 — STOREFRONT SHIPPING CHECKOUT INTEGRATION (P0 — COMPLETE ✅)
+### 🆕 Feb 28, 2026 — STOREFRONT SHIPPING CHECKOUT INTEGRATION + COD MARKUP (P0/Revenue — COMPLETE ✅)
 
-استكمال نظام الشحن الذكي بربطه بالـ checkout في الواجهة الأمامية للمتاجر المُولَّدة.
+استكمال نظام الشحن الذكي بربطه بالـ checkout في الواجهة الأمامية للمتاجر المُولَّدة + ميزة هامش COD لزيادة الإيرادات.
 
 #### Backend
-- **NEW** `POST /api/websites/public/{slug}/shipping/quote` — endpoint عام (بدون auth) يستقبل `{country, city, cart_subtotal, weight_kg}` ويُرجع خيارات الشحن المرتّبة حسب السعر. Auto-detect country من IP إذا لم يُمرَّر.
+- **NEW** `POST /api/websites/public/{slug}/shipping/quote` — endpoint عام (بدون auth) يستقبل `{country, city, cart_subtotal, weight_kg}` ويُرجع خيارات الشحن المرتّبة حسب السعر + `cod_markup_enabled` + `cod_markup_sar`. Auto-detect country من IP إذا لم يُمرَّر.
 - **EXTENDED** `OrderCreateIn` model: أُضيفت 6 حقول للشحن: `city, country, shipping_provider, shipping_provider_name, shipping_fee, shipping_eta`.
-- **HARDENED** `_order_create`: يُعيد الحساب server-side عند استلام `shipping_provider` لمنع تلاعب العميل بالتكلفة. يحفظ metadata الشحن على الطلب: `shipping_provider, shipping_provider_name, shipping_eta, shipping_city, shipping_country`.
+- **HARDENED** `_order_create`: يُعيد الحساب server-side عند استلام `shipping_provider` لمنع تلاعب العميل بالتكلفة. يحفظ metadata الشحن على الطلب: `shipping_provider, shipping_provider_name, shipping_eta, shipping_city, shipping_country, cod_markup_applied`.
+- **🆕 COD MARKUP** (Revenue feature): حقلان جديدان في `shipping_settings`: `cod_markup_enabled` (bool) + `cod_markup_sar` (float). الهامش يُطبَّق server-side فقط عندما (1) العميل اختار COD، (2) المزوّد يدعم COD، (3) صاحب المتجر فعّل الميزة. الهامش لا يُطبَّق على الشحن المجاني.
 - **PRESERVED** التدفق القديم (haversine + delivery_settings) يعمل عند عدم تمرير `shipping_provider`.
 
-#### Frontend (overlay_renderer.py — Storefront Modal)
-- نموذج Checkout الآن فيه: City + Country (auto-detect)، قائمة خيارات شحن radio، Recommended badge، COD indicator، breakdown ديناميكي (المنتجات + الشحن = الإجمالي).
-- `zxLoadShipping()` debounce 400ms عند تغيير المدينة/الدولة.
-- `zxPickShip(idx)` يحدّث الإجمالي فوراً.
-- `zxSubmitOrder` يُرسل بيانات الشحن المختارة مع الطلب.
+#### Frontend
+- **Storefront** (overlay_renderer.py): Modal الـ checkout الآن يعرض: City + Country (auto-detect)، خيارات شحن radio مع badge `+X عند COD`، COD indicator، breakdown ديناميكي يتحدّث عند تغيير طريقة الدفع. `zxLoadShipping()` debounce 400ms.
+- **Client Dashboard** (ClientDashboard.js → ShippingTab): بطاقة جديدة "💵 هامش الدفع عند الاستلام (COD)" مع toggle + input للقيمة بالـ ر.س + شرح يوضّح للمستخدم كيف تزيد الإيرادات.
 
 #### اختبار
-- Backend: 13/13 اختبار نجح (iteration_17.json) — quote endpoint, same-city local delivery, free-shipping threshold, INTL routing, server-side re-quote, metadata persistence, dashboard config GET/PUT, legacy haversine fallback, IP detection, weight pricing, 404 handling.
-- Frontend: Screenshot manual يؤكد ظهور الـ modal بكامل عناصره.
+- Backend: 13/13 اختبار نجح (iteration_17.json) للشحن الأساسي + اختبار يدوي لميزة COD markup (طلب smsa+cod = 25+7=32؛ طلب smsa+stripe = 25 بدون markup) ✅.
+- Frontend: Screenshot يدوي يؤكد الـ UI.
 
-#### الملفات المعدلة
-- `/app/backend/modules/websites/routes.py` (OrderCreateIn extended, public shipping/quote, _order_create updated)
-- `/app/backend/modules/websites/overlay_renderer.py` (zxCheckout, zxLoadShipping, zxPickShip, zxSubmitOrder)
-- `/app/backend/tests/test_shipping_system.py` (NEW — 13 pytest cases)
+#### الملفات المعدلة في هذا التحديث
+- `/app/backend/modules/websites/routes.py` (OrderCreateIn extended, public shipping/quote, _order_create updated مع COD markup logic)
+- `/app/backend/modules/websites/overlay_renderer.py` (zxCheckout, zxLoadShipping, zxPickShip + COD badge & dynamic recalc, zxRefreshTotals, zxSubmitOrder)
+- `/app/frontend/src/pages/client/ClientDashboard.js` (بطاقة COD Markup في ShippingTab)
+- `/app/backend/tests/test_shipping_system.py` (13 pytest cases — الشحن الأساسي)
 
 
 ### 🆕 Feb 27, 2026 — DEEP STYLES + LIVE EDIT MODE + AI CUSTOM WIDGET (P0 — COMPLETE)

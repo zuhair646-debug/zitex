@@ -2655,6 +2655,31 @@ function ShippingTab({ token, slug }) {
         </div>
       </div>
 
+      {/* 🆕 COD Markup — extra revenue knob */}
+      <div className="bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-400/30 rounded-xl p-5" data-testid="cod-markup-card">
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div>
+            <h3 className="font-black text-lg flex items-center gap-2"><span>💵</span> هامش الدفع عند الاستلام (COD)</h3>
+            <p className="text-xs text-white/60 mt-1">يضيف رسوماً إضافية تلقائياً على كل طلب يدفع عند الاستلام لتعويض رسوم البنك ومخاطر الإرجاع. الرسوم تظهر للعميل قبل التأكيد.</p>
+          </div>
+          <label className="cursor-pointer flex-shrink-0">
+            <input type="checkbox" checked={!!config.cod_markup_enabled} onChange={(e) => setConfig({...config, cod_markup_enabled: e.target.checked})} className="sr-only" data-testid="cod-markup-toggle" />
+            <div className={`w-12 h-6 rounded-full p-0.5 transition-colors ${config.cod_markup_enabled ? 'bg-amber-500' : 'bg-white/10'}`}>
+              <div className={`w-5 h-5 rounded-full bg-white transition-transform ${config.cod_markup_enabled ? 'translate-x-6' : ''}`} />
+            </div>
+          </label>
+        </div>
+        {config.cod_markup_enabled && (
+          <label className="block">
+            <span className="text-xs text-white/60">قيمة الهامش (ر.س)</span>
+            <input type="number" min="0" step="0.5" value={config.cod_markup_sar ?? 5}
+              onChange={(e) => setConfig({...config, cod_markup_sar: parseFloat(e.target.value) || 0})}
+              className="w-full mt-1 px-3 py-2 bg-black/30 border border-amber-400/30 rounded-lg text-sm" data-testid="cod-markup-input" />
+            <p className="text-[11px] text-amber-300/80 mt-2">💡 مثال: لو القيمة 5 ر.س — كل طلب COD سيُضاف له 5 ر.س على رسوم الشحن. ربح إضافي بدون عمل.</p>
+          </label>
+        )}
+      </div>
+
       {/* Save bar */}
       <div className="sticky bottom-4 flex gap-3">
         <button onClick={saveConfig} disabled={busy}

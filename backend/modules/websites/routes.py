@@ -564,6 +564,8 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
             "local_delivery_fee": 15,
             "local_delivery_eta_hours": "2-4",
             "free_shipping_above_sar": 200,
+            "cod_markup_enabled": False,
+            "cod_markup_sar": 5,
         }
         return cfg
 
@@ -581,6 +583,7 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
             "enabled_providers", "custom_rates", "store_city",
             "local_delivery_enabled", "local_delivery_fee",
             "local_delivery_eta_hours", "free_shipping_above_sar",
+            "cod_markup_enabled", "cod_markup_sar",
         }
         cfg = dict(p.get("shipping_settings") or {})
         for k, v in body.items():
@@ -1785,6 +1788,8 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
             "weight_kg": weight,
             "options": options,
             "store_city": cfg.get("store_city") or "",
+            "cod_markup_enabled": bool(cfg.get("cod_markup_enabled")),
+            "cod_markup_sar": float(cfg.get("cod_markup_sar") or 0),
         }
 
     # ---- orders (customer-side) ----
@@ -1799,6 +1804,7 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
         shipping_provider_name = (body.shipping_provider_name or "").strip()
         shipping_eta = (body.shipping_eta or "").strip()
         shipping_fee = 0.0
+        cod_markup_applied = 0.0
         km = 0.0
         if shipping_provider:
             # Re-quote on server to prevent client-side fee tampering
@@ -1826,6 +1832,15 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
                         shipping_provider_name = match.get("provider_name", "")
                     if not shipping_eta:
                         shipping_eta = match.get("delivery_eta", "")
+                    # 🆕 COD markup: only when payment is COD AND the provider supports COD AND the toggle is on
+                    pay_method = (body.payment_method or "cod").lower()
+                    if (
+                        pay_method == "cod"
+                        and bool(cfg.get("cod_markup_enabled"))
+                        and bool(match.get("supports_cod"))
+                    ):
+                        cod_markup_applied = max(0.0, float(cfg.get("cod_markup_sar") or 0))
+                        shipping_fee += cod_markup_applied
                 else:
                     # Provider not available for this location — fall back to client-quoted (clamped)
                     shipping_fee = max(0.0, float(body.shipping_fee or 0))
@@ -1900,6 +1915,7 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
             "shipping_eta": shipping_eta,
             "shipping_city": (body.city or "")[:80],
             "shipping_country": (body.country or "")[:8],
+            "cod_markup_applied": round(cod_markup_applied, 2),
         }
         # Update customer points balance
         new_pts = max(0, int(data["customer"].get("points") or 0) - redeemed_points + earned_points)
