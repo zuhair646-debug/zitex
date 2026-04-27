@@ -566,6 +566,9 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
             "free_shipping_above_sar": 200,
             "cod_markup_enabled": False,
             "cod_markup_sar": 5,
+            "insurance_enabled": False,
+            "insurance_percent": 2.0,
+            "insurance_min_sar": 10.0,
         }
         return cfg
 
@@ -584,6 +587,7 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
             "local_delivery_enabled", "local_delivery_fee",
             "local_delivery_eta_hours", "free_shipping_above_sar",
             "cod_markup_enabled", "cod_markup_sar",
+            "insurance_enabled", "insurance_percent", "insurance_min_sar",
         }
         cfg = dict(p.get("shipping_settings") or {})
         for k, v in body.items():
@@ -1660,6 +1664,8 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
         shipping_provider_name: Optional[str] = ""    # display name in Arabic
         shipping_fee: Optional[float] = None          # client-quoted fee (re-validated server-side)
         shipping_eta: Optional[str] = ""
+        # 🆕 Optional shipping insurance (computed server-side from cart_subtotal)
+        insurance_opted: Optional[bool] = False
 
     class DriverCreateIn(BaseModel):
         name: str
@@ -1671,6 +1677,7 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
     class OrderStatusIn(BaseModel):
         status: str  # pending|accepted|preparing|ready|on_the_way|delivered|cancelled
         driver_id: Optional[str] = None
+        tracking_number: Optional[str] = None  # 🆕 owner sets this when handing off to courier
 
     # ---- customer auth (per-site) ----
     async def _resolve_site_customer(slug: str, token: str) -> Dict[str, Any]:
@@ -1790,6 +1797,9 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
             "store_city": cfg.get("store_city") or "",
             "cod_markup_enabled": bool(cfg.get("cod_markup_enabled")),
             "cod_markup_sar": float(cfg.get("cod_markup_sar") or 0),
+            "insurance_enabled": bool(cfg.get("insurance_enabled")),
+            "insurance_percent": float(cfg.get("insurance_percent") or 2.0),
+            "insurance_min_sar": float(cfg.get("insurance_min_sar") or 10.0),
         }
 
     # ---- orders (customer-side) ----
@@ -1883,7 +1893,15 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
             loyalty = data["project"].get("loyalty_settings") or {"redeem_rate": 0.1}
             redeem_discount = pts_to_use * float(loyalty.get("redeem_rate", 0.1))
             redeemed_points = pts_to_use
-        total = max(0, subtotal + fee - discount - redeem_discount)
+        # 🆕 Shipping insurance (optional, customer-opted at checkout)
+        insurance_fee = 0.0
+        if body.insurance_opted:
+            ship_cfg = data["project"].get("shipping_settings") or {}
+            if bool(ship_cfg.get("insurance_enabled")):
+                pct = float(ship_cfg.get("insurance_percent") or 2.0)
+                min_v = float(ship_cfg.get("insurance_min_sar") or 10.0)
+                insurance_fee = max(min_v, round(subtotal * pct / 100, 2))
+        total = max(0, subtotal + fee + insurance_fee - discount - redeem_discount)
         # 🆕 Earn loyalty points on order
         loyalty = data["project"].get("loyalty_settings") or {"enabled": True, "points_per_sar": 1}
         earned_points = int(total * float(loyalty.get("points_per_sar", 1))) if loyalty.get("enabled", True) else 0
@@ -1916,6 +1934,8 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
             "shipping_city": (body.city or "")[:80],
             "shipping_country": (body.country or "")[:8],
             "cod_markup_applied": round(cod_markup_applied, 2),
+            "insurance_fee": round(insurance_fee, 2),
+            "tracking_number": "",
         }
         # Update customer points balance
         new_pts = max(0, int(data["customer"].get("points") or 0) - redeemed_points + earned_points)
@@ -1947,8 +1967,22 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
     async def _order_list_my(slug: str, authorization: str = _Header(None)):
         data = await _resolve_site_customer(slug, authorization or "")
         cid = data["customer"]["id"]
-        orders = [o for o in (data["project"].get("orders") or []) if o.get("customer_id") == cid]
-        return {"orders": list(reversed(orders))}
+        # 🆕 Enrich orders with tracking_url derived from provider's tracking_url_template
+        from .shipping import PROVIDER_BY_ID
+        out = []
+        for o in (data["project"].get("orders") or []):
+            if o.get("customer_id") != cid:
+                continue
+            tn = (o.get("tracking_number") or "").strip()
+            pid = (o.get("shipping_provider") or "").strip()
+            tracking_url = ""
+            if tn and pid in PROVIDER_BY_ID:
+                tmpl = PROVIDER_BY_ID[pid].get("tracking_url_template") or ""
+                if tmpl:
+                    tracking_url = tmpl.replace("{tracking}", tn)
+            o2 = {**o, "tracking_url": tracking_url}
+            out.append(o2)
+        return {"orders": list(reversed(out))}
 
     # ---- orders (owner/client dashboard) ----
     @r.get("/client/orders")
@@ -1965,6 +1999,8 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
         update = {"orders.$.status": body.status, "updated_at": _iso_now()}
         if body.driver_id is not None:
             update["orders.$.driver_id"] = body.driver_id
+        if body.tracking_number is not None:
+            update["orders.$.tracking_number"] = (body.tracking_number or "")[:80]
         res = await database.website_projects.update_one(
             {"id": p["id"], "orders.id": order_id}, {"$set": update}
         )

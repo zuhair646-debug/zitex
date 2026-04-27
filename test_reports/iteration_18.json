@@ -1,0 +1,85 @@
+{
+  "summary": "Completed comprehensive backend testing of Zitex Shipping Features V2 (iteration 18) — all 19 new tests passed + all 13 regression tests passed (32 total). Verified 3 NEW revenue/UX features: (1) COD Markup - PUT config accepts cod_markup_enabled/cod_markup_sar, markup applies only when payment=cod AND provider supports_cod AND toggle on, order saved with cod_markup_applied field. (2) Shipping Insurance - PUT config accepts insurance_enabled/insurance_percent/insurance_min_sar, public quote returns insurance fields, insurance_fee computed as max(min_sar, subtotal*pct/100) when insurance_opted=true, fee=0 when opted=false or config disabled. (3) Shipment Tracking - PATCH /client/orders/{id} with tracking_number sets order.tracking_number, GET /public/{slug}/orders/my returns tracking_url derived from provider's tracking_url_template, tracking_url empty when no tracking_number or provider not in catalog.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_shipping_features_v2.py",
+    "/app/backend/tests/test_shipping_system.py",
+    "/app/test_reports/pytest/shipping_features_v2_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_shipping_features_v2.py"
+  ],
+  "success_rate": {
+    "backend": "100% (19/19 new tests + 13/13 regression tests = 32/32 passed)",
+    "frontend": "N/A (backend-only testing as requested)"
+  },
+  "test_credentials": {
+    "owner": "owner@zitex.com / owner123",
+    "site_customer": "0501122334 / pass123",
+    "client": "WKDWkG0d (via POST /api/websites/client/login {slug,password})"
+  },
+  "seed_data_creation": "Created TEST_ prefixed orders during testing (test orders created in cozy-cafe-demo)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 18 shipping features V2 fully tested. Key features verified: (1) COD Markup: PUT /api/websites/projects/{id}/shipping/config accepts cod_markup_enabled (bool) and cod_markup_sar (float). When customer places order with shipping_provider that supports_cod AND payment_method='cod' AND cod_markup_enabled=true, server adds markup to delivery_fee. Does NOT apply when payment_method='stripe'. Order saved with cod_markup_applied field. (2) Shipping Insurance: PUT config accepts insurance_enabled, insurance_percent, insurance_min_sar. Public quote endpoint returns these fields. When insurance_opted=true, server computes max(min_sar, round(subtotal*pct/100, 2)). When insurance_opted=false (default), insurance_fee=0. When insurance_enabled=false in config, insurance_opted=true is ignored. (3) Tracking: PATCH /api/websites/client/orders/{order_id} with tracking_number sets order.tracking_number. GET /api/websites/public/{slug}/orders/my returns tracking_url derived from provider's tracking_url_template (e.g. SMSA: https://www.smsaexpress.com/sa/en/trackingdetails?tracknumbers={tracking}). tracking_url is empty when tracking_number is empty OR provider not in catalog. (4) Backwards compat: Orders without shipping_provider still work via legacy haversine path; orders without insurance_opted/cod fields still work. (5) All 13 previously-passing shipping tests from iteration 17 still pass.",
+  "test_results": {
+    "backend_tests": {
+      "total": 32,
+      "passed": 32,
+      "failed": 0,
+      "new_tests": 19,
+      "regression_tests": 13,
+      "test_classes": [
+        "TestCODMarkupConfig (1 test) - PASSED: PUT config accepts cod_markup_enabled, cod_markup_sar",
+        "TestCODMarkupOrderCreation (3 tests) - PASSED: COD markup applies when payment=cod, does NOT apply when payment=stripe, order saved with cod_markup_applied field",
+        "TestInsuranceConfig (1 test) - PASSED: PUT config accepts insurance_enabled, insurance_percent, insurance_min_sar",
+        "TestInsurancePublicQuote (1 test) - PASSED: Public quote returns insurance fields",
+        "TestInsuranceOrderCreation (3 tests) - PASSED: insurance_opted=true computes fee, insurance_opted=false fee=0, insurance_enabled=false ignores opted=true",
+        "TestTrackingNumber (1 test) - PASSED: PATCH order sets tracking_number",
+        "TestTrackingURL (3 tests) - PASSED: orders/my returns tracking_url, empty when no tracking_number, empty when provider not in catalog",
+        "TestBackwardsCompatibility (2 tests) - PASSED: Legacy orders without shipping_provider work, orders without insurance_opted field work",
+        "TestRegressionShippingProviders (1 test) - PASSED: 6 providers returned",
+        "TestRegressionPublicQuote (2 tests) - PASSED: Quote returns options, free shipping above threshold",
+        "TestRegressionDashboardConfig (1 test) - PASSED: GET shipping config works"
+      ]
+    },
+    "detailed_verification": {
+      "cod_markup": {
+        "config_fields": ["cod_markup_enabled", "cod_markup_sar"],
+        "applies_when": "payment_method='cod' AND provider.supports_cod=true AND cod_markup_enabled=true",
+        "does_not_apply_when": "payment_method='stripe'",
+        "order_field": "cod_markup_applied"
+      },
+      "shipping_insurance": {
+        "config_fields": ["insurance_enabled", "insurance_percent", "insurance_min_sar"],
+        "public_quote_returns": ["insurance_enabled", "insurance_percent", "insurance_min_sar"],
+        "formula": "max(min_sar, round(subtotal * pct / 100, 2))",
+        "order_field": "insurance_fee"
+      },
+      "tracking": {
+        "set_via": "PATCH /api/websites/client/orders/{order_id} with tracking_number",
+        "returned_via": "GET /api/websites/public/{slug}/orders/my",
+        "tracking_url_template_example": "https://www.smsaexpress.com/sa/en/trackingdetails?tracknumbers={tracking}",
+        "empty_when": ["tracking_number is empty", "provider not in PROVIDER_BY_ID catalog"]
+      },
+      "backwards_compatibility": {
+        "legacy_haversine": "Working - orders without shipping_provider use haversine delivery calculation",
+        "missing_fields": "Orders without insurance_opted/cod fields work with defaults"
+      }
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

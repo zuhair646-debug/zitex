@@ -539,6 +539,18 @@ function OrdersTab({ token }) {
     } catch (_) { toast.error('فشل'); }
   };
 
+  // 🆕 Save tracking number (independent of status changes)
+  const saveTracking = async (id, currentStatus, tracking_number) => {
+    try {
+      await fetch(`${API}/api/websites/client/orders/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authH(token) },
+        body: JSON.stringify({ status: currentStatus, tracking_number }),
+      });
+      toast.success('✅ تم حفظ رقم التتبع');
+      load();
+    } catch (_) { toast.error('فشل'); }
+  };
+
   const STATUS_LABELS = { pending: '⏳ قيد المراجعة', accepted: '✓ مقبول', preparing: '👨‍🍳 قيد التحضير', ready: '📦 جاهز', on_the_way: '🛵 في الطريق', delivered: '✅ تم التوصيل', cancelled: '❌ ملغي' };
   const STATUS_COLORS = { pending: 'bg-yellow-500/20 text-yellow-300', accepted: 'bg-blue-500/20 text-blue-300', preparing: 'bg-orange-500/20 text-orange-300', ready: 'bg-purple-500/20 text-purple-300', on_the_way: 'bg-cyan-500/20 text-cyan-300', delivered: 'bg-green-500/20 text-green-300', cancelled: 'bg-red-500/20 text-red-300' };
 
@@ -574,6 +586,29 @@ function OrdersTab({ token }) {
                 <div className="text-[11px] opacity-70 mb-1">📍 {o.address || (o.lat ? `(${o.lat.toFixed(4)}, ${o.lng.toFixed(4)})` : 'لا عنوان')}</div>
                 <div className="text-[11px] opacity-70 mb-2">{o.items.map((i) => `${i.name} ×${i.qty}`).join(' · ')}</div>
                 {o.note && <div className="text-[11px] bg-yellow-500/10 border border-yellow-500/20 rounded px-2 py-1 mb-2">📝 {o.note}</div>}
+                {o.shipping_provider && (
+                  <div className="flex items-center gap-2 bg-blue-500/5 border border-blue-500/20 rounded px-2 py-1.5 mb-2" data-testid={`tracking-row-${o.id}`}>
+                    <span className="text-[11px] opacity-80">🚚 {o.shipping_provider_name || o.shipping_provider}</span>
+                    <input
+                      type="text"
+                      defaultValue={o.tracking_number || ''}
+                      placeholder="رقم التتبع (AWB)"
+                      className="flex-1 min-w-0 text-[11px] bg-black/30 border border-white/10 rounded px-2 py-1 font-mono"
+                      data-testid={`tracking-input-${o.id}`}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          saveTracking(o.id, o.status, e.target.value.trim());
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const newVal = e.target.value.trim();
+                        if (newVal !== (o.tracking_number || '').trim()) {
+                          saveTracking(o.id, o.status, newVal);
+                        }
+                      }}
+                    />
+                  </div>
+                )}
                 <div className="flex gap-1 flex-wrap">
                   {o.status === 'pending' && <button onClick={() => setStatus(o.id, 'accepted')} className="text-[11px] px-2 py-1 bg-blue-500/20 hover:bg-blue-500/40 rounded font-bold" data-testid={`accept-${o.id}`}>✓ قبول</button>}
                   {o.status === 'accepted' && <button onClick={() => setStatus(o.id, 'preparing')} className="text-[11px] px-2 py-1 bg-orange-500/20 hover:bg-orange-500/40 rounded font-bold">👨‍🍳 تحضير</button>}
@@ -2677,6 +2712,39 @@ function ShippingTab({ token, slug }) {
               className="w-full mt-1 px-3 py-2 bg-black/30 border border-amber-400/30 rounded-lg text-sm" data-testid="cod-markup-input" />
             <p className="text-[11px] text-amber-300/80 mt-2">💡 مثال: لو القيمة 5 ر.س — كل طلب COD سيُضاف له 5 ر.س على رسوم الشحن. ربح إضافي بدون عمل.</p>
           </label>
+        )}
+      </div>
+
+      {/* 🆕 Shipping Insurance — extra revenue knob */}
+      <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border border-blue-400/30 rounded-xl p-5" data-testid="insurance-card">
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div>
+            <h3 className="font-black text-lg flex items-center gap-2"><span>🛡️</span> تأمين الشحنة (اختياري)</h3>
+            <p className="text-xs text-white/60 mt-1">يظهر للعميل كصندوق اختياري عند الـ checkout. يضمن استبدال أو إعادة المبلغ عند تلف/فقدان الشحنة. هامش ربح إضافي على كل طلب يختار التأمين.</p>
+          </div>
+          <label className="cursor-pointer flex-shrink-0">
+            <input type="checkbox" checked={!!config.insurance_enabled} onChange={(e) => setConfig({...config, insurance_enabled: e.target.checked})} className="sr-only" data-testid="insurance-toggle" />
+            <div className={`w-12 h-6 rounded-full p-0.5 transition-colors ${config.insurance_enabled ? 'bg-blue-500' : 'bg-white/10'}`}>
+              <div className={`w-5 h-5 rounded-full bg-white transition-transform ${config.insurance_enabled ? 'translate-x-6' : ''}`} />
+            </div>
+          </label>
+        </div>
+        {config.insurance_enabled && (
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="text-xs text-white/60">النسبة (%)</span>
+              <input type="number" min="0" step="0.5" value={config.insurance_percent ?? 2}
+                onChange={(e) => setConfig({...config, insurance_percent: parseFloat(e.target.value) || 0})}
+                className="w-full mt-1 px-3 py-2 bg-black/30 border border-blue-400/30 rounded-lg text-sm" data-testid="insurance-percent-input" />
+            </label>
+            <label className="block">
+              <span className="text-xs text-white/60">الحد الأدنى (ر.س)</span>
+              <input type="number" min="0" step="1" value={config.insurance_min_sar ?? 10}
+                onChange={(e) => setConfig({...config, insurance_min_sar: parseFloat(e.target.value) || 0})}
+                className="w-full mt-1 px-3 py-2 bg-black/30 border border-blue-400/30 rounded-lg text-sm" data-testid="insurance-min-input" />
+            </label>
+            <p className="col-span-2 text-[11px] text-blue-300/80">💡 مثال: نسبة 2% + حد أدنى 10 ر.س — سلة قيمتها 300 ر.س = تأمين 10 ر.س | سلة قيمتها 1000 ر.س = تأمين 20 ر.س.</p>
+          </div>
         )}
       </div>
 
