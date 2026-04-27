@@ -453,4 +453,87 @@ def init_routes(database, auth_dep) -> APIRouter:
         docs = await database.operator_actions.find({"client_id": cid}, {"_id": 0}).sort("at", -1).limit(limit).to_list(limit)
         return {"entries": docs}
 
+    # ──────────────────────────────────────────────────
+    # AI DevOps Agent — autonomous per-client chat
+    # ──────────────────────────────────────────────────
+    class ChatSendIn(BaseModel):
+        text: str
+        session_id: Optional[str] = None  # reuse to continue a thread
+
+    @r.get("/clients/{cid}/chat/sessions")
+    async def _chat_sessions(cid: str, _u: dict = Depends(_require_operator)):
+        """List chat sessions for a client (most recent first)."""
+        pipeline = [
+            {"$match": {"client_id": cid}},
+            {"$sort": {"at": -1}},
+            {"$group": {
+                "_id": "$session_id",
+                "last_at": {"$first": "$at"},
+                "first_text": {"$last": "$text"},
+                "messages": {"$sum": 1},
+            }},
+            {"$sort": {"last_at": -1}},
+            {"$limit": 30},
+        ]
+        raw = await database.operator_chats.aggregate(pipeline).to_list(30)
+        out = [{"session_id": r["_id"], "last_at": r["last_at"], "title": (r.get("first_text") or "")[:60], "messages": r["messages"]} for r in raw]
+        return {"sessions": out}
+
+    @r.get("/clients/{cid}/chat/{session_id}")
+    async def _chat_history(cid: str, session_id: str, _u: dict = Depends(_require_operator)):
+        """Fetch full message + step history for a session."""
+        docs = await database.operator_chats.find(
+            {"client_id": cid, "session_id": session_id}, {"_id": 0}
+        ).sort("at", 1).to_list(500)
+        return {"messages": docs, "session_id": session_id}
+
+    @r.post("/clients/{cid}/chat")
+    async def _chat_send(cid: str, body: ChatSendIn, user: dict = Depends(_require_operator)):
+        """Send a user turn to the DevOps AI Agent. Returns the final answer + tool trace."""
+        from .agent import AgentRunner
+        client_doc = await database.operator_clients.find_one({"id": cid}, {"_id": 0})
+        if not client_doc:
+            raise HTTPException(404, "Client not found")
+        session_id = (body.session_id or str(uuid.uuid4())).strip()
+        text = (body.text or "").strip()
+        if not text:
+            raise HTTPException(400, "text required")
+
+        now = _iso_now()
+        # Persist user turn
+        await database.operator_chats.insert_one({
+            "id": str(uuid.uuid4()),
+            "client_id": cid,
+            "session_id": session_id,
+            "role": "user",
+            "text": text,
+            "by": user.get("email") or user.get("user_id"),
+            "at": now,
+        })
+
+        runner = AgentRunner(database, client_doc, session_id, user.get("email") or user.get("user_id") or "owner")
+        result = await runner.run(text)
+
+        # Persist assistant turn (with the tool-step trace for UI replay)
+        await database.operator_chats.insert_one({
+            "id": str(uuid.uuid4()),
+            "client_id": cid,
+            "session_id": session_id,
+            "role": "assistant",
+            "text": result.get("final") or "",
+            "steps": result.get("steps") or [],
+            "at": _iso_now(),
+        })
+
+        return {
+            "session_id": session_id,
+            "final": result.get("final") or "",
+            "steps": result.get("steps") or [],
+        }
+
+    @r.delete("/clients/{cid}/chat/{session_id}")
+    async def _chat_delete(cid: str, session_id: str, _u: dict = Depends(_require_operator)):
+        res = await database.operator_chats.delete_many({"client_id": cid, "session_id": session_id})
+        return {"deleted": res.deleted_count}
+
     return r

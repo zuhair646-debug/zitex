@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { toast } from 'sonner';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -226,6 +226,7 @@ function ClientDetail({ client, H, onChange, onDelete }) {
 
       <div className="flex gap-1 mb-5 border-b border-white/10">
         {[
+          { id: 'chat', label: '🤖 وكيل الـ AI' },
           { id: 'creds', label: '🔐 الاعتمادات' },
           { id: 'actions', label: '⚡ الإجراءات' },
           { id: 'log', label: '📝 السجل' },
@@ -238,6 +239,10 @@ function ClientDetail({ client, H, onChange, onDelete }) {
           </button>
         ))}
       </div>
+
+      {tab === 'chat' && (
+        <ChatTab client={client} H={H} />
+      )}
 
       {tab === 'info' && (
         <InfoTab client={client} save={save} saving={saving} />
@@ -497,6 +502,184 @@ function Field({ label, children }) {
       <div className="text-[11px] text-white/55 mb-1">{label}</div>
       {children}
     </label>
+  );
+}
+
+// ─────────────────────────────────────────────────────────
+// AI Agent Chat Tab
+// ─────────────────────────────────────────────────────────
+function ChatTab({ client, H }) {
+  const [sessionId, setSessionId] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [sending, setSending] = useState(false);
+  const [sessions, setSessions] = useState([]);
+  const listRef = useRef(null);
+
+  const loadSessions = async () => {
+    const d = await fetch(`${API}/api/operator/clients/${client.id}/chat/sessions`, { headers: H }).then(r => r.json());
+    setSessions(d.sessions || []);
+  };
+
+  const loadSession = async (sid) => {
+    setSessionId(sid);
+    if (!sid) { setMessages([]); return; }
+    const d = await fetch(`${API}/api/operator/clients/${client.id}/chat/${sid}`, { headers: H }).then(r => r.json());
+    setMessages(d.messages || []);
+  };
+
+  useEffect(() => { loadSessions(); setSessionId(null); setMessages([]); /* eslint-disable-next-line */ }, [client.id]);
+  useEffect(() => { if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight; }, [messages, sending]);
+
+  const send = async () => {
+    const t = input.trim(); if (!t || sending) return;
+    setInput('');
+    setMessages(m => [...m, { role: 'user', text: t, at: new Date().toISOString() }]);
+    setSending(true);
+    try {
+      const r = await fetch(`${API}/api/operator/clients/${client.id}/chat`, {
+        method: 'POST', headers: H,
+        body: JSON.stringify({ text: t, session_id: sessionId || undefined }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'Failed');
+      if (!sessionId) { setSessionId(d.session_id); loadSessions(); }
+      setMessages(m => [...m, { role: 'assistant', text: d.final, steps: d.steps, at: new Date().toISOString() }]);
+    } catch (e) { toast.error(e.message); }
+    setSending(false);
+  };
+
+  const delSession = async (sid) => {
+    if (!window.confirm('حذف هذه الجلسة؟')) return;
+    await fetch(`${API}/api/operator/clients/${client.id}/chat/${sid}`, { method: 'DELETE', headers: H });
+    if (sid === sessionId) { setSessionId(null); setMessages([]); }
+    loadSessions();
+  };
+
+  const suggestions = [
+    '🔍 افحص حالة المشروع الحالية (context)',
+    '🚨 افحص آخر deployment على Railway وقل لي إذا فشل',
+    '📄 اقرأ ملف backend/railway.toml وأخبرني ماذا يحتوي',
+    '🛠️ أصلح مشكلة PORT في railway.toml وأعد النشر',
+    '🌐 أعد نشر Vercel للـ frontend',
+  ];
+
+  return (
+    <div className="flex gap-4 h-[calc(100vh-220px)]">
+      {/* Sessions sidebar */}
+      <div className="w-56 flex-shrink-0 bg-white/[.02] border border-white/10 rounded-xl p-3 overflow-y-auto">
+        <button
+          onClick={() => { setSessionId(null); setMessages([]); }}
+          className="w-full px-3 py-2 bg-emerald-500 text-black rounded-lg text-xs font-black mb-2"
+          data-testid="new-chat"
+        >+ محادثة جديدة</button>
+        {sessions.length === 0 && <div className="text-[11px] text-white/40 text-center py-4">لا محادثات</div>}
+        {sessions.map((s) => (
+          <div key={s.session_id} className={`group flex items-center gap-1 mb-1 rounded-lg ${s.session_id === sessionId ? 'bg-emerald-500/15 border border-emerald-500/30' : 'hover:bg-white/5'}`}>
+            <button onClick={() => loadSession(s.session_id)} className="flex-1 text-right p-2 text-xs truncate">
+              <div className="truncate font-medium">{s.title || '(بدون عنوان)'}</div>
+              <div className="text-[9px] text-white/40">{new Date(s.last_at).toLocaleString('ar-SA')} · {s.messages} رسالة</div>
+            </button>
+            <button onClick={() => delSession(s.session_id)} className="opacity-0 group-hover:opacity-100 text-red-400 text-xs px-1 transition-opacity">✕</button>
+          </div>
+        ))}
+      </div>
+
+      {/* Main chat */}
+      <div className="flex-1 flex flex-col bg-white/[.02] border border-white/10 rounded-xl overflow-hidden">
+        <div ref={listRef} className="flex-1 overflow-y-auto p-4 space-y-3" data-testid="chat-log">
+          {messages.length === 0 && !sending && (
+            <div className="py-6">
+              <div className="text-center text-white/60 mb-5">
+                <div className="text-4xl mb-2">🤖</div>
+                <div className="font-black text-lg">Zitex DevOps Agent</div>
+                <div className="text-xs mt-2">وكيل ذكي يصلح، ينشر، ويدير مشاريع العملاء تلقائياً</div>
+              </div>
+              <div className="max-w-md mx-auto space-y-2">
+                <div className="text-[11px] text-white/50 text-center mb-2">جرّب:</div>
+                {suggestions.map((s, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setInput(s)}
+                    className="w-full text-right p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs transition-colors"
+                    data-testid={`suggest-${i}`}
+                  >{s}</button>
+                ))}
+              </div>
+            </div>
+          )}
+          {messages.map((m, i) => <MessageRow key={i} msg={m} />)}
+          {sending && (
+            <div className="flex items-center gap-2 text-xs text-white/60 p-3">
+              <div className="animate-pulse">🤖</div>
+              <span>الوكيل يفكّر ويستدعي الأدوات...</span>
+            </div>
+          )}
+        </div>
+        <div className="border-t border-white/10 p-3 flex gap-2">
+          <textarea
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+            }}
+            placeholder="اكتب ما تريد أن يفعله الوكيل... (Enter للإرسال، Shift+Enter لسطر جديد)"
+            rows={2}
+            className="flex-1 px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-sm resize-none focus:border-emerald-400 outline-none"
+            data-testid="chat-input"
+          />
+          <button
+            onClick={send}
+            disabled={sending || !input.trim()}
+            className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-black font-black rounded-lg disabled:opacity-40"
+            data-testid="chat-send"
+          >{sending ? '⏳' : '📤 إرسال'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MessageRow({ msg }) {
+  if (msg.role === 'user') {
+    return (
+      <div className="flex justify-start">
+        <div className="bg-yellow-500/15 border border-yellow-500/30 rounded-2xl rounded-tr-sm px-4 py-2.5 max-w-[80%] text-sm whitespace-pre-wrap" data-testid="msg-user">
+          {msg.text}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex justify-end">
+      <div className="flex-1 max-w-[90%]">
+        {(msg.steps || []).filter(s => s.kind === 'tool').length > 0 && (
+          <details className="mb-2">
+            <summary className="cursor-pointer text-[10px] text-emerald-400 select-none hover:text-emerald-300">
+              🔧 {msg.steps.filter(s => s.kind === 'tool').length} استدعاء أدوات — انقر للتفاصيل
+            </summary>
+            <div className="mt-2 space-y-1.5">
+              {msg.steps.filter(s => s.kind === 'tool').map((s, i) => (
+                <div key={i} className="bg-black/50 border border-white/10 rounded-lg p-2.5 text-[11px]">
+                  {s.thought && <div className="text-white/60 italic mb-1">💭 {s.thought}</div>}
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <code className={`font-mono font-bold ${s.result?.error ? 'text-red-300' : 'text-emerald-300'}`}>{s.tool}</code>
+                    {s.args && Object.keys(s.args).length > 0 && (
+                      <span className="text-white/40">({Object.keys(s.args).join(', ')})</span>
+                    )}
+                    {s.result?.error ? <span className="text-red-400">❌</span> : <span className="text-emerald-400">✅</span>}
+                  </div>
+                  <pre className="text-white/50 text-[10px] overflow-auto max-h-24 font-mono">{JSON.stringify(s.result, null, 2).slice(0, 500)}</pre>
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
+        <div className="bg-emerald-500/10 border border-emerald-500/25 rounded-2xl rounded-tl-sm px-4 py-2.5 text-sm whitespace-pre-wrap" data-testid="msg-assistant">
+          {msg.text}
+        </div>
+      </div>
+    </div>
   );
 }
 
