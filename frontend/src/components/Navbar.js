@@ -81,6 +81,17 @@ export const Navbar = ({ user, transparent = false, setUser }) => {
                   {isAdmin ? <Shield className="w-4 h-4 me-2" /> : <LayoutDashboard className="w-4 h-4 me-2" />}
                   {isAdmin ? 'لوحة الأدمن' : 'لوحة التحكم'}
                 </Button>
+                {isAdmin && (
+                  <Button
+                    variant="outline"
+                    onClick={() => navigate('/operator')}
+                    data-testid="navbar-operator-btn"
+                    className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+                    title="إدارة عملاء الوكالة (Agency Mode)"
+                  >
+                    🧑‍💼 الوكالة
+                  </Button>
+                )}
                 <Button 
                   variant="outline" 
                   onClick={handleLogout} 

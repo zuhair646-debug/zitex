@@ -29,6 +29,7 @@ import VisualDesigner from '@/pages/VisualDesigner';
 import WebsiteStudio from '@/pages/websites/WebsiteStudio';
 import PublicSite from '@/pages/PublicSite';
 import SourceBrowser from '@/pages/SourceBrowser';
+import Operator from '@/pages/Operator';
 import AdminSites from '@/pages/websites/AdminSites';
 import ClientSiteDashboard from '@/pages/client/ClientDashboard';
 import DriverDashboardPage from '@/pages/driver/DriverDashboard';
@@ -112,6 +113,7 @@ function App() {
           <Route path="/driver/:slug" element={<DriverDashboardPage />} />
           <Route path="/admin/sites" element={<ProtectedRoute adminOnly><AdminSites user={user} /></ProtectedRoute>} />
           <Route path="/source" element={<ProtectedRoute adminOnly><SourceBrowser user={user} /></ProtectedRoute>} />
+          <Route path="/operator" element={<ProtectedRoute><Operator user={user} /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
       <Toaster position="top-center" richColors />

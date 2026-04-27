@@ -2917,6 +2917,15 @@ try:
 except Exception as _se:
     logging.getLogger(__name__).error(f"Failed to register source module: {_se}", exc_info=True)
 
+# ============== OPERATOR (Agency Mode) — multi-client management ==============
+try:
+    from modules.operator.routes import init_routes as init_operator_routes
+    _operator_router = init_operator_routes(db, get_current_user)
+    app.include_router(_operator_router, prefix="/api")
+    logging.getLogger(__name__).info("Operator module registered")
+except Exception as _oe:
+    logging.getLogger(__name__).error(f"Failed to register operator module: {_oe}", exc_info=True)
+
 # ============== VISUAL DESIGNER APIS ==============
 class DesignElement(BaseModel):
     id: str
