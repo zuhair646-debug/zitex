@@ -16,6 +16,43 @@
 
 
 
+### 🆕 Apr 28, 2026 — STORIES + ANIMATED BANNER + ANALYTICS (P0 — COMPLETE ✅)
+
+#### 1. Stories + Animated Banner للمتجر
+- **`/app/backend/modules/websites/stories.py`** — CRUD + توليد AI:
+  - 8 endpoints: list/create/patch/delete/reorder + banner GET/PUT + public/{slug}/stories
+  - Image gen (Nano Banana via Emergent LLM Key) → فوري (≈10ث)
+  - Video gen (Sora 2) → background job مع polling (4/8/12 ثانية)
+- **`/app/backend/modules/websites/stories_widget.py`** — يُحقن في الـ renderer:
+  - بنر علوي فخم: Ken Burns / Parallax / Fade animations
+  - شريط Stories دائري (Instagram-style) مع conic-gradient ring
+  - Fullscreen viewer مع progress bar تلقائي + tap navigation + auto-advance
+  - يدعم image + video stories
+- **Frontend `StoriesTab`** في `ClientDashboard.js`:
+  - Sub-tabs: ⭕ الحالات | 🌅 البنر المتحرك
+  - توليد صورة AI (Nano Banana) inline
+  - توليد فيديو AI (Sora 2) مع polling حالة الـ job
+  - رفع ملف (image/video, حد 6MB)
+  - Banner editor: نوع/حركة/عنوان/CTA
+  - تعديل caption/link/visibility لكل story
+
+#### 2. Conversation Analytics للـ Chatbot
+- **Backend** — endpoint `GET /api/websites/client/chatbot/analytics?days=30`:
+  - يُسجّل كل رسالة في `chatbot_messages` collection (بحد 500 لكل project)
+  - يحلّل الـ topics بـ keyword matching بالعربية (8 فئات: أسعار/شحن/ساعات/منتجات/خصومات/دفع/تواصل/استرجاع)
+  - KPIs: total_messages, unique_sessions, handoffs, handoff_rate_pct
+  - Lost questions: الأسئلة اللي طلبت موظف بشري
+- **Frontend** — Sub-tab `📊 تحليلات المحادثات` داخل `ChatbotTab`:
+  - 4 KPI cards
+  - Topic bar chart
+  - Lost questions list (مع نصيحة لتحسين extra_context)
+  - Recent messages timeline
+
+#### اختبار شامل ✅ (testing_agent_v3 — iteration 20)
+- **15/15 backend tests** + 100% frontend
+- Pytest file: `/app/backend/tests/test_stories_banner_analytics.py`
+- Visual verified: storefront banner + stories ribbon + viewer + close + auto-progress
+
 ### 🆕 Apr 28, 2026 — END-CUSTOMER AI CHAT BOT v2 + AGENT STREAMING (P0/P1 — COMPLETE ✅)
 
 #### Phase 1 — Smarter Chatbot + Human Handoff
