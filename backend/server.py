@@ -3163,31 +3163,18 @@ async def delete_user_element(el_id: str, current_user: dict = Depends(get_curre
 async def health_check():
     return {"status": "healthy", "service": "zitex-api"}
 
-# Serve static game engine
-@app.get("/api/game-engine.js")
-async def serve_game_engine():
-    """Serve the Zitex game engine JavaScript"""
-    import os
-    engine_path = os.path.join(os.path.dirname(__file__), "static", "game-engine.js")
-    if os.path.exists(engine_path):
-        with open(engine_path, 'r') as f:
-            content = f.read()
-        return Response(content=content, media_type="application/javascript", headers={"Cache-Control": "no-cache"})
-
-
-# Internal game engine test page (used for QA/screenshots)
-@app.get("/api/game-test")
-async def serve_game_test():
-    import os
-    p = os.path.join(os.path.dirname(__file__), "static", "game-test.html")
-    if os.path.exists(p):
-        with open(p, 'r') as f:
-            content = f.read()
-        return Response(content=content, media_type="text/html")
+# Serve static game engine (delegated to games module)
+try:
+    from modules.games.routes import init_routes as _init_games_routes
+    _games_router = _init_games_routes()
+    app.include_router(_games_router, prefix="/api")
+except Exception as _ge:
+    logging.getLogger(__name__).error(f"games module failed: {_ge}")
 
 
 @app.get("/api/iframe-test")
 async def serve_iframe_test():
+    """Deprecated — handled by modules.games.routes. Kept as fallback."""
     import os
     p = os.path.join(os.path.dirname(__file__), "static", "iframe-test.html")
     if os.path.exists(p):
@@ -3198,6 +3185,7 @@ async def serve_iframe_test():
 
 @app.get("/api/image-backed-test")
 async def serve_image_backed_test():
+    """Deprecated — handled by modules.games.routes. Kept as fallback."""
     import os
     p = os.path.join(os.path.dirname(__file__), "static", "image-backed-test.html")
     if os.path.exists(p):

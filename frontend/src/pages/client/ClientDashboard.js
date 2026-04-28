@@ -481,13 +481,34 @@ function SupportTab({ token }) {
           {tickets.map((t) => (
             <div key={t.id} className="bg-white/5 border border-white/10 rounded-xl p-3" data-testid={`ticket-${t.id}`}>
               <div className="flex items-center justify-between gap-2">
-                <div className="font-bold text-sm">{t.subject}</div>
+                <div className="font-bold text-sm flex items-center gap-2">
+                  {t.category === 'chatbot_handoff' && <span title="من المساعد الذكي">🤖</span>}
+                  {t.subject}
+                </div>
                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${t.status === 'open' ? 'bg-yellow-500/20 text-yellow-300' : 'bg-green-500/20 text-green-300'}`}>
                   {t.status === 'open' ? (t.reply ? '💬 تم الرد' : '⏳ قيد المراجعة') : '✓ منتهي'}
                 </span>
               </div>
               <div className="text-xs opacity-80 mt-1 whitespace-pre-wrap">{t.description}</div>
               <div className="text-[10px] opacity-50 mt-1">{new Date(t.at).toLocaleString('ar-SA')} · {t.category}</div>
+              {t.whatsapp && (t.whatsapp.reply_to_customer_link || t.whatsapp.owner_alert_link) && (
+                <div className="mt-2 flex flex-wrap gap-2" data-testid={`ticket-wa-${t.id}`}>
+                  {t.whatsapp.reply_to_customer_link && (
+                    <a
+                      href={t.whatsapp.reply_to_customer_link}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 rounded-lg text-xs font-bold text-emerald-200"
+                      data-testid={`wa-reply-${t.id}`}
+                    >
+                      📲 ردّ على الزبون عبر واتساب
+                    </a>
+                  )}
+                  {t.customer?.contact && !t.whatsapp.reply_to_customer_link && (
+                    <span className="text-[10px] opacity-60">رقم الزبون غير صالح للواتساب: {t.customer.contact}</span>
+                  )}
+                </div>
+              )}
               {t.reply && (
                 <div className="mt-2 p-2 bg-green-500/10 border border-green-500/30 rounded-lg" data-testid={`ticket-reply-${t.id}`}>
                   <div className="text-[10px] font-bold text-green-300 mb-1">💬 رد المالك:</div>
@@ -1907,9 +1928,10 @@ function ChatbotTab({ token, slug }) {
         welcome_message: d.welcome_message || '',
         business_hours: d.business_hours || '',
         extra_context: d.extra_context || '',
+        notify_whatsapp: d.notify_whatsapp || '',
         usage: d.usage || {},
       }))
-      .catch(() => setCfg({ enabled: false, welcome_message: '', business_hours: '', extra_context: '', usage: {} }));
+      .catch(() => setCfg({ enabled: false, welcome_message: '', business_hours: '', extra_context: '', notify_whatsapp: '', usage: {} }));
   }, [token]);
 
   const save = async () => {
@@ -1924,6 +1946,7 @@ function ChatbotTab({ token, slug }) {
           welcome_message: cfg.welcome_message,
           business_hours: cfg.business_hours,
           extra_context: cfg.extra_context,
+          notify_whatsapp: cfg.notify_whatsapp,
         }),
       });
       if (!r.ok) throw new Error();
@@ -2012,6 +2035,20 @@ function ChatbotTab({ token, slug }) {
             data-testid="chatbot-context-input"
           />
           <div className="text-[10px] opacity-50 mt-1 text-left">{(cfg.extra_context || '').length}/1500</div>
+        </label>
+        <label className="block">
+          <span className="text-xs text-white/60">📲 رقم واتساب لاستلام إشعارات تواصل الزبائن (اختياري)</span>
+          <input
+            type="tel"
+            value={cfg.notify_whatsapp || ''}
+            onChange={(e) => setCfg({ ...cfg, notify_whatsapp: e.target.value })}
+            placeholder="966500000000 (شامل رمز الدولة)"
+            className="w-full mt-1 px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm font-mono"
+            data-testid="chatbot-notify-whatsapp"
+          />
+          <div className="text-[10px] opacity-60 mt-1">
+            🔔 لما يطلب زبون التواصل مع موظف، يصلك رابط واتساب جاهز تنقر عليه فيفتح المحادثة بنص الطلب.
+          </div>
         </label>
       </div>
 

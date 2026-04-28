@@ -356,7 +356,7 @@ def init_routes(database) -> APIRouter:
     async def _public_handoff(slug: str, body: HandoffIn):
         p = await database.website_projects.find_one(
             {"slug": slug, "status": "approved"},
-            {"_id": 0, "id": 1, "support_tickets": 1},
+            {"_id": 0, "id": 1, "name": 1, "support_tickets": 1, "chatbot_config": 1},
         )
         if not p:
             raise HTTPException(404, "غير موجود")
@@ -377,6 +377,35 @@ def init_routes(database) -> APIRouter:
             f"=== سجل المحادثة ===\n{transcript_txt}"
         )[:4000]
 
+        # 🆕 Generate WhatsApp deep-links
+        import urllib.parse as _up
+        store = p.get("name") or "متجركم"
+        cfg_now = p.get("chatbot_config") or {}
+        owner_phone = (cfg_now.get("notify_whatsapp") or "").strip()
+
+        # Link 1 (for OWNER): pre-filled message reminding him a customer needs help
+        owner_msg = (
+            f"🔔 طلب تواصل جديد على متجر {store}\n\n"
+            f"العميل: {body.name or 'مجهول'}\n"
+            f"التواصل: {body.contact or 'لم يُذكر'}\n"
+            f"الملاحظة: {body.message or 'لا توجد'}\n\n"
+            "افتح لوحة التحكم للرد عبر تذكرة الدعم."
+        )
+        owner_wa_link = ""
+        if owner_phone:
+            digits = "".join(ch for ch in owner_phone if ch.isdigit())
+            owner_wa_link = f"https://wa.me/{digits}?text={_up.quote(owner_msg)}"
+
+        # Link 2 (for OWNER → CUSTOMER reply): if customer left a phone, prepare a wa.me link
+        # the owner can click to start the conversation directly with them.
+        reply_to_customer_link = ""
+        cust_contact = (body.contact or "").strip()
+        if cust_contact and any(ch.isdigit() for ch in cust_contact):
+            cdigits = "".join(ch for ch in cust_contact if ch.isdigit())
+            if len(cdigits) >= 8:
+                reply_msg = f"مرحباً {body.name or ''}! تواصلنا معك ردّاً على استفسارك في {store}. كيف يمكننا خدمتك؟"
+                reply_to_customer_link = f"https://wa.me/{cdigits}?text={_up.quote(reply_msg)}"
+
         import uuid as _uuid
         ticket = {
             "id": str(_uuid.uuid4()),
@@ -391,12 +420,20 @@ def init_routes(database) -> APIRouter:
                 "contact": (body.contact or "")[:80],
                 "session_id": body.session_id or "",
             },
+            "whatsapp": {
+                "owner_alert_link": owner_wa_link,
+                "reply_to_customer_link": reply_to_customer_link,
+            },
         }
         await database.website_projects.update_one(
             {"id": p["id"]},
             {"$push": {"support_tickets": ticket}, "$set": {"updated_at": _iso_now()}},
         )
-        return {"ok": True, "ticket_id": ticket["id"]}
+        return {
+            "ok": True,
+            "ticket_id": ticket["id"],
+            "owner_notified": bool(owner_wa_link),
+        }
 
     return r
 
@@ -407,9 +444,10 @@ class ChatbotCfg(BaseModel):
     welcome_message: Optional[str] = None
     business_hours: Optional[str] = None
     extra_context: Optional[str] = None
+    notify_whatsapp: Optional[str] = None  # owner's WhatsApp phone for handoff alerts
 
 
-_ALLOWED_CFG_KEYS = ("enabled", "welcome_message", "business_hours", "extra_context")
+_ALLOWED_CFG_KEYS = ("enabled", "welcome_message", "business_hours", "extra_context", "notify_whatsapp")
 
 
 def register_owner_endpoints(r: APIRouter, database, auth_dep, resolve_client=None):

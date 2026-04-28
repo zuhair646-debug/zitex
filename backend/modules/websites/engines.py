@@ -392,16 +392,37 @@ def register_engines(r: APIRouter, database, resolve_client, resolve_site_custom
     @r.get("/market/quotes")
     async def _market_quotes(symbols: Optional[str] = None):
         wanted = symbols.split(",") if symbols else list(MARKET.keys())
+        # 🆕 Try Alpha Vantage live data first; fall back to simulation per-symbol
+        live: Dict[str, Dict[str, Any]] = {}
+        try:
+            from . import stocks_live as _sl
+            if _sl.is_configured():
+                live = await _sl.get_live_quotes(wanted)
+        except Exception:
+            live = {}
+
         out = []
         for s in wanted:
-            if s in MARKET:
+            if s not in MARKET:
+                continue
+            if s in live:
+                out.append({
+                    "symbol": s,
+                    "name": MARKET[s]["name"],
+                    "market": MARKET[s]["market"],
+                    "price": live[s]["price"],
+                    "change_pct": live[s]["change_pct"],
+                    "source": "alpha_vantage",
+                })
+            else:
                 price = _sim_price(s)
                 base = MARKET[s]["base"]
                 change_pct = round((price - base) / base * 100, 2)
                 out.append({"symbol": s, "name": MARKET[s]["name"],
                             "market": MARKET[s]["market"], "price": price,
-                            "change_pct": change_pct})
-        return {"quotes": out, "at": _iso_now()}
+                            "change_pct": change_pct, "source": "simulated"})
+        return {"quotes": out, "at": _iso_now(),
+                "live_enabled": bool(live), "live_count": len(live)}
 
     @r.get("/public/{slug}/portfolio/me")
     async def _portfolio_me(slug: str, authorization: str = _Header(None)):
