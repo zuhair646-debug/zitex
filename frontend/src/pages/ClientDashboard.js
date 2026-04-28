@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useNavigate } from 'react-router-dom';
 import { PlusCircle, FileText, Globe, Image, Video, Coins, Crown, Gift, Sparkles } from 'lucide-react';
+import SiteBannerStories from '@/components/SiteBannerStories';
 
 const ClientDashboard = ({ user, setUser }) => {
   const navigate = useNavigate();
@@ -65,8 +66,13 @@ const ClientDashboard = ({ user, setUser }) => {
   return (
     <div className="min-h-screen bg-slate-900" data-testid="client-dashboard">
       <Navbar user={user} transparent />
-      
-      <div className="container mx-auto px-4 md:px-8 max-w-7xl pt-24 pb-12">
+
+      {/* Rotating banner + stories above the dashboard sections */}
+      <div className="pt-16">
+        <SiteBannerStories placement="inside" />
+      </div>
+
+      <div className="container mx-auto px-4 md:px-8 max-w-7xl pt-8 pb-12">
         <div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-white mb-2" data-testid="dashboard-title">

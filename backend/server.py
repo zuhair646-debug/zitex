@@ -2930,6 +2930,22 @@ try:
 except Exception as _se:
     logging.getLogger(__name__).error(f"Failed to register source module: {_se}", exc_info=True)
 
+# ============== SITE BANNER & STORIES (Zitex main marketing site) ==============
+try:
+    from modules.site.routes import init_routes as init_site_routes
+
+    async def _require_owner(current_user: dict = Depends(get_current_user)):
+        if (current_user or {}).get("role") != "owner":
+            from fastapi import HTTPException as _HE
+            raise _HE(403, "Owner only")
+        return current_user
+
+    _site_router = init_site_routes(db, get_current_user, _require_owner)
+    app.include_router(_site_router, prefix="/api")
+    logging.getLogger(__name__).info("Site (banner+stories) module registered")
+except Exception as _ste:
+    logging.getLogger(__name__).error(f"Failed to register site module: {_ste}", exc_info=True)
+
 # ============== OPERATOR (Agency Mode) — multi-client management ==============
 try:
     from modules.operator.routes import init_routes as init_operator_routes

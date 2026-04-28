@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, Zap, Shield, Globe, Image, Video, Code, ArrowLeft, CheckCircle, Gamepad2 } from 'lucide-react';
+import SiteBannerStories from '@/components/SiteBannerStories';
 
 const LandingPage = ({ user }) => {
   const navigate = useNavigate();
@@ -30,9 +31,14 @@ const LandingPage = ({ user }) => {
   return (
     <div className="min-h-screen bg-[#0a0a12]" data-testid="landing-page">
       <Navbar user={user} transparent />
-      
+
+      {/* Rotating banner + stories at the very top */}
+      <div className="pt-16">
+        <SiteBannerStories placement="outside" />
+      </div>
+
       {/* Hero Section */}
-      <section className="relative pt-32 pb-20 overflow-hidden">
+      <section className="relative pt-20 pb-20 overflow-hidden">
         {/* Background Effects */}
         <div className="absolute inset-0 bg-gradient-to-br from-amber-600/10 via-yellow-600/5 to-transparent"></div>
         <div className="absolute top-20 right-10 w-72 h-72 bg-amber-500/20 rounded-full blur-3xl"></div>

@@ -16,6 +16,45 @@
 
 
 
+### 🆕 Apr 28, 2026 — ZITEX SITE BANNER & STORIES (P0 — COMPLETE ✅)
+
+**موقع Zitex الرئيسي صار يحمل نفس الميزة المتوفرة للمتاجر** — بنر دوّار + Stories.
+
+#### الميزات
+- **Module جديد**: `/app/backend/modules/site/routes.py` (NEW)
+- **Collections**: `site_banner_slides`, `site_stories`, `site_settings`
+- **Banner دوّار**: يتبدّل تلقائياً كل 2-30 ثانية، 3 أنماط انتقال (fade/slide/kenburns)
+- **Placement targeting**: لكل سلايد/story، يحدّد أين يظهر:
+  - `outside`: قبل تسجيل الدخول (Landing/Login/Register)
+  - `inside`: بعد الدخول (ClientDashboard فوق الأقسام)
+  - `both`: الاثنين معاً
+- **AI Generation**: Nano Banana للصور (فوري) + Sora 2 للفيديو (async مع polling)
+- **Public endpoints** لا تحتاج auth → السرعة قصوى
+
+#### Endpoints (11)
+- Public: `GET /api/site/banner` + `GET /api/site/stories` (يقبلان `?placement=`)
+- Admin (owner only): CRUD لـ slides + stories + reorder + settings + AI gen + jobs
+
+#### Frontend
+- **`/app/frontend/src/components/SiteBannerStories.js`** (NEW) — مكوّن React reusable مع:
+  - بنر بـ auto-rotation + pagination dots
+  - Stories ribbon Instagram-style مع conic-gradient ring
+  - Fullscreen viewer مع progress bar + tap nav + keyboard arrows
+- **مدمج في**: `LoginPage.js`, `RegisterPage.js`, `LandingPage.js`, `ClientDashboard.js`
+- **`/app/frontend/src/pages/AdminSiteBanner.js`** (NEW) — صفحة إدارة كاملة:
+  - 3 sub-tabs: 🌅 البنر | ⭕ الحالات | 👁️ معاينة
+  - AI image/video generation panel
+  - File upload + URL paste
+  - Edit modal لكل slide/story مع placement selector
+  - Live preview للـ outside + inside
+- **Route**: `/admin/site-banner` (admin-only)
+
+#### اختبار محقق E2E ✅
+- ✅ Login as owner → POST slide + story + settings → all return 200
+- ✅ Public GET بدون auth → returns slides/stories filtered by placement
+- ✅ Visual: صفحة /login تعرض الآن البنر "Zitex AI Platform" + CTA ذهبي + Story ring
+- ✅ Auto-rotation works (rotate_seconds=4 → animation=fade)
+
 ### 🆕 Apr 28, 2026 — AUTOPILOT STORIES (P1 — COMPLETE ✅)
 
 **ذكاء اصطناعي يدير محتوى المتجر تلقائياً** — اقتراحات ذكية + نشر مجدول.

@@ -20,6 +20,7 @@ import AdminPayments from '@/pages/AdminPayments';
 import AdminClients from '@/pages/AdminClients';
 import AdminWebsites from '@/pages/AdminWebsites';
 import AdminSettings from '@/pages/AdminSettings';
+import AdminSiteBanner from '@/pages/AdminSiteBanner';
 import AdminActivity from '@/pages/AdminActivity';
 import AdminCredits from '@/pages/AdminCredits';
 import AdminTraining from '@/pages/AdminTraining';
@@ -101,6 +102,7 @@ function App() {
           <Route path="/admin/clients" element={<ProtectedRoute adminOnly><AdminClients user={user} /></ProtectedRoute>} />
           <Route path="/admin/websites" element={<ProtectedRoute adminOnly><AdminWebsites user={user} /></ProtectedRoute>} />
           <Route path="/admin/settings" element={<ProtectedRoute adminOnly><AdminSettings user={user} /></ProtectedRoute>} />
+          <Route path="/admin/site-banner" element={<ProtectedRoute adminOnly><AdminSiteBanner user={user} /></ProtectedRoute>} />
           <Route path="/admin/activity" element={<ProtectedRoute adminOnly><AdminActivity user={user} /></ProtectedRoute>} />
           <Route path="/admin/credits" element={<ProtectedRoute adminOnly><AdminCredits user={user} /></ProtectedRoute>} />
           <Route path="/admin/training" element={<ProtectedRoute adminOnly><AdminTraining user={user} /></ProtectedRoute>} />

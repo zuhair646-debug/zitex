@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { ZitexLogo } from '@/components/Navbar';
+import SiteBannerStories from '@/components/SiteBannerStories';
 
 const LoginPage = ({ setUser }) => {
   const navigate = useNavigate();
@@ -42,13 +43,17 @@ const LoginPage = ({ setUser }) => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-[#0a0a12]" data-testid="login-page">
-      {/* Background Effects */}
-      <div className="absolute inset-0 bg-gradient-to-br from-amber-600/5 via-yellow-600/5 to-transparent"></div>
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl"></div>
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-yellow-500/10 rounded-full blur-3xl"></div>
-      
-      <Card className="w-full max-w-md bg-[#0d0d18]/90 backdrop-blur-xl border-amber-500/20 relative z-10 shadow-2xl shadow-amber-500/5">
+    <div className="min-h-screen bg-[#0a0a12]" data-testid="login-page">
+      {/* Banner + Stories above the login form */}
+      <SiteBannerStories placement="outside" />
+
+      <div className="relative flex items-center justify-center p-4 py-10">
+        {/* Background Effects */}
+        <div className="absolute inset-0 bg-gradient-to-br from-amber-600/5 via-yellow-600/5 to-transparent"></div>
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-yellow-500/10 rounded-full blur-3xl"></div>
+
+        <Card className="w-full max-w-md bg-[#0d0d18]/90 backdrop-blur-xl border-amber-500/20 relative z-10 shadow-2xl shadow-amber-500/5">
         <CardHeader className="text-center">
           <Link to="/" className="flex justify-center mb-4">
             <ZitexLogo size="xl" />
@@ -103,6 +108,7 @@ const LoginPage = ({ setUser }) => {
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 };
