@@ -16,6 +16,37 @@
 
 
 
+### 🆕 Apr 28, 2026 — PREMIUM REDESIGN: Login/Register + Banner Cleanup (P0 — COMPLETE ✅)
+
+تصميم جديد فخم لـ صفحات Login/Register + إزالة الـ CTA من البنر (البنر للإعلانات فقط).
+
+#### الميزات
+1. **بنر نظيف بدون CTA**: في `SiteBannerStories.js`، تم إزالة زر `zsb-cta`. الآن:
+   - السلايد كامل clickable (لو فيه `cta_link`)
+   - يعرض فقط title + subtitle بنمط سينمائي
+2. **Header موحّد رفيع**: header ثابت 14px مع شعار Zitex + الرابط المعاكس (Login/Register)
+3. **Layout عمودين Premium**:
+   - **Login**: يسار = value-prop (badge + heading + 4 pills) | يمين = نموذج فاخر
+   - **Register**: يسار = bonus items (4 مزايا) + affiliate badge | يمين = نموذج بشبكة 2x2 للدولة وكود الدعوة
+4. **بطاقة فاخرة**: إطار ذهبي رفيع (`bg-gradient + blur`) + glow خلفي + Z logo مركزي مع halo
+5. **Inputs بنمط premium**:
+   - Labels ذهبية uppercase حجم 11px
+   - Inputs بخلفية سوداء داكنة + border ذهبي رفيع
+   - h-11 ارتفاع مريح + focus ring ذهبي
+6. **زر CTA بقوس ذهبي**: gradient ثلاثي (amber → yellow → amber) + shadow ذهبي عميق
+7. **Trust line تحت البطاقة**: shield icon + "بياناتك مشفّرة"
+
+#### الملفات
+- `/app/frontend/src/pages/LoginPage.js` (مُعاد تصميمها بالكامل)
+- `/app/frontend/src/pages/RegisterPage.js` (مُعاد تصميمها بالكامل)
+- `/app/frontend/src/components/SiteBannerStories.js` (CTA removed, slide-as-link)
+
+#### اختبار محقق ✅
+- Visual: الصفحتان تظهران بنمط premium موحّد
+- Banner CTA count = 0 (تأكيد إزالة الزر)
+- Banner title يظهر صحيح "Zitex AI Platform"
+- Story ring يظهر تحت البنر
+
 ### 🆕 Apr 28, 2026 — ZITEX SITE BANNER & STORIES (P0 — COMPLETE ✅)
 
 **موقع Zitex الرئيسي صار يحمل نفس الميزة المتوفرة للمتاجر** — بنر دوّار + Stories.

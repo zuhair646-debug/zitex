@@ -131,28 +131,35 @@ export default function SiteBannerStories({ placement = 'outside' }) {
     <div data-testid={`site-bs-${placement}`} className="zsb-host" dir="rtl">
       <style>{css}</style>
 
-      {/* ─── Rotating Banner ─── */}
+      {/* ─── Rotating Banner (cinematic ad slot — no CTA button) ─── */}
       {slides.length > 0 && (
         <section className={`zsb-banner zsb-banner-${animation}`}>
-          {slides.map((s, i) => (
-            <div key={s.id} className={`zsb-slide ${i === activeIdx ? 'is-active' : ''}`}>
-              {s.type === 'video' ? (
-                <video src={s.media_url} className="zsb-media" autoPlay muted loop playsInline />
-              ) : (
-                <img src={s.media_url} className={`zsb-media ${animation === 'kenburns' && i === activeIdx ? 'kenburns' : ''}`} alt={s.title || ''} />
-              )}
-              <div className="zsb-overlay" style={{ opacity: overlayOpacity }}></div>
-              <div className="zsb-content">
-                {s.title && <div className="zsb-title">{s.title}</div>}
-                {s.subtitle && <div className="zsb-subtitle">{s.subtitle}</div>}
-                {s.cta_text && (
-                  <a href={s.cta_link || '#'} className="zsb-cta" data-testid={`zsb-cta-${i}`}>
-                    {s.cta_text} <span style={{ marginRight: 6 }}>←</span>
-                  </a>
+          {slides.map((s, i) => {
+            const Body = (
+              <>
+                {s.type === 'video' ? (
+                  <video src={s.media_url} className="zsb-media" autoPlay muted loop playsInline />
+                ) : (
+                  <img src={s.media_url} className={`zsb-media ${animation === 'kenburns' && i === activeIdx ? 'kenburns' : ''}`} alt={s.title || ''} />
                 )}
+                <div className="zsb-overlay" style={{ opacity: overlayOpacity }}></div>
+                <div className="zsb-content">
+                  {s.title && <div className="zsb-title">{s.title}</div>}
+                  {s.subtitle && <div className="zsb-subtitle">{s.subtitle}</div>}
+                </div>
+              </>
+            );
+            const className = `zsb-slide ${i === activeIdx ? 'is-active' : ''}`;
+            return s.cta_link ? (
+              <a key={s.id} href={s.cta_link} className={className} aria-label={s.title || 'banner'} data-testid={`zsb-slide-${i}`}>
+                {Body}
+              </a>
+            ) : (
+              <div key={s.id} className={className} data-testid={`zsb-slide-${i}`}>
+                {Body}
               </div>
-            </div>
-          ))}
+            );
+          })}
           {/* Pagination dots */}
           {slides.length > 1 && (
             <div className="zsb-dots">
@@ -224,33 +231,32 @@ const PLACEHOLDER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/
 
 const css = `
 .zsb-host{position:relative;z-index:1;direction:rtl;font-family:inherit}
-.zsb-banner{position:relative;width:100%;height:clamp(220px,32vw,440px);overflow:hidden;background:#0a0a12}
-.zsb-slide{position:absolute;inset:0;opacity:0;transition:opacity .9s ease;pointer-events:none}
+.zsb-banner{position:relative;width:100%;height:clamp(200px,28vw,380px);overflow:hidden;background:#0a0a12;border-radius:0;box-shadow:0 20px 60px -20px rgba(0,0,0,.6)}
+.zsb-slide{position:absolute;inset:0;opacity:0;transition:opacity 1.1s ease;pointer-events:none;display:block;text-decoration:none;color:#fff}
 .zsb-slide.is-active{opacity:1;pointer-events:auto;z-index:2}
-.zsb-banner-slide .zsb-slide{transform:translateX(-100%);transition:transform .9s cubic-bezier(.25,.8,.25,1),opacity .5s}
+a.zsb-slide{cursor:pointer}
+.zsb-banner-slide .zsb-slide{transform:translateX(-100%);transition:transform 1s cubic-bezier(.25,.8,.25,1),opacity .6s}
 .zsb-banner-slide .zsb-slide.is-active{transform:translateX(0)}
 .zsb-media{width:100%;height:100%;object-fit:cover;display:block;background:#000}
 .zsb-media.kenburns{animation:zsb-kb 16s ease-in-out infinite alternate}
 @keyframes zsb-kb{from{transform:scale(1) translate(0,0)}to{transform:scale(1.12) translate(-3%,2%)}}
-.zsb-overlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0) 0%,rgba(0,0,0,.7) 100%);pointer-events:none}
-.zsb-content{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:clamp(16px,3vw,42px);gap:8px;color:#fff;z-index:3}
-.zsb-title{font-size:clamp(22px,3.4vw,42px);font-weight:900;line-height:1.15;text-shadow:0 6px 28px rgba(0,0,0,.7);max-width:80%;animation:zsb-rise .9s cubic-bezier(.2,.8,.2,1) both}
-.zsb-subtitle{font-size:clamp(13px,1.3vw,17px);opacity:.92;text-shadow:0 4px 18px rgba(0,0,0,.6);max-width:70%;animation:zsb-rise .9s .12s cubic-bezier(.2,.8,.2,1) both}
+.zsb-overlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0) 30%,rgba(0,0,0,.55) 75%,rgba(0,0,0,.85) 100%);pointer-events:none}
+.zsb-content{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:clamp(20px,3vw,46px);gap:6px;color:#fff;z-index:3}
+.zsb-title{font-size:clamp(20px,3vw,38px);font-weight:900;line-height:1.2;text-shadow:0 6px 28px rgba(0,0,0,.7);max-width:80%;letter-spacing:-.5px;animation:zsb-rise .9s cubic-bezier(.2,.8,.2,1) both}
+.zsb-subtitle{font-size:clamp(13px,1.25vw,16px);opacity:.92;text-shadow:0 4px 18px rgba(0,0,0,.6);max-width:70%;animation:zsb-rise .9s .12s cubic-bezier(.2,.8,.2,1) both;font-weight:500}
 @keyframes zsb-rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
-.zsb-cta{margin-top:8px;display:inline-flex;align-items:center;gap:7px;padding:10px 22px;background:linear-gradient(135deg,#FFD700,#FF6B35);color:#0a0a12;border-radius:99px;font-weight:900;font-size:14px;text-decoration:none;box-shadow:0 12px 32px rgba(255,107,53,.4);transition:transform .2s ease;animation:zsb-rise .9s .24s cubic-bezier(.2,.8,.2,1) both}
-.zsb-cta:hover{transform:translateY(-2px) scale(1.03)}
-.zsb-dots{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:4}
-.zsb-dot{width:8px;height:8px;border:0;background:rgba(255,255,255,.4);border-radius:99px;cursor:pointer;padding:0;transition:all .2s ease}
-.zsb-dot.is-active{background:#FFD700;width:24px}
-.zsb-stories{display:flex;gap:12px;padding:14px clamp(12px,3vw,24px);overflow-x:auto;scrollbar-width:none;background:linear-gradient(180deg,rgba(0,0,0,.4),rgba(0,0,0,.0));scroll-snap-type:x proximity}
+.zsb-dots{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:4;background:rgba(0,0,0,.4);padding:6px 10px;border-radius:99px;backdrop-filter:blur(8px)}
+.zsb-dot{width:7px;height:7px;border:0;background:rgba(255,255,255,.45);border-radius:99px;cursor:pointer;padding:0;transition:all .25s ease}
+.zsb-dot.is-active{background:linear-gradient(135deg,#FFD700,#FF6B35);width:24px}
+.zsb-stories{display:flex;gap:14px;padding:14px clamp(16px,3vw,28px);overflow-x:auto;scrollbar-width:none;background:linear-gradient(180deg,rgba(0,0,0,.35),rgba(0,0,0,0));scroll-snap-type:x proximity;border-bottom:1px solid rgba(255,255,255,.05)}
 .zsb-stories::-webkit-scrollbar{display:none}
-.zsb-story{flex-shrink:0;width:74px;text-align:center;cursor:pointer;background:transparent;border:0;padding:0;color:inherit;font-family:inherit;scroll-snap-align:start}
-.zsb-ring{width:74px;height:74px;border-radius:50%;padding:3px;background:conic-gradient(from 180deg,#FFD700,#FF6B35,#10b981,#06b6d4,#FFD700);position:relative;transition:transform .25s ease}
-.zsb-story:hover .zsb-ring{transform:scale(1.06)}
-.zsb-ring.seen{background:rgba(255,255,255,.2)}
+.zsb-story{flex-shrink:0;width:78px;text-align:center;cursor:pointer;background:transparent;border:0;padding:0;color:inherit;font-family:inherit;scroll-snap-align:start}
+.zsb-ring{width:78px;height:78px;border-radius:50%;padding:3px;background:conic-gradient(from 180deg,#FFD700,#FF6B35,#10b981,#06b6d4,#FFD700);position:relative;transition:transform .25s ease;box-shadow:0 6px 20px rgba(255,107,53,.18)}
+.zsb-story:hover .zsb-ring{transform:scale(1.07)}
+.zsb-ring.seen{background:rgba(255,255,255,.18);box-shadow:none}
 .zsb-thumb{width:100%;height:100%;border-radius:50%;object-fit:cover;background:#000;border:2px solid #0a0a12}
-.zsb-vbadge{position:absolute;bottom:2px;left:2px;background:#FF6B35;color:#fff;font-size:11px;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center}
-.zsb-cap{font-size:11px;margin-top:5px;color:rgba(255,255,255,.85);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl}
+.zsb-vbadge{position:absolute;bottom:2px;left:2px;background:linear-gradient(135deg,#FF6B35,#FFD700);color:#0a0a12;font-size:11px;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900}
+.zsb-cap{font-size:11px;margin-top:6px;color:rgba(255,255,255,.85);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;font-weight:500}
 .zsb-viewer{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.96);display:flex;align-items:center;justify-content:center;padding:16px;animation:zsb-fadein .25s ease-out}
 @keyframes zsb-fadein{from{opacity:0}to{opacity:1}}
 .zsb-vshell{position:relative;width:min(420px,100%);height:min(80vh,720px);max-height:96vh;background:#000;border-radius:14px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.7)}
