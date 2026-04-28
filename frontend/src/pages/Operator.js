@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { toast } from 'sonner';
+import { DashboardView, MemoryTab, AlertsBell, SettingsPanel, ModernChatTab } from './OperatorParts';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -13,6 +14,8 @@ export default function Operator({ user }) {
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [view, setView] = useState('dashboard'); // 'dashboard' | 'client'
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const token = useMemo(() => localStorage.getItem('token') || '', []);
   const H = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
 
@@ -71,28 +74,32 @@ export default function Operator({ user }) {
     <div className="min-h-screen bg-[#0a0b14] text-white flex" dir="rtl" data-testid="operator-page">
       {/* Sidebar */}
       <aside className="w-80 border-l border-white/10 flex flex-col">
-        <div className="p-4 border-b border-white/10 flex items-center justify-between">
-          <div>
-            <div className="text-[10px] uppercase text-white/40 tracking-widest">Agency Mode</div>
-            <h2 className="font-black text-lg">🧑‍💼 العملاء</h2>
-          </div>
+        <div className="p-4 border-b border-white/10">
+          <div className="text-[10px] uppercase text-white/40 tracking-widest">Agency Mode</div>
+          <h2 className="font-black text-lg mb-3">🧑‍💼 الوكالة</h2>
+          <button
+            onClick={() => { setView('dashboard'); setSelected(null); }}
+            className={`w-full px-3 py-2 rounded-lg text-xs font-black mb-2 transition-colors ${view === 'dashboard' ? 'bg-emerald-500 text-black' : 'bg-white/10 hover:bg-white/20 text-white'}`}
+            data-testid="dashboard-btn"
+          >📊 لوحة التحكم</button>
           <button
             onClick={() => {
               const name = prompt('اسم العميل الجديد:');
               if (name && name.trim()) createClient(name.trim());
             }}
             disabled={creating}
-            className="px-3 py-1.5 bg-yellow-500 text-black rounded-lg font-black text-xs disabled:opacity-50"
+            className="w-full px-3 py-2 bg-yellow-500 text-black rounded-lg font-black text-xs disabled:opacity-50"
             data-testid="new-client-btn"
-          >+ جديد</button>
+          >+ عميل جديد</button>
         </div>
+        <div className="px-4 pt-3 pb-1 text-[10px] uppercase text-white/40 tracking-widest">العملاء</div>
         <div className="flex-1 overflow-y-auto">
           {clients.length === 0 && <div className="p-6 text-xs text-white/50 text-center">لا عملاء بعد</div>}
           {clients.map((c) => (
             <button
               key={c.id}
-              onClick={() => setSelected(c)}
-              className={`w-full text-right p-4 border-b border-white/5 hover:bg-white/5 transition-colors ${selected?.id === c.id ? 'bg-yellow-500/10 border-r-2 border-r-yellow-400' : ''}`}
+              onClick={() => { setSelected(c); setView('client'); }}
+              className={`w-full text-right p-4 border-b border-white/5 hover:bg-white/5 transition-colors ${view === 'client' && selected?.id === c.id ? 'bg-yellow-500/10 border-r-2 border-r-yellow-400' : ''}`}
               data-testid={`client-${c.id}`}
             >
               <div className="font-bold truncate">{c.name}</div>
@@ -107,6 +114,12 @@ export default function Operator({ user }) {
           ))}
         </div>
         <div className="p-3 border-t border-white/10 space-y-1">
+          <AlertsBell H={H} />
+          {user?.role === 'owner' && (
+            <button onClick={() => setSettingsOpen(true)} className="w-full text-xs text-white/60 hover:text-white py-1 text-right px-2" data-testid="open-settings">
+              ⚙️ الإعدادات
+            </button>
+          )}
           {user?.role === 'owner' && <DevelopersManager H={H} />}
           <a href="/" className="block text-center text-[11px] text-white/50 hover:text-white py-1">← الرئيسية</a>
         </div>
@@ -114,12 +127,19 @@ export default function Operator({ user }) {
 
       {/* Main panel */}
       <main className="flex-1 overflow-y-auto">
-        {selected ? (
-          <ClientDetail client={selected} H={H} onChange={reload} onDelete={() => { setSelected(null); reload(); }} />
+        {view === 'dashboard' ? (
+          <DashboardView H={H} onPick={(cid) => {
+            const c = clients.find(x => x.id === cid);
+            if (c) { setSelected(c); setView('client'); }
+          }} />
+        ) : selected ? (
+          <ClientDetail client={selected} H={H} onChange={reload} onDelete={() => { setSelected(null); setView('dashboard'); reload(); }} />
         ) : (
-          <div className="flex items-center justify-center h-full text-white/40 text-sm">اختر عميلاً من القائمة لبدء الإدارة</div>
+          <div className="flex items-center justify-center h-full text-white/40 text-sm">اختر عميلاً من القائمة</div>
         )}
       </main>
+
+      {settingsOpen && <SettingsPanel H={H} onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 }
@@ -227,6 +247,7 @@ function ClientDetail({ client, H, onChange, onDelete }) {
       <div className="flex gap-1 mb-5 border-b border-white/10">
         {[
           { id: 'chat', label: '🤖 وكيل الـ AI' },
+          { id: 'memory', label: '🧠 الذاكرة' },
           { id: 'creds', label: '🔐 الاعتمادات' },
           { id: 'actions', label: '⚡ الإجراءات' },
           { id: 'log', label: '📝 السجل' },
@@ -241,7 +262,11 @@ function ClientDetail({ client, H, onChange, onDelete }) {
       </div>
 
       {tab === 'chat' && (
-        <ChatTab client={client} H={H} />
+        <ModernChatTab client={client} H={H} />
+      )}
+
+      {tab === 'memory' && (
+        <MemoryTab client={client} H={H} />
       )}
 
       {tab === 'info' && (

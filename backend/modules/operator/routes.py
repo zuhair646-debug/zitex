@@ -536,4 +536,115 @@ def init_routes(database, auth_dep) -> APIRouter:
         res = await database.operator_chats.delete_many({"client_id": cid, "session_id": session_id})
         return {"deleted": res.deleted_count}
 
+    # ──────────────────────────────────────────────────
+    # Memory (long-term per-client)
+    # ──────────────────────────────────────────────────
+    @r.get("/clients/{cid}/memory")
+    async def _memory_get(cid: str, _u: dict = Depends(_require_operator)):
+        doc = await database.operator_clients.find_one({"id": cid}, {"_id": 0, "memory": 1})
+        return {"memory": (doc or {}).get("memory") or []}
+
+    @r.delete("/clients/{cid}/memory")
+    async def _memory_clear(cid: str, _u: dict = Depends(_require_operator)):
+        await database.operator_clients.update_one({"id": cid}, {"$set": {"memory": []}})
+        return {"ok": True}
+
+    class MemAdd(BaseModel):
+        fact: str
+
+    @r.post("/clients/{cid}/memory")
+    async def _memory_add(cid: str, body: MemAdd, _u: dict = Depends(_require_operator)):
+        if not body.fact.strip():
+            raise HTTPException(400, "fact required")
+        await database.operator_clients.update_one(
+            {"id": cid},
+            {"$push": {"memory": {"$each": [{"fact": body.fact[:600], "at": _iso_now()}], "$slice": -40}}},
+        )
+        return {"ok": True}
+
+    # ──────────────────────────────────────────────────
+    # Health, Dashboard, Alerts
+    # ──────────────────────────────────────────────────
+    @r.get("/dashboard")
+    async def _dashboard(_u: dict = Depends(_require_operator)):
+        """Multi-client overview: name, last health, billing, memory size."""
+        clients = await database.operator_clients.find({}, {"_id": 0}).sort("name", 1).to_list(500)
+        out = []
+        for c in clients:
+            lh = c.get("last_health") or {}
+            rw = lh.get("railway") or {}
+            billing = c.get("billing") or {}
+            ym = datetime.now(timezone.utc).strftime("%Y-%m")
+            out.append({
+                "id": c.get("id"),
+                "name": c.get("name"),
+                "client_email": c.get("client_email", ""),
+                "checked_at": c.get("last_health_at"),
+                "railway_state": rw.get("state", "n/a"),
+                "railway_status": rw.get("status", ""),
+                "railway_url": rw.get("url", ""),
+                "memory_count": len((c.get("memory") or [])),
+                "agent_calls_month": (billing.get(ym) or {}).get("agent_calls", 0),
+                "agent_calls_total": (c.get("billing_total") or {}).get("agent_calls", 0),
+                "has_github": bool((c.get("github") or {}).get("token_enc")),
+                "has_railway": bool((c.get("railway") or {}).get("token_enc")),
+                "has_vercel": bool((c.get("vercel") or {}).get("token_enc")),
+            })
+        # Aggregate counts
+        summary = {
+            "total": len(out),
+            "healthy": sum(1 for c in out if c["railway_state"] == "healthy"),
+            "failing": sum(1 for c in out if c["railway_state"] == "failing"),
+            "pending": sum(1 for c in out if c["railway_state"] == "pending"),
+            "unconfigured": sum(1 for c in out if c["railway_state"] in ("n/a", "unknown")),
+        }
+        return {"summary": summary, "clients": out}
+
+    @r.post("/health-check/run")
+    async def _health_run_now(_u: dict = Depends(_require_operator)):
+        """Run an on-demand health-check pass over all clients."""
+        from .health import run_all_health_checks
+        return await run_all_health_checks(database)
+
+    @r.get("/clients/{cid}/health/history")
+    async def _health_history(cid: str, _u: dict = Depends(_require_operator)):
+        doc = await database.operator_health_history.find_one({"client_id": cid}, {"_id": 0})
+        snaps = (doc or {}).get("snapshots") or []
+        return {"snapshots": snaps[-100:]}
+
+    @r.get("/alerts")
+    async def _alerts_list(unseen: bool = False, _u: dict = Depends(_require_operator)):
+        q: Dict[str, Any] = {}
+        if unseen:
+            q["seen"] = False
+        docs = await database.operator_alerts.find(q, {"_id": 0}).sort("at", -1).limit(100).to_list(100)
+        return {"alerts": docs, "count": len(docs)}
+
+    @r.post("/alerts/mark-seen")
+    async def _alerts_mark(_u: dict = Depends(_require_operator)):
+        res = await database.operator_alerts.update_many({"seen": False}, {"$set": {"seen": True}})
+        return {"updated": res.modified_count}
+
+    # ──────────────────────────────────────────────────
+    # Global operator settings (alerts phone, etc.)
+    # ──────────────────────────────────────────────────
+    @r.get("/settings")
+    async def _settings_get(_u: dict = Depends(_require_owner)):
+        doc = await database.operator_settings.find_one({"_id": "global"}, {"_id": 0}) or {}
+        return doc
+
+    class SettingsIn(BaseModel):
+        alert_phone: Optional[str] = None
+        alert_email: Optional[str] = None
+
+    @r.put("/settings")
+    async def _settings_put(body: SettingsIn, _u: dict = Depends(_require_owner)):
+        patch: Dict[str, Any] = {"updated_at": _iso_now()}
+        if body.alert_phone is not None:
+            patch["alert_phone"] = body.alert_phone.strip()
+        if body.alert_email is not None:
+            patch["alert_email"] = body.alert_email.strip()
+        await database.operator_settings.update_one({"_id": "global"}, {"$set": patch}, upsert=True)
+        return {"ok": True}
+
     return r

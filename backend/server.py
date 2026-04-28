@@ -2923,6 +2923,14 @@ try:
     _operator_router = init_operator_routes(db, get_current_user)
     app.include_router(_operator_router, prefix="/api")
     logging.getLogger(__name__).info("Operator module registered")
+
+    @app.on_event("startup")
+    async def _start_operator_scheduler():
+        try:
+            from modules.operator.health import start_scheduler
+            start_scheduler(db, interval_seconds=6 * 3600)  # every 6h
+        except Exception as _e:
+            logging.getLogger(__name__).error(f"operator scheduler failed: {_e}")
 except Exception as _oe:
     logging.getLogger(__name__).error(f"Failed to register operator module: {_oe}", exc_info=True)
 
