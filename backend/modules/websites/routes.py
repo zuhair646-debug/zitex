@@ -2959,6 +2959,14 @@ color:#000;text-decoration:none;border-radius:12px;font-weight:900}}</style></he
         import logging
         logging.getLogger(__name__).error(f"chatbot module failed: {_ce}")
 
+    # 🆕 Stories + Animated Banner + AI media generation
+    try:
+        from .stories import register_routes as register_stories_routes
+        register_stories_routes(r, database, _resolve_client_project)
+    except Exception as _se:
+        import logging
+        logging.getLogger(__name__).error(f"stories module failed: {_se}")
+
     app.include_router(r)
     return r
 

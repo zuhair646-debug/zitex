@@ -1,0 +1,57 @@
+{
+  "summary": "Comprehensive testing of iteration 20 features: Stories CRUD, Banner CRUD, AI Image Generation (Nano Banana), AI Video Generation (Sora 2), Chatbot Analytics, and Storefront Stories Widget. All 15 backend tests passed. Frontend UI verified working with all new tabs and components.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Storefront hero section",
+        "issues": ["Hero title shows numeric ID '1776972075.4973445' instead of proper store name - appears to be test/seed data issue (noted in previous iteration)"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_stories_banner_analytics.py",
+    "/app/test_reports/pytest/iteration_20_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_stories_banner_analytics.py"
+  ],
+  "success_rate": {
+    "backend": "100% (15/15 tests passed)",
+    "frontend": "100% (all tested features working)"
+  },
+  "test_credentials": {
+    "owner": "owner@zitex.com / owner123",
+    "client": "slug=cozy-cafe-demo, password=WKDWkG0d"
+  },
+  "seed_data_creation": "Test stories and banner data created during testing, cleaned up after tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All new features tested and working: (1) Stories CRUD - create/read/update/delete stories via /api/websites/client/stories endpoints, (2) Banner CRUD - get/update banner config via /api/websites/client/banner, (3) Public stories endpoint - /api/websites/public/{slug}/stories returns stories, banner, store_name with hidden stories filtered, (4) AI Image Generation - POST /api/websites/client/media/generate-image uses Nano Banana, creates story with ai_generated=true, (5) AI Video Generation - POST /api/websites/client/media/generate-video creates async job, GET /api/websites/client/media/jobs/{id} tracks status, (6) Chatbot Analytics - GET /api/websites/client/chatbot/analytics returns totals (messages, handoffs, handoff_rate_pct, unique_sessions), topics with counts, lost_questions, recent messages, (7) Frontend StoriesTab - has sub-tabs for stories and banner, AI image prompt (data-testid='story-image-prompt'), AI video prompt (story-video-prompt), upload button (story-upload-btn), (8) Frontend ChatbotTab Analytics - has sub-tab 'تحليلات المحادثات', shows 4 KPI cards (kpi-messages, kpi-sessions, kpi-handoffs, kpi-handoff-rate), topic bars, lost questions list, (9) Storefront Stories Widget - banner (.zxsb-banner) and stories ribbon (.zxsb-stories) render in iframe, story viewer (.zxsb-viewer) opens on click with progress bar (.zxsb-viewer-pfill), close button works.",
+  "features_verified": {
+    "stories_crud": "✅ POST/GET/PATCH/DELETE /api/websites/client/stories all working",
+    "public_stories": "✅ GET /api/websites/public/{slug}/stories returns stories, banner, store_name",
+    "hidden_stories_filtered": "✅ Stories with visible:false are filtered from public endpoint",
+    "banner_crud": "✅ GET/PUT /api/websites/client/banner working",
+    "ai_image_generation": "✅ POST /api/websites/client/media/generate-image (Nano Banana) generates image and creates story",
+    "ai_video_generation": "✅ POST /api/websites/client/media/generate-video (Sora 2) creates async job with status tracking",
+    "chatbot_analytics": "✅ GET /api/websites/client/chatbot/analytics returns totals, topics, lost_questions, recent",
+    "frontend_stories_tab": "✅ StoriesTab with sub-tabs, AI prompts, upload button all visible",
+    "frontend_banner_subtab": "✅ Banner toggle, animation dropdown visible",
+    "frontend_chatbot_analytics": "✅ Analytics sub-tab with 4 KPI cards, topic bars, lost questions visible",
+    "storefront_banner": "✅ .zxsb-banner element renders with Ken Burns animation",
+    "storefront_stories_ribbon": "✅ .zxsb-stories ribbon with clickable story circles",
+    "storefront_story_viewer": "✅ .zxsb-viewer opens on click, progress bar advances, close button works"
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "note": "All integrations are live (Claude Sonnet for chatbot, Nano Banana for image gen, Sora 2 for video gen via Emergent Universal Key)"
+  }
+}

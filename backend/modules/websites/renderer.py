@@ -33,6 +33,7 @@ from .portfolio_renderer import (
 from .dashboard_renderer import _section_dashboard
 from .overlay_renderer import _auth_and_commerce_overlay, _floating_widgets
 from .chatbot_widget import chatbot_widget as _chatbot_widget
+from .stories_widget import stories_widget as _stories_widget
 from .base_css import _base_css
 
 
@@ -146,6 +147,7 @@ def render_website_to_html(project: Dict[str, Any]) -> str:
 <style>{theme.get('custom_css', '')}</style>
 </head>
 <body>
+{_stories_widget(project.get('slug') or '')}
 {_floating_widgets(theme)}
 {_chatbot_widget(project.get('slug') or '', project)}
 {''.join(body_parts)}

@@ -6,7 +6,7 @@ import { CoursesTab, MembershipsTab, EventsTab, DriverAnalyticsTab } from './Pha
 import {
   LogIn, Eye, EyeOff, LogOut, ExternalLink, Users, MessageSquare, BarChart3,
   Edit3, Save, X, RefreshCw, Check, Key, CheckCircle2, Copy, Lock, MapPin,
-  Palette, History, RotateCcw, Trash2,
+  Palette, History, RotateCcw, Trash2, Image as ImageIcon,
 } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -1911,13 +1911,340 @@ function LoyaltyTab({ token }) {  const [s, setS] = useState({ enabled: true, we
 }
 
 /* ================================================================
-   CHATBOT TAB — End-customer AI assistant config
+   STORIES + BANNER TAB — Instagram-style stories + animated banner with AI media gen
    ================================================================ */
+function StoriesTab({ token, slug }) {
+  const [stories, setStories] = useState([]);
+  const [banner, setBanner] = useState(null);
+  const [genPrompt, setGenPrompt] = useState('');
+  const [genBusy, setGenBusy] = useState(false);
+  const [vidPrompt, setVidPrompt] = useState('');
+  const [vidDuration, setVidDuration] = useState(4);
+  const [vidJob, setVidJob] = useState(null);
+  const [tab, setTab] = useState('stories'); // 'stories' | 'banner'
+  const fileRef = useRef(null);
+
+  const headers = { 'Content-Type': 'application/json', ...authH(token) };
+
+  const loadAll = useCallback(async () => {
+    try {
+      const [sR, bR] = await Promise.all([
+        fetch(`${API}/api/websites/client/stories`, { headers: authH(token) }),
+        fetch(`${API}/api/websites/client/banner`, { headers: authH(token) }),
+      ]);
+      const sD = await sR.json(); const bD = await bR.json();
+      setStories(sD.stories || []);
+      setBanner({
+        enabled: !!bD.enabled, type: bD.type || 'image',
+        media_url: bD.media_url || '',
+        title: bD.title || '', subtitle: bD.subtitle || '',
+        cta_text: bD.cta_text || '', cta_link: bD.cta_link || '',
+        animation: bD.animation || 'kenburns',
+        overlay_opacity: bD.overlay_opacity ?? 0.45,
+      });
+    } catch (_) { toast.error('فشل التحميل'); }
+  }, [token]);
+  useEffect(() => { loadAll(); }, [loadAll]);
+
+  // Poll video job
+  useEffect(() => {
+    if (!vidJob || vidJob.status === 'done' || vidJob.status === 'failed') return;
+    const t = setInterval(async () => {
+      try {
+        const r = await fetch(`${API}/api/websites/client/media/jobs/${vidJob.job_id}`, { headers: authH(token) });
+        if (!r.ok) return;
+        const d = await r.json();
+        setVidJob({ ...vidJob, ...d });
+        if (d.status === 'done') { clearInterval(t); toast.success('🎬 تم توليد الفيديو'); loadAll(); }
+        if (d.status === 'failed') { clearInterval(t); toast.error('فشل توليد الفيديو'); }
+      } catch (_) {}
+    }, 5000);
+    return () => clearInterval(t);
+  }, [vidJob, token, loadAll]);
+
+  const uploadFile = async (file) => {
+    if (!file) return;
+    if (file.size > 6 * 1024 * 1024) { toast.error('الملف كبير جداً (الحد 6 ميجا)'); return; }
+    setGenBusy(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const dataUrl = reader.result;
+        const isVideo = file.type.startsWith('video/');
+        const r = await fetch(`${API}/api/websites/client/stories`, {
+          method: 'POST', headers,
+          body: JSON.stringify({
+            type: isVideo ? 'video' : 'image',
+            media_url: dataUrl,
+            caption: '', duration_sec: 6, visible: true,
+          }),
+        });
+        if (!r.ok) throw new Error('فشل الرفع');
+        toast.success('✅ تمت الإضافة');
+        loadAll();
+      };
+      reader.readAsDataURL(file);
+    } catch (e) { toast.error(e.message); }
+    finally { setGenBusy(false); }
+  };
+
+  const generateImage = async () => {
+    if (!genPrompt.trim()) return;
+    setGenBusy(true);
+    try {
+      const r = await fetch(`${API}/api/websites/client/media/generate-image`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ prompt: genPrompt, add_as_story: true }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'فشل التوليد');
+      toast.success('✨ تم التوليد وإضافته كحالة');
+      setGenPrompt('');
+      loadAll();
+    } catch (e) { toast.error(e.message); }
+    finally { setGenBusy(false); }
+  };
+
+  const generateVideo = async () => {
+    if (!vidPrompt.trim()) return;
+    try {
+      const r = await fetch(`${API}/api/websites/client/media/generate-video`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ prompt: vidPrompt, duration: vidDuration, size: '1024x1792', add_as_story: true }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'فشل');
+      setVidJob({ job_id: d.job_id, status: 'queued', prompt: vidPrompt });
+      toast.success(`🎬 بدأ التوليد (≈${Math.round(d.estimated_seconds / 60)} دقيقة)`);
+      setVidPrompt('');
+    } catch (e) { toast.error(e.message); }
+  };
+
+  const patchStory = async (id, body) => {
+    await fetch(`${API}/api/websites/client/stories/${id}`, { method: 'PATCH', headers, body: JSON.stringify(body) });
+    loadAll();
+  };
+  const delStory = async (id) => {
+    if (!window.confirm('حذف هذه الحالة؟')) return;
+    await fetch(`${API}/api/websites/client/stories/${id}`, { method: 'DELETE', headers: authH(token) });
+    loadAll();
+  };
+
+  const saveBanner = async () => {
+    setGenBusy(true);
+    try {
+      await fetch(`${API}/api/websites/client/banner`, { method: 'PUT', headers, body: JSON.stringify(banner) });
+      toast.success('✅ تم حفظ البنر');
+    } catch (_) { toast.error('فشل'); }
+    finally { setGenBusy(false); }
+  };
+
+  if (!banner) return <div className="p-6 text-white/50">جارٍ التحميل...</div>;
+
+  return (
+    <div className="space-y-5 p-4 md:p-6" data-testid="stories-tab">
+      <div className="bg-gradient-to-br from-orange-500/10 via-pink-500/10 to-purple-500/10 border border-orange-400/30 rounded-2xl p-5">
+        <h2 className="text-2xl font-black mb-1 flex items-center gap-2"><span>🎬</span> الحالات والبنر المتحرك</h2>
+        <p className="text-sm text-white/70">اعرض إعلانات وفيديوهات على الصفحة الرئيسية لمتجرك بأسلوب فخم وسلس — توليد بـ AI أو رفع مباشر.</p>
+      </div>
+
+      {/* Sub-tabs */}
+      <div className="flex gap-1 p-1 bg-white/5 rounded-xl w-fit">
+        {[
+          { id: 'stories', label: '⭕ الحالات' },
+          { id: 'banner', label: '🌅 البنر المتحرك' },
+        ].map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition ${tab === t.id ? 'bg-yellow-500 text-black' : 'hover:bg-white/5'}`}
+            data-testid={`stories-subtab-${t.id}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'stories' && (
+        <div className="space-y-4">
+          {/* Add: AI image generation */}
+          <div className="bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 border border-emerald-400/30 rounded-xl p-4">
+            <h3 className="font-bold text-sm mb-2 flex items-center gap-2">✨ توليد صورة بالذكاء الاصطناعي</h3>
+            <div className="flex gap-2">
+              <input value={genPrompt} onChange={(e) => setGenPrompt(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') generateImage(); }}
+                placeholder="مثال: قهوة لاتيه راقية في كوب ذهبي على طاولة خشبية"
+                className="flex-1 px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm"
+                data-testid="story-image-prompt" />
+              <button onClick={generateImage} disabled={genBusy || !genPrompt.trim()}
+                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-black font-black rounded-lg text-sm disabled:opacity-40"
+                data-testid="story-gen-image-btn">
+                {genBusy ? '⏳' : '✨ توليد'}
+              </button>
+            </div>
+          </div>
+
+          {/* Add: AI video generation (Sora 2) */}
+          <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-400/30 rounded-xl p-4">
+            <h3 className="font-bold text-sm mb-2 flex items-center gap-2">🎥 توليد فيديو بالذكاء الاصطناعي (Sora 2)</h3>
+            <div className="flex gap-2 mb-2">
+              <input value={vidPrompt} onChange={(e) => setVidPrompt(e.target.value)}
+                placeholder="مثال: مشهد لباريستا يصنع لاتيه فني، إضاءة سينمائية"
+                className="flex-1 px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm"
+                data-testid="story-video-prompt" />
+              <select value={vidDuration} onChange={(e) => setVidDuration(+e.target.value)}
+                className="px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm">
+                <option value={4}>4 ثوانٍ</option>
+                <option value={8}>8 ثوانٍ</option>
+                <option value={12}>12 ثانية</option>
+              </select>
+              <button onClick={generateVideo} disabled={!vidPrompt.trim() || (vidJob && vidJob.status !== 'done' && vidJob.status !== 'failed')}
+                className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white font-black rounded-lg text-sm disabled:opacity-40"
+                data-testid="story-gen-video-btn">
+                🎬 ابدأ
+              </button>
+            </div>
+            {vidJob && (
+              <div className="text-[11px] mt-2 p-2 bg-black/30 rounded-lg" data-testid="video-job-status">
+                {vidJob.status === 'queued' && <span className="text-amber-300">⏳ في طابور الانتظار...</span>}
+                {vidJob.status === 'processing' && <span className="text-blue-300 animate-pulse">🎥 جارٍ التوليد (قد تستغرق عدة دقائق)...</span>}
+                {vidJob.status === 'done' && <span className="text-emerald-300">✅ تم! تجد الفيديو في القائمة بالأسفل.</span>}
+                {vidJob.status === 'failed' && <span className="text-red-300">❌ فشل: {vidJob.error || 'خطأ غير معروف'}</span>}
+              </div>
+            )}
+            <div className="text-[10px] opacity-60 mt-1">⚠️ الفيديوهات تستخدم رصيد Universal Key.</div>
+          </div>
+
+          {/* Add: Upload */}
+          <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+            <h3 className="font-bold text-sm mb-2 flex items-center gap-2">📤 رفع ملف مباشر</h3>
+            <div className="flex items-center gap-2">
+              <input ref={fileRef} type="file" accept="image/*,video/*" hidden onChange={(e) => uploadFile(e.target.files[0])} data-testid="story-upload-input" />
+              <button onClick={() => fileRef.current?.click()} disabled={genBusy}
+                className="px-4 py-2 bg-white/10 hover:bg-white/15 rounded-lg text-sm font-bold border border-white/15"
+                data-testid="story-upload-btn">
+                📁 اختر ملف (صورة أو فيديو)
+              </button>
+              <span className="text-[10px] opacity-60">الحد الأقصى: 6 ميجا</span>
+            </div>
+          </div>
+
+          {/* Stories list */}
+          <div className="space-y-2">
+            <h3 className="font-bold text-sm">الحالات المنشورة ({stories.length})</h3>
+            {stories.length === 0 ? (
+              <div className="text-center py-8 bg-white/3 border border-dashed border-white/15 rounded-xl text-sm opacity-60">
+                لا توجد حالات بعد. ابدأ بتوليد صورة أو رفع ملف.
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                {stories.map((s) => (
+                  <div key={s.id} className="bg-white/5 border border-white/10 rounded-xl overflow-hidden" data-testid={`story-card-${s.id}`}>
+                    <div className="relative bg-black aspect-[9/16]">
+                      {s.type === 'video' ? (
+                        <video src={s.media_url} className="w-full h-full object-cover" muted playsInline />
+                      ) : (
+                        <img src={s.media_url} className="w-full h-full object-cover" alt="" />
+                      )}
+                      {s.type === 'video' && (
+                        <span className="absolute top-2 left-2 bg-purple-500/80 text-white text-[10px] px-1.5 py-0.5 rounded font-bold">▶ فيديو</span>
+                      )}
+                      {s.ai_generated && (
+                        <span className="absolute top-2 right-2 bg-emerald-500/80 text-white text-[10px] px-1.5 py-0.5 rounded font-bold">✨ AI</span>
+                      )}
+                    </div>
+                    <div className="p-2 space-y-1.5">
+                      <input value={s.caption || ''} onChange={(e) => patchStory(s.id, { caption: e.target.value })}
+                        placeholder="تعليق" className="w-full px-2 py-1 bg-black/30 border border-white/10 rounded text-xs" />
+                      <input value={s.link || ''} onChange={(e) => patchStory(s.id, { link: e.target.value })}
+                        placeholder="رابط (اختياري)" className="w-full px-2 py-1 bg-black/30 border border-white/10 rounded text-xs" />
+                      <div className="flex items-center justify-between gap-1">
+                        <label className="flex items-center gap-1 text-[11px] cursor-pointer">
+                          <input type="checkbox" checked={s.visible !== false} onChange={(e) => patchStory(s.id, { visible: e.target.checked })} />
+                          ظاهرة
+                        </label>
+                        <button onClick={() => delStory(s.id)} className="text-[11px] text-red-400 hover:text-red-300" data-testid={`del-story-${s.id}`}>🗑️ حذف</button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab === 'banner' && banner && (
+        <div className="space-y-3 bg-white/5 border border-white/10 rounded-xl p-4">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={banner.enabled} onChange={(e) => setBanner({ ...banner, enabled: e.target.checked })} data-testid="banner-enabled-toggle" />
+            <span className="font-bold">تفعيل البنر المتحرك على الصفحة الرئيسية</span>
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="text-[11px] opacity-70">نوع المحتوى</span>
+              <select value={banner.type} onChange={(e) => setBanner({ ...banner, type: e.target.value })}
+                className="w-full mt-1 px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm">
+                <option value="image">صورة</option>
+                <option value="video">فيديو</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-[11px] opacity-70">نوع الحركة</span>
+              <select value={banner.animation} onChange={(e) => setBanner({ ...banner, animation: e.target.value })}
+                className="w-full mt-1 px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm" data-testid="banner-animation">
+                <option value="kenburns">Ken Burns (زوم بطيء)</option>
+                <option value="parallax">Parallax (تحريك بالتمرير)</option>
+                <option value="fade">تلاشي</option>
+                <option value="none">بدون</option>
+              </select>
+            </label>
+          </div>
+          <label className="block">
+            <span className="text-[11px] opacity-70">رابط الوسائط (URL خارجي أو data: URL)</span>
+            <input value={banner.media_url} onChange={(e) => setBanner({ ...banner, media_url: e.target.value })}
+              placeholder="https://... أو ارفع من تبويب الحالات"
+              className="w-full mt-1 px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm font-mono" data-testid="banner-media-url" />
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="text-[11px] opacity-70">العنوان الرئيسي</span>
+              <input value={banner.title} onChange={(e) => setBanner({ ...banner, title: e.target.value })}
+                placeholder="عرض حصري" className="w-full mt-1 px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm" />
+            </label>
+            <label className="block">
+              <span className="text-[11px] opacity-70">العنوان الفرعي</span>
+              <input value={banner.subtitle} onChange={(e) => setBanner({ ...banner, subtitle: e.target.value })}
+                placeholder="خصم 20% على أول طلب" className="w-full mt-1 px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm" />
+            </label>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="text-[11px] opacity-70">نص زر الـ CTA</span>
+              <input value={banner.cta_text} onChange={(e) => setBanner({ ...banner, cta_text: e.target.value })}
+                placeholder="تسوق الآن" className="w-full mt-1 px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm" />
+            </label>
+            <label className="block">
+              <span className="text-[11px] opacity-70">رابط الـ CTA</span>
+              <input value={banner.cta_link} onChange={(e) => setBanner({ ...banner, cta_link: e.target.value })}
+                placeholder="#products" className="w-full mt-1 px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm font-mono" />
+            </label>
+          </div>
+          <button onClick={saveBanner} disabled={genBusy}
+            className="w-full py-2.5 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-lg font-black text-sm disabled:opacity-50"
+            data-testid="save-banner-btn">
+            {genBusy ? '...' : '💾 حفظ البنر'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ChatbotTab({ token, slug }) {
   const [cfg, setCfg] = useState(null);
   const [busy, setBusy] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testReply, setTestReply] = useState('');
+  const [analyticsTab, setAnalyticsTab] = useState('settings'); // 'settings' | 'analytics'
+  const [analytics, setAnalytics] = useState(null);
   const [testInput, setTestInput] = useState('ما هي أسعاركم؟');
 
   useEffect(() => {
@@ -1976,6 +2303,14 @@ function ChatbotTab({ token, slug }) {
 
   const totalMsgs = Object.values(cfg.usage || {}).reduce((sum, m) => sum + ((m && m.messages) || 0), 0);
 
+  const loadAnalytics = async () => {
+    try {
+      const r = await fetch(`${API}/api/websites/client/chatbot/analytics?days=30`, { headers: authH(token) });
+      const d = await r.json();
+      setAnalytics(d);
+    } catch (_) { toast.error('فشل تحميل التحليلات'); }
+  };
+
   return (
     <div className="space-y-5 p-4 md:p-6" data-testid="chatbot-tab">
       <div className="bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 border border-emerald-400/30 rounded-2xl p-5">
@@ -1983,6 +2318,20 @@ function ChatbotTab({ token, slug }) {
         <p className="text-sm text-white/60">يجاوب زبائنك تلقائياً على الأسعار، المنتجات، ساعات العمل وأكثر — مدعوم بـ Claude Sonnet.</p>
       </div>
 
+      <div className="flex gap-1 p-1 bg-white/5 rounded-xl w-fit">
+        {[
+          { id: 'settings', label: '⚙️ الإعدادات' },
+          { id: 'analytics', label: '📊 تحليلات المحادثات' },
+        ].map(t => (
+          <button key={t.id} onClick={() => { setAnalyticsTab(t.id); if (t.id === 'analytics' && !analytics) loadAnalytics(); }}
+            className={`px-4 py-2 rounded-lg text-sm font-bold ${analyticsTab === t.id ? 'bg-emerald-500 text-black' : 'hover:bg-white/5'}`}
+            data-testid={`chatbot-subtab-${t.id}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {analyticsTab === 'settings' && (<>
       {/* Toggle */}
       <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center justify-between">
         <div>
@@ -2093,6 +2442,100 @@ function ChatbotTab({ token, slug }) {
         <div className="text-2xl font-black mt-1">{totalMsgs} <span className="text-xs font-normal opacity-60">رسالة</span></div>
         <div className="text-[10px] opacity-50">الإجمالي عبر جميع الأشهر</div>
       </div>
+      </>)}
+
+      {analyticsTab === 'analytics' && (
+        <div className="space-y-4" data-testid="chatbot-analytics-panel">
+          {!analytics ? (
+            <div className="text-center py-10 opacity-60 text-sm">جارٍ تحميل التحليلات...</div>
+          ) : analytics.totals.messages === 0 ? (
+            <div className="text-center py-10 bg-white/3 border border-white/5 rounded-xl">
+              <div className="text-4xl mb-2">📊</div>
+              <div className="text-sm opacity-60">لا توجد محادثات بعد. التحليلات ستظهر بعد أول رسالة من زبائنك.</div>
+            </div>
+          ) : (
+            <>
+              {/* KPI cards */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 border border-emerald-500/30 rounded-xl p-3" data-testid="kpi-messages">
+                  <div className="text-[11px] opacity-70">إجمالي الرسائل</div>
+                  <div className="text-2xl font-black text-emerald-300">{analytics.totals.messages}</div>
+                  <div className="text-[10px] opacity-50">آخر {analytics.window_days} يوم</div>
+                </div>
+                <div className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 border border-blue-500/30 rounded-xl p-3" data-testid="kpi-sessions">
+                  <div className="text-[11px] opacity-70">جلسات فريدة</div>
+                  <div className="text-2xl font-black text-blue-300">{analytics.totals.unique_sessions}</div>
+                  <div className="text-[10px] opacity-50">زبائن مختلفون</div>
+                </div>
+                <div className="bg-gradient-to-br from-amber-500/10 to-orange-500/5 border border-amber-500/30 rounded-xl p-3" data-testid="kpi-handoffs">
+                  <div className="text-[11px] opacity-70">طلبات تواصل بشري</div>
+                  <div className="text-2xl font-black text-amber-300">{analytics.totals.handoffs}</div>
+                  <div className="text-[10px] opacity-50">تذاكر دعم</div>
+                </div>
+                <div className="bg-gradient-to-br from-pink-500/10 to-purple-500/5 border border-pink-500/30 rounded-xl p-3" data-testid="kpi-handoff-rate">
+                  <div className="text-[11px] opacity-70">نسبة التحويل البشري</div>
+                  <div className="text-2xl font-black text-pink-300">{analytics.totals.handoff_rate_pct}%</div>
+                  <div className="text-[10px] opacity-50">{analytics.totals.handoff_rate_pct > 30 ? '⚠️ مرتفعة — حسّن الـ context' : '✅ ضمن المعدّل'}</div>
+                </div>
+              </div>
+
+              {/* Topics bar chart */}
+              <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                <h3 className="font-bold text-sm mb-3">🔥 أكثر المواضيع طرحاً</h3>
+                <div className="space-y-1.5">
+                  {analytics.topics.filter(t => t.count > 0).slice(0, 8).map((t, i) => {
+                    const max = Math.max(...analytics.topics.map(x => x.count), 1);
+                    const pct = (t.count / max) * 100;
+                    return (
+                      <div key={i} className="flex items-center gap-3" data-testid={`topic-${i}`}>
+                        <div className="text-xs w-32 truncate">{t.label}</div>
+                        <div className="flex-1 h-5 bg-white/5 rounded overflow-hidden">
+                          <div className="h-full bg-gradient-to-r from-emerald-500 to-cyan-500 rounded transition-all" style={{ width: `${pct}%` }}></div>
+                        </div>
+                        <div className="text-xs font-bold w-10 text-right">{t.count}</div>
+                      </div>
+                    );
+                  })}
+                  {analytics.topics.every(t => t.count === 0) && <div className="text-xs opacity-50 text-center py-3">لم يُكتشف أي موضوع شائع بعد.</div>}
+                </div>
+              </div>
+
+              {/* Lost questions */}
+              {analytics.lost_questions.length > 0 && (
+                <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-4">
+                  <h3 className="font-bold text-sm mb-2 flex items-center gap-2">🚨 أسئلة تطلب المساعدة البشرية</h3>
+                  <p className="text-[11px] opacity-70 mb-2">هذه الأسئلة لم يتمكّن المساعد من الإجابة عليها. أضف معلومات عنها في "معلومات إضافية" لتحسين دقة المساعد.</p>
+                  <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                    {analytics.lost_questions.slice(0, 10).map((q, i) => (
+                      <div key={i} className="text-xs bg-black/30 rounded p-2 border-r-2 border-amber-500/50" data-testid={`lost-q-${i}`}>
+                        {q.text}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Recent messages */}
+              <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                <h3 className="font-bold text-sm mb-2">💬 آخر الرسائل</h3>
+                <div className="space-y-1.5 max-h-72 overflow-y-auto">
+                  {analytics.recent.map((m, i) => (
+                    <div key={i} className="flex items-start gap-2 text-xs">
+                      {m.handoff && <span className="text-amber-400">🚨</span>}
+                      <span className="opacity-50 text-[10px] flex-shrink-0">{new Date(m.at).toLocaleString('ar-SA', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</span>
+                      <span className="flex-1 truncate">{m.text}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <button onClick={loadAnalytics} className="w-full py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-bold" data-testid="refresh-analytics">
+                🔄 تحديث التحليلات
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -2600,6 +3043,7 @@ function Dashboard({ slug, token, onLogout }) {
               { id: 'widgets', label: '🎨 الأدوات', icon: Key },
               { id: 'coupons', label: '🎟️ كوبونات', icon: Key },
               { id: 'loyalty', label: '🎁 النقاط', icon: CheckCircle2 },
+              { id: 'stories', label: '🎬 الحالات والبنر', icon: ImageIcon },
               { id: 'chatbot', label: '🤖 المساعد الذكي', icon: MessageSquare },
               { id: 'edit', label: 'المحتوى', icon: Edit3 },
               { id: 'snapshots', label: '📚 السجل', icon: History },
@@ -2662,6 +3106,7 @@ function Dashboard({ slug, token, onLogout }) {
         {tab === 'widgets' && <WidgetCustomizerTab token={token} slug={slug} />}
         {tab === 'coupons' && <CouponsTab token={token} />}
         {tab === 'loyalty' && <LoyaltyTab token={token} />}
+        {tab === 'stories' && <StoriesTab token={token} slug={slug} />}
         {tab === 'chatbot' && <ChatbotTab token={token} slug={slug} />}
 
         {tab === 'messages' && <MessagesTab token={token} />}

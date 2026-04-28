@@ -18,12 +18,16 @@ Features:
 import os
 import json
 import time
+import uuid
+import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Depends, Header
 from pydantic import BaseModel
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+
+log = logging.getLogger(__name__)
 
 
 def _iso_now() -> str:
@@ -340,6 +344,28 @@ def init_routes(database) -> APIRouter:
                 {"id": p["id"]},
                 {"$inc": {f"chatbot_usage.{ym}.messages": 1, **({f"chatbot_usage.{ym}.handoffs": 1} if handoff else {})}},
             )
+            # Log message for analytics (capped collection — keep last 500/project)
+            try:
+                await database.chatbot_messages.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "project_id": p["id"],
+                    "session_id": session_id,
+                    "user_text": text[:500],
+                    "reply_text": (reply or "")[:500] if isinstance(reply, str) else "",
+                    "handoff": bool(handoff),
+                    "at": _iso_now(),
+                })
+                # Trim oldest beyond 500
+                count = await database.chatbot_messages.count_documents({"project_id": p["id"]})
+                if count > 500:
+                    excess = count - 500
+                    olds = await database.chatbot_messages.find(
+                        {"project_id": p["id"]}, {"_id": 1}
+                    ).sort("at", 1).limit(excess).to_list(excess)
+                    if olds:
+                        await database.chatbot_messages.delete_many({"_id": {"$in": [o["_id"] for o in olds]}})
+            except Exception as _le:
+                log.debug("chatbot log failed: %s", _le)
             return {"reply": reply, "session_id": session_id, "handoff": handoff}
         except Exception as e:
             raise HTTPException(500, f"AI error: {str(e)[:200]}")
@@ -508,3 +534,57 @@ def register_owner_endpoints(r: APIRouter, database, auth_dep, resolve_client=No
             await database.website_projects.update_one({"id": p["id"]}, {"$set": patch})
         fresh = await database.website_projects.find_one({"id": p["id"]}, {"_id": 0, "chatbot_config": 1})
         return (fresh or {}).get("chatbot_config") or {}
+
+    # 🆕 Conversation Analytics — gives owner insight on what customers ask + handoff rate
+    @r.get("/client/chatbot/analytics")
+    async def _client_analytics(authorization: str = _Header(None), days: int = 30):
+        p = await resolve_client(authorization or "")
+        from datetime import timedelta
+        since = (datetime.now(timezone.utc) - timedelta(days=max(1, min(days, 365)))).isoformat()
+        cur = database.chatbot_messages.find(
+            {"project_id": p["id"], "at": {"$gte": since}},
+            {"_id": 0, "user_text": 1, "handoff": 1, "session_id": 1, "at": 1},
+        ).sort("at", -1).limit(500)
+        msgs = await cur.to_list(500)
+
+        total = len(msgs)
+        handoffs = sum(1 for m in msgs if m.get("handoff"))
+        sessions = len({m.get("session_id") for m in msgs if m.get("session_id")})
+
+        # Topic detection by keyword presence (simple, fast, deterministic)
+        topics = {
+            "💰 الأسعار": ["سعر", "كم", "تكلفة", "رخيص", "غالي"],
+            "🚚 الشحن": ["شحن", "توصيل", "متى يوصل", "أيام التوصيل", "كم يوم"],
+            "🕐 ساعات العمل": ["ساعات", "متى تفتحون", "متى تسكرون", "دوام", "وقت العمل"],
+            "📦 المنتجات": ["منتج", "متوفر", "موجود", "عندكم", "تبيعون"],
+            "🎟️ خصومات": ["خصم", "كوبون", "تخفيض", "عرض", "كود"],
+            "💳 الدفع": ["دفع", "بطاقة", "كاش", "تحويل", "stc", "مدى"],
+            "📞 تواصل": ["تواصل", "رقم", "اتصال", "موظف", "خدمة العملاء"],
+            "↩️ استرجاع": ["ارجاع", "استرجاع", "شكوى", "استبدال"],
+        }
+        topic_counts = {k: 0 for k in topics}
+        for m in msgs:
+            t = (m.get("user_text") or "").lower()
+            for label, kws in topics.items():
+                if any(kw in t for kw in kws):
+                    topic_counts[label] += 1
+
+        # Top "lost" (likely unanswered) questions = those that triggered handoff
+        lost = [{"text": m.get("user_text") or "", "at": m.get("at")}
+                for m in msgs if m.get("handoff")][:20]
+        recent = [{"text": m.get("user_text") or "", "at": m.get("at"), "handoff": bool(m.get("handoff"))}
+                  for m in msgs[:20]]
+
+        return {
+            "totals": {
+                "messages": total,
+                "handoffs": handoffs,
+                "handoff_rate_pct": round((handoffs / total * 100) if total else 0, 1),
+                "unique_sessions": sessions,
+            },
+            "topics": [{"label": k, "count": v} for k, v in
+                       sorted(topic_counts.items(), key=lambda kv: -kv[1])],
+            "lost_questions": lost,
+            "recent": recent,
+            "window_days": days,
+        }
