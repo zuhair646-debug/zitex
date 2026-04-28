@@ -21,6 +21,7 @@ import AdminClients from '@/pages/AdminClients';
 import AdminWebsites from '@/pages/AdminWebsites';
 import AdminSettings from '@/pages/AdminSettings';
 import AdminSiteBanner from '@/pages/AdminSiteBanner';
+import AuthCallback from '@/pages/AuthCallback';
 import AdminActivity from '@/pages/AdminActivity';
 import AdminCredits from '@/pages/AdminCredits';
 import AdminTraining from '@/pages/AdminTraining';

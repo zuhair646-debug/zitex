@@ -538,6 +538,82 @@ async def login(credentials: UserLogin):
     token = create_token(user.id, user.role)
     return {"token": token, "user": user}
 
+
+# ============== GOOGLE OAUTH (Emergent-managed) ==============
+class GoogleExchangeIn(BaseModel):
+    session_id: str
+
+@api_router.post("/auth/google/exchange")
+async def google_exchange(body: GoogleExchangeIn):
+    """Exchange an Emergent OAuth session_id for our app JWT.
+    Finds-or-creates the user in `users` and returns {token, user, is_new}.
+    REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
+    """
+    sid = (body.session_id or "").strip()
+    if not sid:
+        raise HTTPException(400, "session_id required")
+
+    # Call Emergent's session-data endpoint to retrieve verified Google identity
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get(
+                "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+                headers={"X-Session-ID": sid},
+            )
+            if r.status_code != 200:
+                raise HTTPException(401, "session expired or invalid")
+            data = r.json()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(502, f"OAuth provider error: {str(e)[:200]}")
+
+    email = (data.get("email") or "").lower().strip()
+    name = data.get("name") or email.split("@")[0]
+    picture = data.get("picture") or ""
+    if not email:
+        raise HTTPException(400, "email not returned by provider")
+
+    # Find or create user (preserves email/password sign-up if same email)
+    existing = await db.users.find_one({"email": email}, {"_id": 0})
+    is_new = False
+    if existing:
+        # Mark Google as a known login provider, refresh picture/name once
+        patch: Dict[str, Any] = {
+            "google_linked": True,
+            "last_login_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if picture and not existing.get('avatar_url'):
+            patch['avatar_url'] = picture
+        await db.users.update_one({"id": existing['id']}, {"$set": patch})
+        for field in ['free_images', 'free_videos', 'free_website_trial']:
+            if field not in existing:
+                existing[field] = 0 if field != 'free_website_trial' else False
+        user = User(**{k: v for k, v in existing.items() if k != 'password'})
+    else:
+        is_new = True
+        signup_bonus = POINTS_CONFIG.get("signup_bonus", 20)
+        user = User(
+            email=email, name=name, role="client", country="SA",
+            credits=signup_bonus, bonus_points=signup_bonus,
+            free_images=3, free_videos=2, free_website_trial=True,
+        )
+        doc = user.model_dump()
+        doc['password'] = ""  # No password — Google-only login (can be set later)
+        doc['google_linked'] = True
+        doc['avatar_url'] = picture
+        doc['signup_bonus_claimed'] = True
+        doc['created_at'] = doc['created_at'].isoformat()
+        await db.users.insert_one(doc)
+        await log_activity(user.id, "user_registered", "create",
+                           f"Google sign-up: {email}")
+
+    await log_activity(user.id, "user_login", "create",
+                       f"Google login: {email}")
+    token = create_token(user.id, user.role)
+    return {"token": token, "user": user, "is_new": is_new}
+
 @api_router.get("/auth/me")
 async def get_me(current_user: dict = Depends(get_current_user)):
     user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0, "password": 0})
