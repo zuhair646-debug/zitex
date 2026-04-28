@@ -16,34 +16,35 @@
 
 
 
-### 🆕 Apr 28, 2026 — END-CUSTOMER AI CHAT BOT (P0 — COMPLETE ✅)
+### 🆕 Apr 28, 2026 — END-CUSTOMER AI CHAT BOT v2 + AGENT STREAMING (P0/P1 — COMPLETE ✅)
 
-مساعد ذكي يجيب زبائن المتجر تلقائياً (Claude Sonnet) — مفعّل من لوحة العميل.
+#### Phase 1 — Smarter Chatbot + Human Handoff
+1. **🧠 قاعدة معرفة موسّعة** — `_build_system_prompt` يضخّ الآن: كل المنتجات (بدون حد) + الخدمات + العقارات + الشحن (داخلي/شركات/COD/تأمين/استلام) + بوابات الدفع المُفعّلة + الكوبونات النشطة + برنامج الولاء + الـ FAQ + بيانات التواصل (هاتف/واتساب/بريد/عنوان/سوشيال) + قسم "عن المتجر" + ملاحظات مالك المتجر
+2. **📞 Auto-Handoff لتذكرة دعم** — المساعد يبدأ ردّه بـ `[HANDOFF]` لما يحتاج موظف بشري؛ الـ widget يكشف ذلك ويعرض زر "تواصل مع موظف"
+3. **📝 Handoff Form** — اسم/جوال/بريد/ملاحظة → `POST /api/websites/public/{slug}/chatbot/handoff` ينشئ تذكرة في `support_tickets` مع نسخة كاملة من سجل المحادثة (آخر 30 رسالة)
+4. **🧪 اختبار محقق**: شكوى استرجاع → AI يجاوب بأدب → HANDOFF=true → تذكرة #bff3df61 محفوظة في DB مع customer info + transcript
 
-#### الميزات
-1. **💬 Floating Chat FAB** — زر عائم 💬 على الstorefront (يحقن من `renderer.py` عبر `chatbot_widget`)
-2. **🤖 Claude Sonnet AI** — يعرف اسم المتجر، vertical، المنتجات (حتى 80)، الخدمات، ساعات العمل، context إضافي
-3. **⚙️ Owner/Client Config Tab** — في `ClientDashboard.js` — تفعيل/إيقاف، رسالة ترحيب، ساعات عمل، context إضافي (1500 حرف)
-4. **🧪 Try-it Preview** — اختبار مباشر للمساعد من نفس Tab (يستدعي endpoint العام)
-5. **📊 Usage Counter** — `chatbot_usage.{YYYY-MM}.messages` لكل مشروع (للفوترة المستقبلية)
-6. **🛡️ Rate Limit** — 60 رسالة/ساعة لكل session_id
+#### Phase 2 — DevOps Agent: Long-term Memory + WebSocket Streaming
+1. **📚 Long-term Action Log** — system prompt للوكيل يحقن آخر 20 إجراء من `operator_actions` (الأداة + النتيجة + التاريخ) مع آخر 10 facts من `memory`
+2. **🌊 WebSocket Streaming** — `WS /api/operator/ws/agent/{cid}?token=<jwt>` يبثّ events حية:
+   - `ready` (handshake) → `thinking` → `tool_start` → `tool_done` → `final` → `complete`
+3. **🔧 Frontend**: `ModernChatTab` في `OperatorParts.js` يفتح WS، يعرض كل أداة فور تنفيذها، مع HTTP fallback إن فشل
+4. **🛡️ Auth**: WebSocket يقرأ JWT من query param، يتحقق من owner OR allowlist email
 
-#### الملفات
-- Backend: `/app/backend/modules/websites/chatbot.py`, `chatbot_widget.py`, تعديل `routes.py` + `renderer.py`
-- Frontend: `ChatbotTab` في `/app/frontend/src/pages/client/ClientDashboard.js`
+#### Endpoints المضافة/المعدّلة
+- `POST /api/websites/public/{slug}/chatbot/handoff`  (public — يخلق تذكرة)
+- `WS   /api/operator/ws/agent/{cid}?token=<jwt>`     (operator — streaming)
 
-#### Endpoints
-- `GET  /api/websites/public/{slug}/chatbot/config`  (public)
-- `POST /api/websites/public/{slug}/chatbot`        (public — يرجع reply)
-- `GET  /api/websites/projects/{id}/chatbot/config`  (owner)
-- `PUT  /api/websites/projects/{id}/chatbot/config`  (owner)
-- `GET  /api/websites/client/chatbot/config`        (client session)
-- `PUT  /api/websites/client/chatbot/config`        (client session)
+#### الملفات المعدّلة
+- `/app/backend/modules/websites/chatbot.py` (system prompt + handoff endpoint)
+- `/app/backend/modules/websites/chatbot_widget.py` (handoff UI: button + form)
+- `/app/backend/modules/operator/agent.py` (on_step callback + action log)
+- `/app/backend/modules/operator/routes.py` (WebSocket endpoint)
+- `/app/frontend/src/pages/OperatorParts.js` (live streaming UI)
 
-#### اختبار
-- ✅ Curl flow: enable → public chat → reply صحيح بالعربية
-- ✅ Browser flow: storefront iframe → click FAB → modal → typing → reply من Claude
-- ✅ مثال محقق: "ساعات العمل؟" → "يومياً من 7 صباحاً حتى 12 منتصف الليل"
+#### الميزات الموجودة من قبل (تأكيد ✅)
+- 🟢 **Multi-client Agency Dashboard**: `DashboardView` في `OperatorParts.js` + `GET /api/operator/dashboard` (شغّال)
+- 🟢 **WhatsApp Deployment Alerts**: `health.py` يولّد `whatsapp_link`، `AlertsBell` يعرض الزر، `SettingsPanel` يضبط `alert_phone` (شغّال)
 
 
 

@@ -22,11 +22,14 @@ Endpoints:
   POST   /api/operator/clients/{id}/actions/vercel/test
   POST   /api/operator/clients/{id}/actions/vercel/redeploy
 """
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
+import os
 import uuid
+import json as _json
+import logging as _logging
 
 from . import vault
 from . import actions as ops
@@ -538,6 +541,106 @@ def init_routes(database, auth_dep) -> APIRouter:
     async def _chat_delete(cid: str, session_id: str, _u: dict = Depends(_require_operator)):
         res = await database.operator_chats.delete_many({"client_id": cid, "session_id": session_id})
         return {"deleted": res.deleted_count}
+
+    # ──────────────────────────────────────────────────
+    # 🆕 WebSocket — live agent streaming (real-time tool steps)
+    # ──────────────────────────────────────────────────
+    @r.websocket("/ws/agent/{cid}")
+    async def _ws_agent(ws: WebSocket, cid: str, token: str = ""):
+        """Real-time agent. Frontend opens this WS, sends {text, session_id?},
+        and receives streamed events: thinking / tool_start / tool_done / final / error."""
+        import jwt as _jwt
+        # JWT validation (same as get_current_user)
+        try:
+            secret = os.environ.get("JWT_SECRET", "your-secret-key")
+            payload = _jwt.decode(token, secret, algorithms=["HS256"])
+            user_id = payload.get("user_id")
+            role = payload.get("role")
+            if not user_id:
+                await ws.close(code=4401)
+                return
+        except Exception:
+            await ws.close(code=4401)
+            return
+
+        # Resolve email + ensure operator allowlist (owner bypasses)
+        email = ""
+        if role != "owner":
+            udoc = await database.users.find_one({"id": user_id}, {"_id": 0, "email": 1})
+            email = ((udoc or {}).get("email") or "").lower()
+            doc = await database.operator_settings.find_one({"_id": "global"}, {"_id": 0, "developers": 1})
+            allow = {e.lower() for e in ((doc or {}).get("developers") or [])}
+            if not email or email not in allow:
+                await ws.close(code=4403)
+                return
+        else:
+            udoc = await database.users.find_one({"id": user_id}, {"_id": 0, "email": 1})
+            email = ((udoc or {}).get("email") or "owner")
+
+        client_doc = await database.operator_clients.find_one({"id": cid}, {"_id": 0})
+        if not client_doc:
+            await ws.close(code=4404)
+            return
+
+        await ws.accept()
+        try:
+            await ws.send_json({"kind": "ready", "client_name": client_doc.get("name", "")})
+            while True:
+                raw = await ws.receive_json()
+                text = (raw or {}).get("text", "").strip()
+                session_id = (raw or {}).get("session_id") or str(uuid.uuid4())
+                if not text:
+                    await ws.send_json({"kind": "error", "error": "text required"})
+                    continue
+
+                now = _iso_now()
+                # Persist user turn
+                await database.operator_chats.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "client_id": cid,
+                    "session_id": session_id,
+                    "role": "user",
+                    "text": text,
+                    "by": email or user_id,
+                    "at": now,
+                })
+                await ws.send_json({"kind": "user_saved", "session_id": session_id})
+
+                # Streamed agent run
+                from .agent import AgentRunner
+                runner = AgentRunner(database, client_doc, session_id, email or user_id or "owner")
+
+                async def _on_step(ev):
+                    try:
+                        await ws.send_json({"session_id": session_id, **ev})
+                    except Exception:
+                        pass
+
+                try:
+                    result = await runner.run(text, on_step=_on_step)
+                except Exception as e:
+                    await ws.send_json({"kind": "error", "error": str(e)[:300]})
+                    continue
+
+                # Persist assistant turn
+                await database.operator_chats.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "client_id": cid,
+                    "session_id": session_id,
+                    "role": "assistant",
+                    "text": result.get("final") or "",
+                    "steps": result.get("steps") or [],
+                    "at": _iso_now(),
+                })
+                await ws.send_json({"kind": "complete", "session_id": session_id, "final": result.get("final") or ""})
+        except WebSocketDisconnect:
+            pass
+        except Exception as e:
+            _logging.getLogger(__name__).warning(f"operator ws error: {e}")
+            try:
+                await ws.send_json({"kind": "error", "error": str(e)[:300]})
+            except Exception:
+                pass
 
     # ──────────────────────────────────────────────────
     # Memory (long-term per-client)

@@ -282,7 +282,7 @@ export function SettingsPanel({ H, onClose }) {
 }
 
 // ─────────────────────────────────────────────────────────
-// Modern Chat UX (auto-scroll, collapsible old replies)
+// Modern Chat UX (auto-scroll, collapsible old replies, live WebSocket streaming)
 // ─────────────────────────────────────────────────────────
 export function ModernChatTab({ client, H }) {
   const [sessionId, setSessionId] = useState(null);
@@ -290,7 +290,11 @@ export function ModernChatTab({ client, H }) {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [sessions, setSessions] = useState([]);
+  const [liveSteps, setLiveSteps] = useState([]);  // in-progress tool steps for current turn
+  const [liveStatus, setLiveStatus] = useState(''); // e.g. "🔧 calling read_file..."
   const bottomRef = useRef(null);
+  const wsRef = useRef(null);
+  const pendingResolveRef = useRef(null);
 
   const loadSessions = async () => {
     const d = await fetch(`${API}/api/operator/clients/${client.id}/chat/sessions`, { headers: H }).then(r => r.json());
@@ -300,42 +304,106 @@ export function ModernChatTab({ client, H }) {
     setSessionId(sid);
     if (!sid) { setMessages([]); return; }
     const d = await fetch(`${API}/api/operator/clients/${client.id}/chat/${sid}`, { headers: H }).then(r => r.json());
-    // Auto-collapse all older assistant messages on load
     const msgs = (d.messages || []).map((m, i, arr) => ({
       ...m,
       _collapsed: m.role === 'assistant' && i < arr.length - 1,
     }));
     setMessages(msgs);
   };
-  useEffect(() => { loadSessions(); setSessionId(null); setMessages([]); /* eslint-disable-next-line */ }, [client.id]);
-
-  // Smooth auto-scroll on each new message OR while sending
   useEffect(() => {
-    if (bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
-    }
-  }, [messages, sending]);
+    loadSessions(); setSessionId(null); setMessages([]);
+    // close WS on client switch
+    if (wsRef.current) { try { wsRef.current.close(); } catch (_) {} wsRef.current = null; }
+    // eslint-disable-next-line
+  }, [client.id]);
+
+  useEffect(() => {
+    if (bottomRef.current) bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messages, sending, liveSteps]);
+
+  // Cleanup on unmount
+  useEffect(() => () => { if (wsRef.current) { try { wsRef.current.close(); } catch (_) {} } }, []);
+
+  const ensureSocket = () => new Promise((resolve, reject) => {
+    if (wsRef.current && wsRef.current.readyState === 1) { resolve(wsRef.current); return; }
+    const tok = localStorage.getItem('token') || '';
+    const wsUrl = (API.replace(/^http/, 'ws')) + `/api/operator/ws/agent/${client.id}?token=${encodeURIComponent(tok)}`;
+    const ws = new WebSocket(wsUrl);
+    let opened = false;
+    ws.onopen = () => { opened = true; wsRef.current = ws; };
+    ws.onmessage = (ev) => {
+      let m; try { m = JSON.parse(ev.data); } catch (_) { return; }
+      if (m.kind === 'ready') { resolve(ws); return; }
+      if (m.kind === 'tool_start') {
+        setLiveStatus(`🔧 ${m.tool}(${Object.keys(m.args || {}).join(', ')})...`);
+      } else if (m.kind === 'tool_done') {
+        setLiveSteps(prev => [...prev, m]);
+        setLiveStatus(m.result?.error ? `❌ ${m.tool}` : `✅ ${m.tool}`);
+      } else if (m.kind === 'thinking') {
+        setLiveStatus('💭 يفكّر...');
+      } else if (m.kind === 'final') {
+        setLiveStatus('');
+      } else if (m.kind === 'complete') {
+        if (pendingResolveRef.current) {
+          pendingResolveRef.current({ final: m.final, session_id: m.session_id });
+          pendingResolveRef.current = null;
+        }
+      } else if (m.kind === 'error') {
+        if (pendingResolveRef.current) {
+          pendingResolveRef.current({ error: m.error });
+          pendingResolveRef.current = null;
+        }
+      }
+    };
+    ws.onerror = () => { if (!opened) reject(new Error('WebSocket failed')); };
+    ws.onclose = () => { wsRef.current = null; };
+    setTimeout(() => { if (!opened) reject(new Error('WS timeout')); }, 10000);
+  });
 
   const send = async () => {
     const t = input.trim(); if (!t || sending) return;
     setInput('');
-    // Auto-collapse all previous assistant messages when sending a new question
     setMessages(prev => [
       ...prev.map(m => m.role === 'assistant' ? { ...m, _collapsed: true } : m),
       { role: 'user', text: t, at: new Date().toISOString() },
     ]);
     setSending(true);
+    setLiveSteps([]); setLiveStatus('🚀 متصل...');
+
+    // Try WebSocket streaming; fallback to HTTP if WS fails
+    let usedWS = false;
     try {
-      const r = await fetch(`${API}/api/operator/clients/${client.id}/chat`, {
-        method: 'POST', headers: H,
-        body: JSON.stringify({ text: t, session_id: sessionId || undefined }),
+      const ws = await ensureSocket();
+      usedWS = true;
+      const result = await new Promise((resolve) => {
+        pendingResolveRef.current = resolve;
+        ws.send(JSON.stringify({ text: t, session_id: sessionId || undefined }));
       });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.detail || 'Failed');
-      if (!sessionId) { setSessionId(d.session_id); loadSessions(); }
-      setMessages(prev => [...prev, { role: 'assistant', text: d.final, steps: d.steps, at: new Date().toISOString(), _collapsed: false }]);
-    } catch (e) { toast.error(e.message); }
-    setSending(false);
+      if (result.error) throw new Error(result.error);
+      if (!sessionId && result.session_id) { setSessionId(result.session_id); loadSessions(); }
+      // Capture the steps we collected via stream; merge into final message
+      setMessages(prev => {
+        const stepsCopy = liveSteps.slice();
+        return [...prev, { role: 'assistant', text: result.final, steps: stepsCopy, at: new Date().toISOString(), _collapsed: false }];
+      });
+    } catch (e) {
+      if (!usedWS) {
+        // HTTP fallback
+        try {
+          const r = await fetch(`${API}/api/operator/clients/${client.id}/chat`, {
+            method: 'POST', headers: H,
+            body: JSON.stringify({ text: t, session_id: sessionId || undefined }),
+          });
+          const d = await r.json();
+          if (!r.ok) throw new Error(d.detail || 'Failed');
+          if (!sessionId) { setSessionId(d.session_id); loadSessions(); }
+          setMessages(prev => [...prev, { role: 'assistant', text: d.final, steps: d.steps, at: new Date().toISOString(), _collapsed: false }]);
+        } catch (e2) { toast.error(e2.message); }
+      } else {
+        toast.error(e.message);
+      }
+    }
+    setSending(false); setLiveStatus(''); setLiveSteps([]);
   };
 
   const toggleCollapse = (idx) => {
@@ -400,9 +468,22 @@ export function ModernChatTab({ client, H }) {
             <ModernMessageRow key={i} msg={m} idx={i} onToggle={() => toggleCollapse(i)} />
           ))}
           {sending && (
-            <div className="flex items-center gap-2 text-xs text-white/60 p-3" data-testid="thinking">
-              <div className="animate-bounce">🤖</div>
-              <span className="animate-pulse">الوكيل يفكّر ويستدعي الأدوات...</span>
+            <div className="flex flex-col gap-2" data-testid="thinking">
+              {liveSteps.length > 0 && (
+                <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-2 space-y-1.5">
+                  {liveSteps.map((s, i) => (
+                    <div key={i} className="flex items-start gap-2 text-[11px]">
+                      <span>{s.result?.error ? '❌' : '✅'}</span>
+                      <code className={`font-mono font-bold ${s.result?.error ? 'text-red-300' : 'text-emerald-300'}`}>{s.tool}</code>
+                      <span className="text-white/50 truncate flex-1">({Object.keys(s.args || {}).join(', ')})</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-center gap-2 text-xs text-white/70 p-3 bg-white/[.03] border border-white/5 rounded-lg" data-testid="live-status">
+                <div className="animate-bounce">🤖</div>
+                <span className="animate-pulse">{liveStatus || 'الوكيل يفكّر ويستدعي الأدوات...'}</span>
+              </div>
             </div>
           )}
           <div ref={bottomRef} />

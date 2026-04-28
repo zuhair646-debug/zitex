@@ -251,8 +251,14 @@ class AgentRunner:
             return {"error": str(e)[:500]}
 
     # ── Core loop ───────────────────────────────────────────────────
-    async def run(self, user_text: str) -> Dict[str, Any]:
-        """Run the ReAct loop for one user turn. Returns {final, steps}."""
+    async def run(self, user_text: str, on_step=None) -> Dict[str, Any]:
+        """Run the ReAct loop for one user turn. Returns {final, steps}.
+
+        Args:
+            user_text: The new user message.
+            on_step: optional async callable(event_dict) invoked after each tool step
+                     and once at the end. Used for WebSocket streaming.
+        """
         api_key = os.environ.get("EMERGENT_LLM_KEY", "")
         if not api_key:
             return {"final": "❌ EMERGENT_LLM_KEY غير مُعدّ في .env", "steps": []}
@@ -266,6 +272,24 @@ class AgentRunner:
             memory_block = "\n\n=== ذاكرة دائمة عن العميل (مما تعلّمته سابقاً) ===\n" + "\n".join(
                 f"• {m.get('fact','')}" for m in memory
             )
+
+        # Recent action log (long-term operational history)
+        try:
+            recent = await self.db.operator_actions.find(
+                {"client_id": self.cid, "action": {"$regex": "^agent\\."}},
+                {"_id": 0, "action": 1, "ok": 1, "detail": 1, "at": 1, "by": 1},
+            ).sort("at", -1).limit(20).to_list(20)
+        except Exception:
+            recent = []
+        if recent:
+            lines = []
+            for r in reversed(recent):
+                ok = "✓" if r.get("ok") else "✗"
+                tool = (r.get("action") or "").replace("agent.", "")
+                detail = (r.get("detail") or "")[:120]
+                at = (r.get("at") or "")[:19]
+                lines.append(f"  [{at}] {ok} {tool}({detail})")
+            memory_block += "\n\n=== سجل الإجراءات الأخيرة (آخر 20) ===\n" + "\n".join(lines)
 
         sys_prompt = SYSTEM_PROMPT + "\n\n=== بيانات العميل ===\n" + json.dumps(
             {
@@ -309,15 +333,27 @@ class AgentRunner:
 
         # The actual new user turn
         current = user_text
+
+        async def _emit(ev):
+            if on_step:
+                try:
+                    await on_step(ev)
+                except Exception:
+                    pass
+
         for step_n in range(MAX_TOOL_STEPS):
+            await _emit({"kind": "thinking", "step": step_n})
             try:
                 raw = await chat.send_message(UserMessage(text=current))
             except Exception as e:
-                return {"final": f"❌ خطأ في LLM: {e}", "steps": self.steps}
+                final_msg = f"❌ خطأ في LLM: {e}"
+                await _emit({"kind": "final", "text": final_msg})
+                return {"final": final_msg, "steps": self.steps}
 
             parsed = self._parse(raw)
             if "final" in parsed:
                 self.steps.append({"kind": "final", "thought": parsed.get("thought", ""), "text": parsed["final"]})
+                await _emit({"kind": "final", "thought": parsed.get("thought", ""), "text": parsed["final"]})
                 return {"final": parsed["final"], "steps": self.steps}
 
             tool = parsed.get("tool")
@@ -325,16 +361,23 @@ class AgentRunner:
             if not tool:
                 # Treat plain text as final
                 self.steps.append({"kind": "final", "thought": "", "text": raw})
+                await _emit({"kind": "final", "text": raw})
                 return {"final": raw, "steps": self.steps}
 
+            # Notify that we're about to call a tool (for live UI updates)
+            await _emit({"kind": "tool_start", "tool": tool, "args": args, "thought": parsed.get("thought", "")})
+
             result = await self._run_tool(tool, args)
-            self.steps.append({
+            step_record = {
                 "kind": "tool",
                 "thought": parsed.get("thought", ""),
                 "tool": tool,
                 "args": args,
                 "result": result,
-            })
+            }
+            self.steps.append(step_record)
+            await _emit({"kind": "tool_done", **step_record})
+
             # Log tool usage for audit
             await self.db.operator_actions.insert_one({
                 "client_id": self.cid,
@@ -352,7 +395,9 @@ class AgentRunner:
                 + "\n```\nاستكمل — استدعِ أداة أخرى أو انهِ الحوار عبر `done`."
             )
 
-        return {"final": "⚠️ وصلت إلى الحد الأقصى من الخطوات (12) بدون إنهاء. راجع التفاصيل.", "steps": self.steps}
+        cap_msg = "⚠️ وصلت إلى الحد الأقصى من الخطوات (12) بدون إنهاء. راجع التفاصيل."
+        await _emit({"kind": "final", "text": cap_msg})
+        return {"final": cap_msg, "steps": self.steps}
 
     def _parse(self, text: str) -> Dict[str, Any]:
         """Extract the single JSON block from model output, tolerating markdown fences."""
