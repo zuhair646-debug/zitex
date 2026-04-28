@@ -2949,6 +2949,16 @@ color:#000;text-decoration:none;border-radius:12px;font-weight:900}}</style></he
     from .engines_v2 import register_engines_v2 as _reg_v2
     _reg_v2(r, database, _resolve_client_project, _resolve_site_customer)
 
+    # 🆕 Chatbot owner config + public chat endpoints
+    try:
+        from .chatbot import register_owner_endpoints, init_routes as init_chatbot_routes
+        register_owner_endpoints(r, database, auth_dep)
+        chatbot_router = init_chatbot_routes(database)
+        app.include_router(chatbot_router, prefix="/api")
+    except Exception as _ce:
+        import logging
+        logging.getLogger(__name__).error(f"chatbot module failed: {_ce}")
+
     app.include_router(r)
     return r
 
