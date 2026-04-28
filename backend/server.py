@@ -444,6 +444,7 @@ class UserRegisterWithReferral(BaseModel):
     name: str
     country: str = "SA"
     referral_code: Optional[str] = None
+    affiliate_code: Optional[str] = None  # 🆕 paid affiliate program
 
 @api_router.post("/auth/register")
 async def register(user_data: UserRegisterWithReferral):
@@ -489,9 +490,21 @@ async def register(user_data: UserRegisterWithReferral):
                 {"id": inviter['id']},
                 {"$inc": {"credits": inviter_bonus, "bonus_points": inviter_bonus, "total_referrals": 1}}
             )
+
+    # 🆕 Paid affiliate attribution (if user signed up via marketer's link)
+    if user_data.affiliate_code:
+        doc['affiliate_ref'] = user_data.affiliate_code.upper()
     
     await db.users.insert_one(doc)
     await log_activity(user.id, "user_registered", "create", f"New user registered: {user.email} with {doc['credits']} bonus points")
+
+    # 🆕 Track affiliate signup (best-effort, never blocks registration)
+    if user_data.affiliate_code:
+        try:
+            from modules.affiliate.routes import record_signup
+            await record_signup(db, user.id, user_data.affiliate_code)
+        except Exception as _ae:
+            logging.getLogger(__name__).warning(f"affiliate signup hook failed: {_ae}")
     
     token = create_token(user.id, user.role)
     
@@ -2933,6 +2946,15 @@ try:
             logging.getLogger(__name__).error(f"operator scheduler failed: {_e}")
 except Exception as _oe:
     logging.getLogger(__name__).error(f"Failed to register operator module: {_oe}", exc_info=True)
+
+# ============== AFFILIATE (Paid marketing program) ==============
+try:
+    from modules.affiliate.routes import init_routes as init_affiliate_routes
+    _affiliate_router = init_affiliate_routes(db, get_current_user)
+    app.include_router(_affiliate_router, prefix="/api")
+    logging.getLogger(__name__).info("Affiliate module registered")
+except Exception as _afe:
+    logging.getLogger(__name__).error(f"Failed to register affiliate module: {_afe}", exc_info=True)
 
 # ============== VISUAL DESIGNER APIS ==============
 class DesignElement(BaseModel):

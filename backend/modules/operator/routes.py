@@ -172,6 +172,7 @@ def init_routes(database, auth_dep) -> APIRouter:
         name: Optional[str] = None
         client_email: Optional[str] = None
         notes: Optional[str] = None
+        auto_fix_enabled: Optional[bool] = None  # 🆕 enables autonomous repair on failure
         github: Optional[GithubIn] = None
         railway: Optional[RailwayIn] = None
         vercel: Optional[VercelIn] = None
@@ -272,6 +273,8 @@ def init_routes(database, auth_dep) -> APIRouter:
             patch["client_email"] = body.client_email.strip()
         if body.notes is not None:
             patch["notes"] = body.notes
+        if body.auto_fix_enabled is not None:
+            patch["auto_fix_enabled"] = bool(body.auto_fix_enabled)
         if body.github is not None:
             patch["github"] = _apply_github(existing.get("github") or {}, body.github)
         if body.railway is not None:

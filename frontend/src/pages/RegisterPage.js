@@ -18,13 +18,26 @@ const RegisterPage = ({ setUser }) => {
     email: '', 
     password: '', 
     country: 'SA',
-    referral_code: ''
+    referral_code: '',
+    affiliate_code: ''   // 🆕 paid affiliate
   });
+  const [marketerName, setMarketerName] = useState('');
 
   useEffect(() => {
     const refCode = searchParams.get('ref');
     if (refCode) {
       setFormData(prev => ({ ...prev, referral_code: refCode }));
+    }
+    // 🆕 Capture affiliate code (paid program)
+    const affCode = searchParams.get('aff');
+    if (affCode) {
+      const code = affCode.toUpperCase();
+      setFormData(prev => ({ ...prev, affiliate_code: code }));
+      // Validate + show marketer name
+      fetch(`${process.env.REACT_APP_BACKEND_URL}/api/affiliate/validate/${code}`)
+        .then(r => r.json())
+        .then(d => { if (d.valid) setMarketerName(d.marketer_name); })
+        .catch(() => {});
     }
   }, [searchParams]);
 
@@ -86,6 +99,16 @@ const RegisterPage = ({ setUser }) => {
               <span className="font-semibold">احصل على 20 نقطة + 3 صور + 2 فيديو مجاناً!</span>
             </div>
           </div>
+
+          {/* 🆕 Affiliate banner */}
+          {marketerName && (
+            <div className="mt-3 p-3 bg-gradient-to-r from-emerald-900/30 to-cyan-900/30 border border-emerald-500/30 rounded-lg" data-testid="affiliate-banner">
+              <div className="flex items-center justify-center gap-2 text-emerald-300 text-sm">
+                <span>🤝</span>
+                <span>تم دعوتك من قبل: <b>{marketerName}</b></span>
+              </div>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

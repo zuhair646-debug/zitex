@@ -115,6 +115,34 @@ async def run_all_health_checks(database) -> Dict[str, Any]:
             await database.operator_alerts.insert_one(alert_doc)
             alerts.append(alert_doc)
 
+            # 🆕 AI Auto-Fix Mode
+            if c.get("auto_fix_enabled"):
+                try:
+                    from .agent import AgentRunner
+                    import uuid as _uuid
+                    runner = AgentRunner(database, c, f"autofix-{_uuid.uuid4()}", "auto-fix-bot")
+                    fix_prompt = (
+                        "تشغيل تلقائي: اكتشفت خاصية الفحص الدوري أن آخر deployment على Railway فاشل "
+                        f"(status={rw.get('status')}). افحص السبب الجذري عبر سحب سجلات Railway "
+                        "وقراءة الملفات ذات الصلة (مثل railway.toml, Procfile, requirements.txt). "
+                        "إن وجدت إصلاحاً واضحاً، طبّقه عبر write_file ثم railway_redeploy. "
+                        "احفظ الدرس في الذاكرة عبر remember. أنهِ بـ done مع رسالة تلخّص ما حدث."
+                    )
+                    result = await runner.run(fix_prompt)
+                    final_msg = (result or {}).get("final", "(لا رد)")
+                    summary = f"🤖 إصلاح تلقائي لـ {c.get('name')}: {final_msg[:200]}"
+                    wa2 = whatsapp_link(alert_phone, summary) if alert_phone else ""
+                    await database.operator_alerts.insert_one({
+                        "client_id": c["id"],
+                        "kind": "auto_fix_attempted",
+                        "title": summary,
+                        "whatsapp_link": wa2,
+                        "at": _iso_now(),
+                        "seen": False,
+                    })
+                except Exception as e:
+                    log.error("auto-fix failed for %s: %s", c.get("name"), e)
+
     # Realtime broadcast (fire-and-forget, ignore failures)
     try:
         from server import realtime_broadcast_global  # type: ignore

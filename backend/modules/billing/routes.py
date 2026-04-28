@@ -295,6 +295,19 @@ def register_routes(app, db, get_current_user):
             )
             log.info(f"[webhook] Activated studio subscription for user {txn['user_id']}")
 
+            # 🆕 Affiliate commission hook (best-effort, never breaks payment)
+            try:
+                from modules.affiliate.routes import record_commission
+                await record_commission(
+                    db,
+                    referred_user_id=txn["user_id"],
+                    txn_session_id=session_id,
+                    amount=float(txn.get("amount") or 0),
+                    currency=str(txn.get("currency") or "usd"),
+                )
+            except Exception as _afe:
+                log.warning(f"affiliate commission hook failed: {_afe}")
+
         return {"received": True}
 
     app.include_router(router)

@@ -303,12 +303,37 @@ function InfoTab({ client, save, saving }) {
   const [name, setName] = useState(client.name);
   const [email, setEmail] = useState(client.client_email || '');
   const [notes, setNotes] = useState(client.notes || '');
+  const [autoFix, setAutoFix] = useState(!!client.auto_fix_enabled);
   return (
     <div className="space-y-4 max-w-xl">
       <Field label="اسم العميل"><input value={name} onChange={e => setName(e.target.value)} className="inp" data-testid="info-name" /></Field>
       <Field label="بريد العميل"><input value={email} onChange={e => setEmail(e.target.value)} className="inp" data-testid="info-email" /></Field>
       <Field label="ملاحظات"><textarea rows={4} value={notes} onChange={e => setNotes(e.target.value)} className="inp" data-testid="info-notes" /></Field>
-      <button disabled={saving} onClick={() => save({ name, client_email: email, notes })} className="btn-primary" data-testid="save-info">💾 حفظ</button>
+
+      {/* 🆕 Auto-fix mode */}
+      <div className="bg-gradient-to-br from-violet-500/10 to-fuchsia-500/10 border border-violet-400/30 rounded-xl p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1">
+            <div className="font-black text-base flex items-center gap-2"><span>🤖</span> الإصلاح التلقائي (Auto-Fix)</div>
+            <p className="text-xs text-white/65 mt-1 leading-relaxed">
+              عند تفعيل هذه الميزة، سيقوم الوكيل تلقائياً بـ:
+              <br />• اكتشاف فشل الـ deployment على Railway (كل 6 ساعات)
+              <br />• قراءة السجلّات والملفات ذات الصلة
+              <br />• تطبيق الإصلاح ودفعه إلى GitHub
+              <br />• إعادة النشر والتأكّد من النجاح
+              <br />• إرسال إشعار واتساب بالنتيجة
+            </p>
+          </div>
+          <label className="cursor-pointer flex-shrink-0">
+            <input type="checkbox" checked={autoFix} onChange={e => setAutoFix(e.target.checked)} className="sr-only" data-testid="autofix-toggle" />
+            <div className={`w-12 h-6 rounded-full p-0.5 transition-colors ${autoFix ? 'bg-violet-500' : 'bg-white/15'}`}>
+              <div className={`w-5 h-5 rounded-full bg-white transition-transform ${autoFix ? 'translate-x-6' : ''}`} />
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <button disabled={saving} onClick={() => save({ name, client_email: email, notes, auto_fix_enabled: autoFix })} className="btn-primary" data-testid="save-info">💾 حفظ</button>
     </div>
   );
 }

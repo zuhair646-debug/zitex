@@ -30,6 +30,8 @@ import WebsiteStudio from '@/pages/websites/WebsiteStudio';
 import PublicSite from '@/pages/PublicSite';
 import SourceBrowser from '@/pages/SourceBrowser';
 import Operator from '@/pages/Operator';
+import Affiliate from '@/pages/Affiliate';
+import AdminAffiliates from '@/pages/AdminAffiliates';
 import AdminSites from '@/pages/websites/AdminSites';
 import ClientSiteDashboard from '@/pages/client/ClientDashboard';
 import DriverDashboardPage from '@/pages/driver/DriverDashboard';
@@ -114,6 +116,8 @@ function App() {
           <Route path="/admin/sites" element={<ProtectedRoute adminOnly><AdminSites user={user} /></ProtectedRoute>} />
           <Route path="/source" element={<ProtectedRoute adminOnly><SourceBrowser user={user} /></ProtectedRoute>} />
           <Route path="/operator" element={<ProtectedRoute><Operator user={user} /></ProtectedRoute>} />
+          <Route path="/affiliate" element={<ProtectedRoute><Affiliate user={user} /></ProtectedRoute>} />
+          <Route path="/admin/affiliates" element={<ProtectedRoute adminOnly><AdminAffiliates /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
       <Toaster position="top-center" richColors />
