@@ -16,6 +16,40 @@
 
 
 
+### 🆕 Apr 28, 2026 — STORIES TEMPLATES LIBRARY (P1 — COMPLETE ✅)
+
+**One-click AI Story generation** — مكتبة قوالب Stories جاهزة، يختار المالك قالب → يكتب القيم → AI يولّد صورة/فيديو يحمل هويته البصرية.
+
+#### الميزات
+- **14 قالب جاهز** عبر 7 فئات:
+  - ⚡ خصومات (3): خصم خاطف، إعلان فيديو، عرض الويكند
+  - ✨ منتجات جديدة (2): كشف منتج (صورة/فيديو)
+  - 💖 شكر (1): بطاقة شكر للزبائن
+  - 🎉 فعاليات (1): إعلان حدث
+  - 🌟 مميزات (3) — vertical-aware: طبق اليوم (cafe/restaurant)، خدمة سبا (salon)، عرض عقار (real_estate)
+  - 📢 إعلانات (2): ساعات العمل، عرض رمضاني
+  - 🔔 تذكير (1): توصيل مجاني
+- **Vertical-aware**: المتجر يشاهد فقط القوالب المناسبة لـ vertical الخاص به
+- **Brand-aware**: استخدام تلقائي لـ store_name + primary_color في الـ prompt
+- **Smart fields**: حقول ديناميكية لكل قالب (e.g., نسبة الخصم، اسم المنتج، التاريخ)
+- **Validation**: حقول مطلوبة بـ Arabic error messages
+- **Auto-caption**: caption لكل story مولّد تلقائياً من القالب
+
+#### Endpoints
+- `GET  /api/websites/client/stories/templates` — قائمة filtered by vertical
+- `POST /api/websites/client/stories/from-template` — يستلم {template_id, fields} → ينشئ story مباشرة (image) أو يبدأ Sora job (video)
+
+#### الملفات
+- `/app/backend/modules/websites/stories_templates.py` (NEW — 14 templates مع prompts)
+- `/app/backend/modules/websites/stories.py` (مضاف: 2 endpoints جديدة)
+- `/app/frontend/src/pages/client/ClientDashboard.js` — `StoriesTab` الآن فيه sub-tab `⚡ قوالب جاهزة` (افتراضي) + grid عرض + modal تخصيص
+
+#### اختبار محقق
+- ✅ List: 11 templates لـ vertical=cafe (لا يحتوي salon/property templates)
+- ✅ Apply image template (sale_flash_image, discount=25, product_hint=كروسان دارك) → story مولّد بـ Nano Banana مع caption "⚡ خصم 25% — لا تفوّت الفرصة!"
+- ✅ Field validation: missing required field → 400 "يجب تعبئة: اسم المنتج"
+- ✅ Visual: Story الجديد يظهر فوراً في storefront ribbon
+
 ### 🆕 Apr 28, 2026 — STORIES + ANIMATED BANNER + ANALYTICS (P0 — COMPLETE ✅)
 
 #### 1. Stories + Animated Banner للمتجر

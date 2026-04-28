@@ -366,3 +366,88 @@ def register_routes(r: APIRouter, database, resolve_client_project) -> None:
             fresh = await database.website_projects.find_one({"id": p["id"]}, {"_id": 0, "stories": 1})
             out["stories"] = (fresh or {}).get("stories") or []
         return out
+
+    # ─── Stories Templates Library — one-click AI-generated stories ───
+    from . import stories_templates as _stpl
+
+    @r.get("/client/stories/templates")
+    async def _list_templates(authorization: str = _Header(None)):
+        p = await resolve_client_project(authorization or "")
+        items = _stpl.filter_for_vertical(p.get("vertical"))
+        # Strip the heavy `prompt` text from listing — only needed at render time
+        return {"templates": [
+            {k: v for k, v in t.items() if k not in ("prompt", "caption_tpl")}
+            for t in items
+        ]}
+
+    class TemplateApplyIn(BaseModel):
+        template_id: str
+        fields: Optional[Dict[str, Any]] = None
+
+    @r.post("/client/stories/from-template")
+    async def _apply_template(body: TemplateApplyIn, authorization: str = _Header(None)):
+        p = await resolve_client_project(authorization or "")
+        tpl = _stpl.get_template(body.template_id)
+        if not tpl:
+            raise HTTPException(404, "قالب غير موجود")
+        # Validate required fields
+        fields = body.fields or {}
+        missing = [f["label"] for f in tpl.get("fields", [])
+                   if f.get("required") and not str(fields.get(f["name"]) or "").strip()]
+        if missing:
+            raise HTTPException(400, f"يجب تعبئة: {', '.join(missing)}")
+
+        # Build context from project + brand colors
+        theme = (p.get("theme") or {}) if isinstance(p.get("theme"), dict) else {}
+        ctx = {
+            "store_name": p.get("name") or "",
+            "vertical": p.get("vertical") or "",
+            "primary_color": theme.get("primary") or "warm gold",
+            "secondary_color": theme.get("secondary") or "deep navy",
+            "language": "Arabic",
+            "fields": fields,
+        }
+        try:
+            prompt, caption = _stpl.render_prompt(tpl, ctx)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+
+        # IMAGE template — generate inline & attach as story
+        if tpl.get("output") == "image":
+            media_url = await _generate_image_nano_banana(prompt)
+            sid = await _append_story(database, p["id"], {
+                "type": "image", "media_url": media_url,
+                "caption": caption, "duration_sec": 7,
+                "visible": True, "ai_generated": True,
+            })
+            return {"ok": True, "type": "image", "story_id": sid, "caption": caption}
+
+        # VIDEO template — kick off Sora job
+        duration = int(tpl.get("duration_sec") or 4)
+        size = tpl.get("size") or "1024x1792"
+        job_id = f"vj-{uuid.uuid4().hex[:12]}"
+        _VIDEO_JOBS[job_id] = {
+            "id": job_id, "project_id": p["id"],
+            "prompt": prompt[:200], "caption": caption,
+            "status": "queued", "queued_at": _iso_now(),
+        }
+
+        async def _enrich_story_caption():
+            """When the Sora job finishes, override the auto-caption with the template caption."""
+            for _ in range(360):  # poll up to ~30 minutes
+                await asyncio.sleep(5)
+                j = _VIDEO_JOBS.get(job_id)
+                if not j or j.get("status") in ("done", "failed"):
+                    break
+            j = _VIDEO_JOBS.get(job_id) or {}
+            sid = j.get("story_id")
+            if sid:
+                await database.website_projects.update_one(
+                    {"id": p["id"], "stories.id": sid},
+                    {"$set": {"stories.$.caption": caption}},
+                )
+
+        asyncio.create_task(_run_video_job(job_id, p["id"], prompt, duration, size, True, database))
+        asyncio.create_task(_enrich_story_caption())
+        return {"ok": True, "type": "video", "job_id": job_id,
+                "caption": caption, "estimated_seconds": 120 if duration == 4 else 240}

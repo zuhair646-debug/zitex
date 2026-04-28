@@ -1921,18 +1921,24 @@ function StoriesTab({ token, slug }) {
   const [vidPrompt, setVidPrompt] = useState('');
   const [vidDuration, setVidDuration] = useState(4);
   const [vidJob, setVidJob] = useState(null);
-  const [tab, setTab] = useState('stories'); // 'stories' | 'banner'
+  const [tab, setTab] = useState('templates'); // 'templates' | 'stories' | 'banner'
+  const [templates, setTemplates] = useState([]);
+  const [tplPicked, setTplPicked] = useState(null);
+  const [tplFields, setTplFields] = useState({});
+  const [tplBusy, setTplBusy] = useState(false);
+  const [tplCategory, setTplCategory] = useState('all');
   const fileRef = useRef(null);
 
   const headers = { 'Content-Type': 'application/json', ...authH(token) };
 
   const loadAll = useCallback(async () => {
     try {
-      const [sR, bR] = await Promise.all([
+      const [sR, bR, tR] = await Promise.all([
         fetch(`${API}/api/websites/client/stories`, { headers: authH(token) }),
         fetch(`${API}/api/websites/client/banner`, { headers: authH(token) }),
+        fetch(`${API}/api/websites/client/stories/templates`, { headers: authH(token) }),
       ]);
-      const sD = await sR.json(); const bD = await bR.json();
+      const sD = await sR.json(); const bD = await bR.json(); const tD = await tR.json();
       setStories(sD.stories || []);
       setBanner({
         enabled: !!bD.enabled, type: bD.type || 'image',
@@ -1942,6 +1948,7 @@ function StoriesTab({ token, slug }) {
         animation: bD.animation || 'kenburns',
         overlay_opacity: bD.overlay_opacity ?? 0.45,
       });
+      setTemplates(tD.templates || []);
     } catch (_) { toast.error('فشل التحميل'); }
   }, [token]);
   useEffect(() => { loadAll(); }, [loadAll]);
@@ -2039,6 +2046,40 @@ function StoriesTab({ token, slug }) {
     finally { setGenBusy(false); }
   };
 
+  const pickTemplate = (t) => {
+    setTplPicked(t);
+    const init = {};
+    (t.fields || []).forEach(f => { init[f.name] = f.default ?? ''; });
+    setTplFields(init);
+  };
+  const applyTemplate = async () => {
+    if (!tplPicked) return;
+    const required = (tplPicked.fields || []).filter(f => f.required);
+    for (const f of required) {
+      const v = String(tplFields[f.name] ?? '').trim();
+      if (!v) { toast.error(`الرجاء تعبئة: ${f.label}`); return; }
+    }
+    setTplBusy(true);
+    try {
+      const r = await fetch(`${API}/api/websites/client/stories/from-template`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ template_id: tplPicked.id, fields: tplFields }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'فشل');
+      if (d.type === 'image') {
+        toast.success('✨ تم إنشاء الـ Story بنقرة واحدة!');
+        setTplPicked(null);
+        loadAll();
+      } else if (d.type === 'video') {
+        toast.success(`🎬 بدأ توليد الفيديو (≈${Math.round(d.estimated_seconds / 60)} دقيقة)`);
+        setVidJob({ job_id: d.job_id, status: 'queued', prompt: tplPicked.name });
+        setTplPicked(null);
+      }
+    } catch (e) { toast.error(e.message); }
+    finally { setTplBusy(false); }
+  };
+
   if (!banner) return <div className="p-6 text-white/50">جارٍ التحميل...</div>;
 
   return (
@@ -2051,6 +2092,7 @@ function StoriesTab({ token, slug }) {
       {/* Sub-tabs */}
       <div className="flex gap-1 p-1 bg-white/5 rounded-xl w-fit">
         {[
+          { id: 'templates', label: '⚡ قوالب جاهزة' },
           { id: 'stories', label: '⭕ الحالات' },
           { id: 'banner', label: '🌅 البنر المتحرك' },
         ].map(t => (
@@ -2061,6 +2103,103 @@ function StoriesTab({ token, slug }) {
           </button>
         ))}
       </div>
+
+      {tab === 'templates' && (
+        <div className="space-y-4" data-testid="templates-panel">
+          {/* Category filter */}
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { id: 'all', label: 'الكل' },
+              { id: 'sale', label: '⚡ خصومات' },
+              { id: 'new_product', label: '✨ منتج جديد' },
+              { id: 'thanks', label: '💖 شكر' },
+              { id: 'event', label: '🎉 فعاليات' },
+              { id: 'feature', label: '🌟 مميزات' },
+              { id: 'announcement', label: '📢 إعلانات' },
+              { id: 'reminder', label: '🔔 تذكير' },
+            ].map(c => (
+              <button key={c.id} onClick={() => setTplCategory(c.id)}
+                className={`px-3 py-1 rounded-full text-xs font-bold ${tplCategory === c.id ? 'bg-yellow-500 text-black' : 'bg-white/5 hover:bg-white/10'}`}
+                data-testid={`tpl-cat-${c.id}`}>
+                {c.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Templates grid */}
+          {templates.length === 0 ? (
+            <div className="text-center py-10 opacity-60 text-sm">جارٍ تحميل القوالب...</div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              {templates
+                .filter(t => tplCategory === 'all' || t.category === tplCategory)
+                .map((t) => (
+                  <button key={t.id} onClick={() => pickTemplate(t)}
+                    className="bg-gradient-to-br from-white/5 to-white/0 hover:from-yellow-500/10 hover:to-orange-500/5 border border-white/10 hover:border-yellow-500/40 rounded-xl p-4 text-right transition-all group"
+                    data-testid={`tpl-${t.id}`}>
+                    <div className="text-3xl mb-2">{t.emoji}</div>
+                    <div className="font-bold text-sm group-hover:text-yellow-300">{t.name}</div>
+                    <div className="text-[11px] opacity-60 mt-1 leading-snug">{t.description}</div>
+                    <div className="mt-2 flex items-center gap-1.5 text-[10px]">
+                      <span className={`px-1.5 py-0.5 rounded ${t.output === 'video' ? 'bg-purple-500/20 text-purple-300' : 'bg-emerald-500/20 text-emerald-300'}`}>
+                        {t.output === 'video' ? '🎥 فيديو' : '🖼️ صورة'}
+                      </span>
+                      {t.output === 'video' && <span className="opacity-60">{t.duration_sec}ث</span>}
+                    </div>
+                  </button>
+                ))}
+            </div>
+          )}
+
+          {/* Picked template modal */}
+          {tplPicked && (
+            <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) setTplPicked(null); }} data-testid="tpl-modal">
+              <div className="bg-[#0e1128] border border-yellow-500/30 rounded-2xl p-5 max-w-md w-full max-h-[85vh] overflow-y-auto">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-black flex items-center gap-2">
+                    <span className="text-2xl">{tplPicked.emoji}</span>
+                    {tplPicked.name}
+                  </h3>
+                  <button onClick={() => setTplPicked(null)} className="opacity-60 hover:opacity-100 text-xl">×</button>
+                </div>
+                <div className="text-xs opacity-70 mb-4">{tplPicked.description}</div>
+
+                {(tplPicked.fields || []).length === 0 ? (
+                  <div className="text-xs opacity-60 mb-3 p-2 bg-white/5 rounded">هذا القالب لا يحتاج إلى مدخلات — جاهز للإنشاء فوراً.</div>
+                ) : (
+                  <div className="space-y-3 mb-4">
+                    {(tplPicked.fields || []).map((f) => (
+                      <label key={f.name} className="block">
+                        <span className="text-xs opacity-70 mb-1 block">
+                          {f.label}{f.required && <span className="text-red-400 mr-1">*</span>}
+                        </span>
+                        <input
+                          type={f.type === 'number' ? 'number' : 'text'}
+                          value={tplFields[f.name] ?? ''}
+                          onChange={(e) => setTplFields({ ...tplFields, [f.name]: e.target.value })}
+                          placeholder={f.default ? String(f.default) : ''}
+                          className="w-full px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm"
+                          data-testid={`tpl-field-${f.name}`}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                )}
+
+                <div className="text-[11px] p-2 bg-amber-500/5 border border-amber-500/20 rounded mb-3">
+                  💡 سيتم استخدام اسم متجرك ولونه الأساسي تلقائياً للحفاظ على هويتك البصرية.
+                </div>
+
+                <button onClick={applyTemplate} disabled={tplBusy}
+                  className="w-full py-3 bg-gradient-to-r from-yellow-500 via-orange-500 to-pink-500 text-black rounded-lg font-black text-sm disabled:opacity-50"
+                  data-testid="tpl-apply-btn">
+                  {tplBusy ? '⏳ جارٍ الإنشاء...' : (tplPicked.output === 'video' ? '🎬 توليد بنقرة واحدة' : '✨ إنشاء بنقرة واحدة')}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {tab === 'stories' && (
         <div className="space-y-4">
