@@ -16,6 +16,37 @@
 
 
 
+### 🆕 Apr 28, 2026 — END-CUSTOMER AI CHAT BOT (P0 — COMPLETE ✅)
+
+مساعد ذكي يجيب زبائن المتجر تلقائياً (Claude Sonnet) — مفعّل من لوحة العميل.
+
+#### الميزات
+1. **💬 Floating Chat FAB** — زر عائم 💬 على الstorefront (يحقن من `renderer.py` عبر `chatbot_widget`)
+2. **🤖 Claude Sonnet AI** — يعرف اسم المتجر، vertical، المنتجات (حتى 80)، الخدمات، ساعات العمل، context إضافي
+3. **⚙️ Owner/Client Config Tab** — في `ClientDashboard.js` — تفعيل/إيقاف، رسالة ترحيب، ساعات عمل، context إضافي (1500 حرف)
+4. **🧪 Try-it Preview** — اختبار مباشر للمساعد من نفس Tab (يستدعي endpoint العام)
+5. **📊 Usage Counter** — `chatbot_usage.{YYYY-MM}.messages` لكل مشروع (للفوترة المستقبلية)
+6. **🛡️ Rate Limit** — 60 رسالة/ساعة لكل session_id
+
+#### الملفات
+- Backend: `/app/backend/modules/websites/chatbot.py`, `chatbot_widget.py`, تعديل `routes.py` + `renderer.py`
+- Frontend: `ChatbotTab` في `/app/frontend/src/pages/client/ClientDashboard.js`
+
+#### Endpoints
+- `GET  /api/websites/public/{slug}/chatbot/config`  (public)
+- `POST /api/websites/public/{slug}/chatbot`        (public — يرجع reply)
+- `GET  /api/websites/projects/{id}/chatbot/config`  (owner)
+- `PUT  /api/websites/projects/{id}/chatbot/config`  (owner)
+- `GET  /api/websites/client/chatbot/config`        (client session)
+- `PUT  /api/websites/client/chatbot/config`        (client session)
+
+#### اختبار
+- ✅ Curl flow: enable → public chat → reply صحيح بالعربية
+- ✅ Browser flow: storefront iframe → click FAB → modal → typing → reply من Claude
+- ✅ مثال محقق: "ساعات العمل؟" → "يومياً من 7 صباحاً حتى 12 منتصف الليل"
+
+
+
 ### 🆕 Feb 28, 2026 — STOREFRONT SHIPPING + 5 REVENUE/UX FEATURES (P0/Revenue — COMPLETE ✅)
 
 نظام شحن شامل end-to-end + 5 ميزات بناء على نفس النواة:

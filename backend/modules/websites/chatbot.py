@@ -169,17 +169,20 @@ def init_routes(database) -> APIRouter:
     return r
 
 
-# ── Owner config endpoints (mounted on the existing operator-style router) ──
-def register_owner_endpoints(r: APIRouter, database, auth_dep):
-    """
-    Mount config GET/PUT on the main websites router so it's protected by the same auth.
-    Called from /app/backend/modules/websites/routes.py at registration time.
-    """
-    class ChatbotCfg(BaseModel):
-        enabled: Optional[bool] = None
-        welcome_message: Optional[str] = None
-        business_hours: Optional[str] = None
-        extra_context: Optional[str] = None
+# ── Owner / Client config endpoints — both routes mounted on main websites router ──
+class ChatbotCfg(BaseModel):
+    enabled: Optional[bool] = None
+    welcome_message: Optional[str] = None
+    business_hours: Optional[str] = None
+    extra_context: Optional[str] = None
+
+
+_ALLOWED_CFG_KEYS = ("enabled", "welcome_message", "business_hours", "extra_context")
+
+
+def register_owner_endpoints(r: APIRouter, database, auth_dep, resolve_client=None):
+    """Mount owner + client config endpoints on the main websites router."""
+    from fastapi import Header as _Header
 
     @r.get("/projects/{project_id}/chatbot/config")
     async def _cfg_get(project_id: str, current_user: dict = Depends(auth_dep)):
@@ -189,7 +192,7 @@ def register_owner_endpoints(r: APIRouter, database, auth_dep):
         )
         if not p:
             raise HTTPException(404, "Not found")
-        cfg = p.get("chatbot_config") or {}
+        cfg = dict(p.get("chatbot_config") or {})
         cfg["usage"] = p.get("chatbot_usage") or {}
         return cfg
 
@@ -201,7 +204,7 @@ def register_owner_endpoints(r: APIRouter, database, auth_dep):
         if not p:
             raise HTTPException(404, "Not found")
         patch: Dict[str, Any] = {}
-        for k in ("enabled", "welcome_message", "business_hours", "extra_context"):
+        for k in _ALLOWED_CFG_KEYS:
             v = getattr(body, k)
             if v is not None:
                 patch[f"chatbot_config.{k}"] = v
@@ -209,4 +212,29 @@ def register_owner_endpoints(r: APIRouter, database, auth_dep):
             patch["updated_at"] = _iso_now()
             await database.website_projects.update_one({"id": project_id}, {"$set": patch})
         fresh = await database.website_projects.find_one({"id": project_id}, {"_id": 0, "chatbot_config": 1})
+        return (fresh or {}).get("chatbot_config") or {}
+
+    # ── Client-side endpoints (use client session token) ──
+    if resolve_client is None:
+        return
+
+    @r.get("/client/chatbot/config")
+    async def _client_cfg_get(authorization: str = _Header(None)):
+        p = await resolve_client(authorization or "")
+        cfg = dict(p.get("chatbot_config") or {})
+        cfg["usage"] = p.get("chatbot_usage") or {}
+        return cfg
+
+    @r.put("/client/chatbot/config")
+    async def _client_cfg_put(body: ChatbotCfg, authorization: str = _Header(None)):
+        p = await resolve_client(authorization or "")
+        patch: Dict[str, Any] = {}
+        for k in _ALLOWED_CFG_KEYS:
+            v = getattr(body, k)
+            if v is not None:
+                patch[f"chatbot_config.{k}"] = v
+        if patch:
+            patch["updated_at"] = _iso_now()
+            await database.website_projects.update_one({"id": p["id"]}, {"$set": patch})
+        fresh = await database.website_projects.find_one({"id": p["id"]}, {"_id": 0, "chatbot_config": 1})
         return (fresh or {}).get("chatbot_config") or {}

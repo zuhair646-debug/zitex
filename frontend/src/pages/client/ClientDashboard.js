@@ -1890,6 +1890,178 @@ function LoyaltyTab({ token }) {  const [s, setS] = useState({ enabled: true, we
 }
 
 /* ================================================================
+   CHATBOT TAB — End-customer AI assistant config
+   ================================================================ */
+function ChatbotTab({ token, slug }) {
+  const [cfg, setCfg] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testReply, setTestReply] = useState('');
+  const [testInput, setTestInput] = useState('ما هي أسعاركم؟');
+
+  useEffect(() => {
+    fetch(`${API}/api/websites/client/chatbot/config`, { headers: authH(token) })
+      .then((r) => r.json())
+      .then((d) => setCfg({
+        enabled: !!d.enabled,
+        welcome_message: d.welcome_message || '',
+        business_hours: d.business_hours || '',
+        extra_context: d.extra_context || '',
+        usage: d.usage || {},
+      }))
+      .catch(() => setCfg({ enabled: false, welcome_message: '', business_hours: '', extra_context: '', usage: {} }));
+  }, [token]);
+
+  const save = async () => {
+    if (!cfg) return;
+    setBusy(true);
+    try {
+      const r = await fetch(`${API}/api/websites/client/chatbot/config`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...authH(token) },
+        body: JSON.stringify({
+          enabled: cfg.enabled,
+          welcome_message: cfg.welcome_message,
+          business_hours: cfg.business_hours,
+          extra_context: cfg.extra_context,
+        }),
+      });
+      if (!r.ok) throw new Error();
+      toast.success('✅ تم حفظ إعدادات المساعد الذكي');
+    } catch (_) { toast.error('فشل الحفظ'); }
+    finally { setBusy(false); }
+  };
+
+  const tryIt = async () => {
+    if (!testInput.trim()) return;
+    setTesting(true); setTestReply('');
+    try {
+      const r = await fetch(`${API}/api/websites/public/${slug}/chatbot`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: testInput, session_id: 'preview-' + Date.now() }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'فشل');
+      setTestReply(d.reply || '(لا يوجد رد)');
+    } catch (e) {
+      setTestReply('⚠️ ' + (e.message || 'تعذّر الاتصال — تأكد من تفعيل المساعد وحفظه أولاً.'));
+    } finally { setTesting(false); }
+  };
+
+  if (!cfg) return <div className="p-6 text-white/50">جارٍ التحميل...</div>;
+
+  const totalMsgs = Object.values(cfg.usage || {}).reduce((sum, m) => sum + ((m && m.messages) || 0), 0);
+
+  return (
+    <div className="space-y-5 p-4 md:p-6" data-testid="chatbot-tab">
+      <div className="bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 border border-emerald-400/30 rounded-2xl p-5">
+        <h2 className="text-2xl font-black mb-1 flex items-center gap-2"><span>🤖</span> المساعد الذكي للزبائن</h2>
+        <p className="text-sm text-white/60">يجاوب زبائنك تلقائياً على الأسعار، المنتجات، ساعات العمل وأكثر — مدعوم بـ Claude Sonnet.</p>
+      </div>
+
+      {/* Toggle */}
+      <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center justify-between">
+        <div>
+          <div className="font-bold text-sm">تفعيل المساعد على المتجر</div>
+          <div className="text-[11px] opacity-60 mt-0.5">سيظهر زر دردشة عائم 💬 على صفحة متجرك</div>
+        </div>
+        <label className="cursor-pointer">
+          <input type="checkbox" checked={!!cfg.enabled} onChange={(e) => setCfg({ ...cfg, enabled: e.target.checked })} className="sr-only" data-testid="chatbot-enabled-toggle" />
+          <div className={`w-12 h-6 rounded-full p-0.5 transition-colors ${cfg.enabled ? 'bg-emerald-500' : 'bg-white/10'}`}>
+            <div className={`w-5 h-5 rounded-full bg-white transition-transform ${cfg.enabled ? 'translate-x-6' : ''}`} />
+          </div>
+        </label>
+      </div>
+
+      {/* Welcome message */}
+      <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
+        <label className="block">
+          <span className="text-xs text-white/60">رسالة الترحيب (اختياري)</span>
+          <input
+            type="text"
+            value={cfg.welcome_message}
+            onChange={(e) => setCfg({ ...cfg, welcome_message: e.target.value })}
+            placeholder="مرحباً! كيف أساعدك اليوم؟"
+            maxLength={200}
+            className="w-full mt-1 px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm"
+            data-testid="chatbot-welcome-input"
+          />
+        </label>
+        <label className="block">
+          <span className="text-xs text-white/60">ساعات العمل (لإخبار الزبون)</span>
+          <input
+            type="text"
+            value={cfg.business_hours}
+            onChange={(e) => setCfg({ ...cfg, business_hours: e.target.value })}
+            placeholder="السبت - الخميس · 9 صباحاً إلى 11 مساءً"
+            maxLength={120}
+            className="w-full mt-1 px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm"
+            data-testid="chatbot-hours-input"
+          />
+        </label>
+        <label className="block">
+          <span className="text-xs text-white/60">معلومات إضافية للمساعد (سياسات الإرجاع، رسوم التوصيل، إلخ)</span>
+          <textarea
+            value={cfg.extra_context}
+            onChange={(e) => setCfg({ ...cfg, extra_context: e.target.value })}
+            placeholder="مثال: نوصّل لجميع مدن المملكة. الإرجاع متاح خلال 7 أيام. للطلبات بالجملة تواصل واتساب."
+            maxLength={1500}
+            rows={4}
+            className="w-full mt-1 px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm font-mono leading-relaxed"
+            data-testid="chatbot-context-input"
+          />
+          <div className="text-[10px] opacity-50 mt-1 text-left">{(cfg.extra_context || '').length}/1500</div>
+        </label>
+      </div>
+
+      <button
+        onClick={save}
+        disabled={busy}
+        className="w-full py-2.5 bg-gradient-to-r from-emerald-500 to-cyan-500 text-black rounded-lg font-black text-sm disabled:opacity-50"
+        data-testid="save-chatbot-btn"
+      >
+        {busy ? '...' : '💾 حفظ الإعدادات'}
+      </button>
+
+      {/* Try-it preview (only after saving + enabled) */}
+      {cfg.enabled && (
+        <div className="bg-white/5 border border-emerald-400/20 rounded-xl p-4">
+          <h3 className="font-bold text-sm mb-2 flex items-center gap-2">🧪 جرّب المساعد الآن</h3>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={testInput}
+              onChange={(e) => setTestInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') tryIt(); }}
+              className="flex-1 px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm"
+              placeholder="اكتب سؤالاً تجريبياً..."
+              data-testid="chatbot-test-input"
+            />
+            <button onClick={tryIt} disabled={testing} className="px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 rounded-lg text-sm font-bold disabled:opacity-50" data-testid="chatbot-test-btn">
+              {testing ? '...' : 'إرسال'}
+            </button>
+          </div>
+          {testReply && (
+            <div className="mt-3 p-3 bg-black/30 rounded-lg text-sm whitespace-pre-wrap" data-testid="chatbot-test-reply">
+              {testReply}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Usage stats */}
+      <div className="bg-white/3 border border-white/5 rounded-xl p-4">
+        <div className="text-xs opacity-70">إحصائيات الاستخدام</div>
+        <div className="text-2xl font-black mt-1">{totalMsgs} <span className="text-xs font-normal opacity-60">رسالة</span></div>
+        <div className="text-[10px] opacity-50">الإجمالي عبر جميع الأشهر</div>
+      </div>
+    </div>
+  );
+}
+
+
+/* ================================================================
    LIVE MAP TAB — drivers + active orders on OpenStreetMap (WebSocket)
    ================================================================ */
 function LiveMapTab({ token, slug }) {
@@ -2391,6 +2563,7 @@ function Dashboard({ slug, token, onLogout }) {
               { id: 'widgets', label: '🎨 الأدوات', icon: Key },
               { id: 'coupons', label: '🎟️ كوبونات', icon: Key },
               { id: 'loyalty', label: '🎁 النقاط', icon: CheckCircle2 },
+              { id: 'chatbot', label: '🤖 المساعد الذكي', icon: MessageSquare },
               { id: 'edit', label: 'المحتوى', icon: Edit3 },
               { id: 'snapshots', label: '📚 السجل', icon: History },
               { id: 'messages', label: 'الرسائل', icon: MessageSquare },
@@ -2452,6 +2625,7 @@ function Dashboard({ slug, token, onLogout }) {
         {tab === 'widgets' && <WidgetCustomizerTab token={token} slug={slug} />}
         {tab === 'coupons' && <CouponsTab token={token} />}
         {tab === 'loyalty' && <LoyaltyTab token={token} />}
+        {tab === 'chatbot' && <ChatbotTab token={token} slug={slug} />}
 
         {tab === 'messages' && <MessagesTab token={token} />}
 

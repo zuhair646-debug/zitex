@@ -2952,7 +2952,7 @@ color:#000;text-decoration:none;border-radius:12px;font-weight:900}}</style></he
     # 🆕 Chatbot owner config + public chat endpoints
     try:
         from .chatbot import register_owner_endpoints, init_routes as init_chatbot_routes
-        register_owner_endpoints(r, database, auth_dep)
+        register_owner_endpoints(r, database, auth_dep, resolve_client=_resolve_client_project)
         chatbot_router = init_chatbot_routes(database)
         app.include_router(chatbot_router, prefix="/api")
     except Exception as _ce:
