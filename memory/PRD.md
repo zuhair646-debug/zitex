@@ -16,6 +16,45 @@
 
 
 
+### 🆕 Apr 28, 2026 — AUTOPILOT STORIES (P1 — COMPLETE ✅)
+
+**ذكاء اصطناعي يدير محتوى المتجر تلقائياً** — اقتراحات ذكية + نشر مجدول.
+
+#### الميزات
+1. **💡 Smart Suggestions** — `GET /client/autopilot/suggestions`:
+   - **Inactivity-aware**: لو مرّ 5+ أيام بدون story → اقتراح خصم خاطف
+   - **Time-aware**: نهاية الشهر (3 أيام أخيرة) → خصم 30%، الخميس/الجمعة → عرض ويكند، رمضان → إعلان رمضاني
+   - **Sales-aware**: best-seller من orders (آخر 30 يوم) → "كشف منتج جديد"
+   - **Vertical-aware**: cafe → طبق اليوم، salon → خدمة سبا، real_estate → عرض عقار
+   - **Config-aware**: shipping.free_shipping_above_sar → "تذكير توصيل مجاني"
+   - أعلى 3 اقتراحات بأولوية، مع reason بالعربية
+2. **⏰ Scheduled Auto-Publish** — `Background scheduler كل ساعة`:
+   - opt-in: `enabled` flag في autopilot_settings
+   - frequency: weekly | biweekly | monthly
+   - يولّد + ينشر تلقائياً → يحدث `last_run_at` + `next_run_at` + history (آخر 20)
+   - فقط image templates (لا تستخدم Sora 2 تلقائياً لتوفير الرصيد)
+3. **🚀 Run-Now button** — `POST /client/autopilot/run-now` — نشر يدوي للاقتراح الأعلى أولوية
+
+#### Endpoints
+- `GET  /api/websites/client/autopilot/suggestions`
+- `GET  /api/websites/client/autopilot/settings`
+- `PUT  /api/websites/client/autopilot/settings`
+- `POST /api/websites/client/autopilot/run-now`
+
+#### الملفات
+- `/app/backend/modules/websites/autopilot.py` (NEW — suggestion engine + scheduler + routes)
+- `/app/backend/modules/websites/routes.py` (registered routes + scheduler startup)
+- `/app/frontend/src/pages/client/ClientDashboard.js` — `StoriesTab` فيه sub-tab `🤖 AutoPilot`:
+  - Suggestions cards مع زر "✨ نشر الآن" لكل اقتراح
+  - Settings: toggle + frequency + next_run_at countdown
+  - History timeline
+
+#### اختبار محقق E2E
+- ✅ Suggestions: 3 توليد لـ cozy-cafe (نهاية الشهر + cafe vertical + free shipping)
+- ✅ Settings: enable + weekly → next_run_at = +7 days
+- ✅ Run-now: نشر story "⚡ خصم 30% — لا تفوّت الفرصة!" عبر Nano Banana
+- ✅ Visual: 3 stories تظهر في storefront ribbon
+
 ### 🆕 Apr 28, 2026 — STORIES TEMPLATES LIBRARY (P1 — COMPLETE ✅)
 
 **One-click AI Story generation** — مكتبة قوالب Stories جاهزة، يختار المالك قالب → يكتب القيم → AI يولّد صورة/فيديو يحمل هويته البصرية.

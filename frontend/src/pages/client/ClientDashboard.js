@@ -1921,12 +1921,15 @@ function StoriesTab({ token, slug }) {
   const [vidPrompt, setVidPrompt] = useState('');
   const [vidDuration, setVidDuration] = useState(4);
   const [vidJob, setVidJob] = useState(null);
-  const [tab, setTab] = useState('templates'); // 'templates' | 'stories' | 'banner'
+  const [tab, setTab] = useState('templates'); // 'templates' | 'stories' | 'banner' | 'autopilot'
   const [templates, setTemplates] = useState([]);
   const [tplPicked, setTplPicked] = useState(null);
   const [tplFields, setTplFields] = useState({});
   const [tplBusy, setTplBusy] = useState(false);
   const [tplCategory, setTplCategory] = useState('all');
+  const [apSuggestions, setApSuggestions] = useState([]);
+  const [apSettings, setApSettings] = useState(null);
+  const [apBusy, setApBusy] = useState(false);
   const fileRef = useRef(null);
 
   const headers = { 'Content-Type': 'application/json', ...authH(token) };
@@ -2052,6 +2055,64 @@ function StoriesTab({ token, slug }) {
     (t.fields || []).forEach(f => { init[f.name] = f.default ?? ''; });
     setTplFields(init);
   };
+
+  const loadAutopilot = useCallback(async () => {
+    try {
+      const [sR, gR] = await Promise.all([
+        fetch(`${API}/api/websites/client/autopilot/settings`, { headers: authH(token) }),
+        fetch(`${API}/api/websites/client/autopilot/suggestions`, { headers: authH(token) }),
+      ]);
+      setApSettings(await sR.json());
+      const g = await gR.json();
+      setApSuggestions(g.suggestions || []);
+    } catch (_) { toast.error('فشل تحميل AutoPilot'); }
+  }, [token]);
+
+  const applySuggestion = async (sug) => {
+    setApBusy(true);
+    try {
+      const r = await fetch(`${API}/api/websites/client/stories/from-template`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ template_id: sug.template_id, fields: sug.fields }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'فشل');
+      if (d.type === 'image') {
+        toast.success('✨ تم نشر الـ Story الذكي!');
+        loadAll(); loadAutopilot();
+      } else {
+        toast.success(`🎬 بدأ توليد الفيديو الذكي`);
+        setVidJob({ job_id: d.job_id, status: 'queued', prompt: sug.name });
+      }
+    } catch (e) { toast.error(e.message); }
+    finally { setApBusy(false); }
+  };
+
+  const saveAutopilot = async (patch) => {
+    setApBusy(true);
+    try {
+      const r = await fetch(`${API}/api/websites/client/autopilot/settings`, {
+        method: 'PUT', headers, body: JSON.stringify(patch),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'فشل');
+      setApSettings(d);
+      toast.success('✅ تم الحفظ');
+    } catch (e) { toast.error(e.message); }
+    finally { setApBusy(false); }
+  };
+
+  const runAutopilotNow = async () => {
+    setApBusy(true);
+    try {
+      const r = await fetch(`${API}/api/websites/client/autopilot/run-now`, { method: 'POST', headers });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'فشل');
+      toast.success('✨ تم نشر Story تلقائياً!');
+      loadAll(); loadAutopilot();
+    } catch (e) { toast.error(e.message); }
+    finally { setApBusy(false); }
+  };
   const applyTemplate = async () => {
     if (!tplPicked) return;
     const required = (tplPicked.fields || []).filter(f => f.required);
@@ -2093,16 +2154,111 @@ function StoriesTab({ token, slug }) {
       <div className="flex gap-1 p-1 bg-white/5 rounded-xl w-fit">
         {[
           { id: 'templates', label: '⚡ قوالب جاهزة' },
+          { id: 'autopilot', label: '🤖 AutoPilot' },
           { id: 'stories', label: '⭕ الحالات' },
           { id: 'banner', label: '🌅 البنر المتحرك' },
         ].map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
+          <button key={t.id} onClick={() => { setTab(t.id); if (t.id === 'autopilot' && !apSettings) loadAutopilot(); }}
             className={`px-4 py-2 rounded-lg text-sm font-bold transition ${tab === t.id ? 'bg-yellow-500 text-black' : 'hover:bg-white/5'}`}
             data-testid={`stories-subtab-${t.id}`}>
             {t.label}
           </button>
         ))}
       </div>
+
+      {tab === 'autopilot' && (
+        <div className="space-y-4" data-testid="autopilot-panel">
+          <div className="bg-gradient-to-br from-yellow-500/10 via-orange-500/10 to-pink-500/10 border border-yellow-400/30 rounded-2xl p-5">
+            <h3 className="text-xl font-black mb-1 flex items-center gap-2"><span>🤖</span> AutoPilot الذكي</h3>
+            <p className="text-sm text-white/70">نظام ذكي يقترح وينشر Stories مناسبة لتوقيت المتجر، مبيعاته، وأنشطته. اضغط نشر أو فعّل التشغيل التلقائي.</p>
+          </div>
+
+          {/* Suggestions */}
+          <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="font-bold text-sm">💡 اقتراحات ذكية لك الآن</h4>
+              <button onClick={loadAutopilot} className="text-[11px] opacity-70 hover:opacity-100" data-testid="ap-refresh">🔄 تحديث</button>
+            </div>
+            {apSuggestions.length === 0 ? (
+              <div className="text-center py-6 text-sm opacity-60">لا توجد اقتراحات حالياً — متجرك نشط بالفعل! 🎉</div>
+            ) : (
+              <div className="space-y-3">
+                {apSuggestions.map((s, i) => (
+                  <div key={i} className="bg-gradient-to-r from-white/5 to-transparent border border-white/10 rounded-xl p-3 flex items-start gap-3" data-testid={`ap-sug-${i}`}>
+                    <div className="text-3xl">{s.emoji}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-sm">{s.name}</div>
+                      <div className="text-[11px] opacity-70 mt-0.5 leading-snug">{s.reason}</div>
+                      {Object.keys(s.fields || {}).length > 0 && (
+                        <div className="text-[10px] opacity-50 mt-1 font-mono">
+                          {Object.entries(s.fields).filter(([_, v]) => v !== '' && v != null).map(([k, v]) => `${k}=${v}`).join(' · ')}
+                        </div>
+                      )}
+                    </div>
+                    <button onClick={() => applySuggestion(s)} disabled={apBusy}
+                      className="px-3 py-2 bg-yellow-500 hover:bg-yellow-400 text-black text-xs font-black rounded-lg disabled:opacity-50 whitespace-nowrap"
+                      data-testid={`ap-apply-${i}`}>
+                      {apBusy ? '...' : '✨ نشر الآن'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Settings */}
+          {apSettings && (
+            <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
+              <h4 className="font-bold text-sm flex items-center gap-2">⚙️ النشر التلقائي</h4>
+              <label className="flex items-center justify-between gap-3 cursor-pointer p-3 bg-white/3 rounded-lg">
+                <div>
+                  <div className="font-bold text-sm">تفعيل النشر التلقائي</div>
+                  <div className="text-[11px] opacity-60 mt-0.5">يقوم AutoPilot بنشر Story جديد حسب التردد المختار — يوفّر عليك وقت ويُبقي متجرك نشطاً</div>
+                </div>
+                <input type="checkbox" checked={!!apSettings.enabled} onChange={(e) => saveAutopilot({ enabled: e.target.checked })}
+                  className="w-5 h-5" data-testid="ap-enabled-toggle" />
+              </label>
+
+              <label className="block">
+                <span className="text-[11px] opacity-70">التردد</span>
+                <select value={apSettings.frequency} onChange={(e) => saveAutopilot({ frequency: e.target.value })}
+                  className="w-full mt-1 px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm" data-testid="ap-frequency">
+                  <option value="weekly">📅 أسبوعياً (مُوصى به)</option>
+                  <option value="biweekly">📆 كل أسبوعين</option>
+                  <option value="monthly">🗓️ شهرياً</option>
+                </select>
+              </label>
+
+              {apSettings.next_run_at && apSettings.enabled && (
+                <div className="text-[11px] opacity-70 p-2 bg-emerald-500/5 border border-emerald-500/20 rounded">
+                  ⏰ الموعد التالي: {new Date(apSettings.next_run_at).toLocaleString('ar-SA')}
+                </div>
+              )}
+
+              <button onClick={runAutopilotNow} disabled={apBusy}
+                className="w-full py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-black text-sm disabled:opacity-50"
+                data-testid="ap-run-now">
+                {apBusy ? '⏳ جارٍ النشر...' : '🚀 نشر AutoPilot Story الآن (يدوي)'}
+              </button>
+
+              {/* History */}
+              {apSettings.history?.length > 0 && (
+                <div>
+                  <div className="text-[11px] opacity-70 mb-1">السجل الأخير ({apSettings.history.length})</div>
+                  <div className="space-y-1 max-h-40 overflow-y-auto">
+                    {apSettings.history.slice().reverse().map((h, i) => (
+                      <div key={i} className="text-[11px] p-2 bg-black/20 rounded flex items-center justify-between gap-2" data-testid={`ap-history-${i}`}>
+                        <div className="truncate flex-1">{h.caption}</div>
+                        <span className="opacity-50 flex-shrink-0">{new Date(h.at).toLocaleDateString('ar-SA')}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {tab === 'templates' && (
         <div className="space-y-4" data-testid="templates-panel">

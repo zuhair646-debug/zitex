@@ -2967,6 +2967,15 @@ color:#000;text-decoration:none;border-radius:12px;font-weight:900}}</style></he
         import logging
         logging.getLogger(__name__).error(f"stories module failed: {_se}")
 
+    # 🆕 AutoPilot Stories — smart suggestions + scheduled auto-publish
+    try:
+        from .autopilot import register_routes as register_autopilot_routes, start_scheduler as start_ap_scheduler
+        register_autopilot_routes(r, database, _resolve_client_project)
+        start_ap_scheduler(database, interval_seconds=3600)
+    except Exception as _ae:
+        import logging
+        logging.getLogger(__name__).error(f"autopilot module failed: {_ae}")
+
     app.include_router(r)
     return r
 
