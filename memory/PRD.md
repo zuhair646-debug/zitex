@@ -21,30 +21,40 @@
 #### Phase 1 — Smarter Chatbot + Human Handoff
 1. **🧠 قاعدة معرفة موسّعة** — `_build_system_prompt` يضخّ الآن: كل المنتجات (بدون حد) + الخدمات + العقارات + الشحن (داخلي/شركات/COD/تأمين/استلام) + بوابات الدفع المُفعّلة + الكوبونات النشطة + برنامج الولاء + الـ FAQ + بيانات التواصل (هاتف/واتساب/بريد/عنوان/سوشيال) + قسم "عن المتجر" + ملاحظات مالك المتجر
 2. **📞 Auto-Handoff لتذكرة دعم** — المساعد يبدأ ردّه بـ `[HANDOFF]` لما يحتاج موظف بشري؛ الـ widget يكشف ذلك ويعرض زر "تواصل مع موظف"
-3. **📝 Handoff Form** — اسم/جوال/بريد/ملاحظة → `POST /api/websites/public/{slug}/chatbot/handoff` ينشئ تذكرة في `support_tickets` مع نسخة كاملة من سجل المحادثة (آخر 30 رسالة)
-4. **🧪 اختبار محقق**: شكوى استرجاع → AI يجاوب بأدب → HANDOFF=true → تذكرة #bff3df61 محفوظة في DB مع customer info + transcript
+3. **📝 Handoff Form** — اسم/جوال/بريد/ملاحظة → `POST /api/websites/public/{slug}/chatbot/handoff` ينشئ تذكرة في `support_tickets`
+4. **📲 WhatsApp wa.me Integration (مجاني، بدون API keys)** — كل تذكرة `chatbot_handoff` تتضمن:
+   - `whatsapp.owner_alert_link`: رابط جاهز يفتح محادثة المالك بنص الطلب (إذا ضبط `notify_whatsapp`)
+   - `whatsapp.reply_to_customer_link`: رابط جاهز للرد على الزبون (لو رقم الزبون صالح)
+   - يظهر زر `📲 ردّ على الزبون عبر واتساب` في تبويب "الدعم" بـ `ClientDashboard`
 
 #### Phase 2 — DevOps Agent: Long-term Memory + WebSocket Streaming
-1. **📚 Long-term Action Log** — system prompt للوكيل يحقن آخر 20 إجراء من `operator_actions` (الأداة + النتيجة + التاريخ) مع آخر 10 facts من `memory`
-2. **🌊 WebSocket Streaming** — `WS /api/operator/ws/agent/{cid}?token=<jwt>` يبثّ events حية:
-   - `ready` (handshake) → `thinking` → `tool_start` → `tool_done` → `final` → `complete`
-3. **🔧 Frontend**: `ModernChatTab` في `OperatorParts.js` يفتح WS، يعرض كل أداة فور تنفيذها، مع HTTP fallback إن فشل
-4. **🛡️ Auth**: WebSocket يقرأ JWT من query param، يتحقق من owner OR allowlist email
+1. **📚 Long-term Action Log** — system prompt للوكيل يحقن آخر 20 إجراء من `operator_actions`
+2. **🌊 WebSocket Streaming** — `WS /api/operator/ws/agent/{cid}?token=<jwt>` يبثّ events حية: `ready → thinking → tool_start → tool_done → final → complete`
+3. **🔧 Frontend**: `ModernChatTab` يفتح WS مع HTTP fallback، يعرض كل أداة فور تنفيذها
+
+#### Phase 3 — Alpha Vantage Live Stocks (مع Fallback)
+1. **📈 stocks_live.py** — تكامل Alpha Vantage (`GLOBAL_QUOTE` + `CURRENCY_EXCHANGE_RATE`) مع cache 60 ثانية + rate-limit 4 req/min
+2. **🔁 Graceful fallback** — إذا `ALPHA_VANTAGE_KEY` فارغ أو فشل النداء → simulation (المستخدم لا يلاحظ خلل)
+3. **📊 Response field**: كل quote يحمل `source: 'alpha_vantage' | 'simulated'`
+
+#### Phase 4 — Games/Videos Module Migration (Started)
+1. **`/app/backend/modules/games/`** — يخدم `/api/game-engine.js`, `/api/game-test`, `/api/iframe-test`, `/api/image-backed-test`
+2. **`/app/backend/modules/videos/`, `images/`** — skeleton + خطة هجرة موثّقة (الـ routes نفسها لسّه في server.py)
 
 #### Endpoints المضافة/المعدّلة
-- `POST /api/websites/public/{slug}/chatbot/handoff`  (public — يخلق تذكرة)
+- `POST /api/websites/public/{slug}/chatbot/handoff`  (public — يخلق تذكرة + wa.me links)
 - `WS   /api/operator/ws/agent/{cid}?token=<jwt>`     (operator — streaming)
+- `GET  /api/websites/market/quotes`                  (محدّث: live + simulation)
 
-#### الملفات المعدّلة
-- `/app/backend/modules/websites/chatbot.py` (system prompt + handoff endpoint)
-- `/app/backend/modules/websites/chatbot_widget.py` (handoff UI: button + form)
-- `/app/backend/modules/operator/agent.py` (on_step callback + action log)
-- `/app/backend/modules/operator/routes.py` (WebSocket endpoint)
-- `/app/frontend/src/pages/OperatorParts.js` (live streaming UI)
+#### اختبار شامل ✅ (testing_agent_v3 — iteration 19)
+- **Backend**: 19/19 tests passed (100%)
+- **Frontend**: جميع الميزات تعمل
+- **التحقق**: Chatbot deep-knowledge, HANDOFF detection, ticket creation مع wa.me links, WebSocket streaming, Stocks fallback, Games module
+- التقرير: `/app/test_reports/iteration_19.json`
 
 #### الميزات الموجودة من قبل (تأكيد ✅)
-- 🟢 **Multi-client Agency Dashboard**: `DashboardView` في `OperatorParts.js` + `GET /api/operator/dashboard` (شغّال)
-- 🟢 **WhatsApp Deployment Alerts**: `health.py` يولّد `whatsapp_link`، `AlertsBell` يعرض الزر، `SettingsPanel` يضبط `alert_phone` (شغّال)
+- 🟢 **Multi-client Agency Dashboard**: `DashboardView` + `GET /api/operator/dashboard`
+- 🟢 **WhatsApp Deployment Alerts**: `health.py` + `AlertsBell` + `SettingsPanel.alert_phone`
 
 
 
