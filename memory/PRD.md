@@ -16,6 +16,43 @@
 
 
 
+### 🆕 Apr 29, 2026 — GOOGLE OAUTH (Emergent-managed) (P0 — COMPLETE ✅)
+
+تكامل Google Sign-In بنقرة واحدة عبر Emergent-managed OAuth.
+
+#### Flow
+1. مستخدم يضغط "المتابعة باستخدام Google" في `/login` أو `/register`
+2. Frontend يحوّل إلى `https://auth.emergentagent.com/?redirect=<origin>/auth-callback`
+3. بعد المصادقة، Emergent يحوّل إلى `/auth-callback#session_id=...`
+4. `AuthCallback` يستخرج session_id ويستدعي `POST /api/auth/google/exchange`
+5. Backend يستدعي Emergent's `/auth/v1/env/oauth/session-data` للتحقق
+6. find-or-create user في `users` (بـ `google_linked: true` + `avatar_url`)
+7. إصدار JWT وإرجاع `{token, user, is_new}`
+8. Frontend يحفظ في localStorage ويوجّه إلى `/dashboard` أو `/admin`
+
+#### الملفات
+- `/app/backend/server.py` — endpoint `POST /api/auth/google/exchange` (خط 542-615)
+- `/app/frontend/src/pages/AuthCallback.js` (NEW) — يعالج الـ redirect callback
+- `/app/frontend/src/pages/LoginPage.js` — زر Google تحت الفاصل
+- `/app/frontend/src/pages/RegisterPage.js` — زر Google بعد النموذج
+- `/app/frontend/src/App.js` — route `/auth-callback` مسجّل
+- `/app/auth_testing.md` — playbook للاختبار
+
+#### اختبار محقق ✅
+- Backend: empty session_id → 400, invalid session_id → 401 (Emergent يرفض)
+- Login button → redirect URL صحيح: `auth.emergentagent.com/?redirect=...auth-callback`
+- Register button → redirect URL صحيح
+- `/auth-callback` بدون session → toast + redirect لـ /login
+- `/auth-callback#session_id=fake` → backend rejection + redirect لـ /login
+- Regression: email+password login لـ owner@zitex.com يعمل + `/api/auth/me` يعمل
+- Lint: 4 ملفات JS تمر بدون أخطاء
+
+#### ملاحظات تقنية
+- Google users لهم `password=""` في DB (لا يستطيعون login بـ email+password بدون password reset لاحقاً)
+- نفس الـ JWT الموجود (Bearer header)، لا تغيير في باقي endpoints
+- signup_bonus = 20 credits + free_images=3 + free_videos=2 + free_website_trial=true (مثل التسجيل العادي)
+
+
 ### 🆕 Apr 28, 2026 — PREMIUM REDESIGN: Login/Register + Banner Cleanup (P0 — COMPLETE ✅)
 
 تصميم جديد فخم لـ صفحات Login/Register + إزالة الـ CTA من البنر (البنر للإعلانات فقط).

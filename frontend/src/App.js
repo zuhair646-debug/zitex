@@ -86,6 +86,7 @@ function App() {
           <Route path="/demo" element={<DemoLanding />} />
           <Route path="/login" element={<LoginPage setUser={setUser} />} />
           <Route path="/register" element={<RegisterPage setUser={setUser} />} />
+          <Route path="/auth-callback" element={<AuthCallback setUser={setUser} />} />
           <Route path="/pricing" element={<PricingPage user={user} />} />
           <Route path="/payment" element={<ProtectedRoute><PaymentPage user={user} /></ProtectedRoute>} />
           
