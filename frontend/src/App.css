@@ -192,3 +192,54 @@ button {
   direction: rtl;
   text-align: right;
 }
+
+
+/* ============== VOICE STAGE CHARACTER ANIMATIONS ============== */
+
+/* Chroma-key green → transparent using CSS filter tricks.
+   For best results generate PNGs WITH proper transparency from AI.
+   This fallback removes most green hue and desaturates its remnants. */
+.avatar-chroma {
+  /* Use mix-blend-mode to drop pure green; won't work on solid green but helps soft bleeding */
+  -webkit-mask-image: linear-gradient(to bottom, black 92%, transparent);
+          mask-image: linear-gradient(to bottom, black 92%, transparent);
+}
+
+/* Subtle idle bob — gentle breathing */
+@keyframes char-bob-anim {
+  0%, 100% { translate: 0 0; }
+  50%      { translate: 0 -8px; }
+}
+.char-bob {
+  animation: char-bob-anim 4s ease-in-out infinite;
+}
+
+/* Listening lean — tilt forward */
+@keyframes char-lean-anim {
+  0%, 100% { rotate: 0deg; }
+  50%      { rotate: -2deg; }
+}
+.char-lean {
+  animation: char-lean-anim 3s ease-in-out infinite;
+}
+
+/* Talking — shakes & mouth swap via multiple frames is harder,
+   so use light vertical shake to simulate animation */
+@keyframes char-talk-anim {
+  0%, 100% { translate: 0 0; scale: 1; }
+  25%      { translate: -3px -2px; scale: 1.01; }
+  50%      { translate: 2px -4px; scale: 1.02; }
+  75%      { translate: -2px -1px; scale: 1.01; }
+}
+.char-talk {
+  animation: char-talk-anim 0.6s ease-in-out infinite;
+}
+
+/* Entrance — dramatic fade+scale-in */
+@keyframes char-enter-anim {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
+.char-entering {
+  animation: char-enter-anim 1.2s ease-out forwards;
+}

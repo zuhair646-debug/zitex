@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import SiteBannerStories from '@/components/SiteBannerStories';
-import ZitexDuo from '@/components/ZitexDuo';
+import ZitexDuoLauncher from '@/components/ZitexDuoLauncher';
 
 const LandingPage = ({ user }) => {
   const navigate = useNavigate();
@@ -212,7 +212,7 @@ const LandingPage = ({ user }) => {
       </footer>
 
       {/* Dual AI characters: Zara + Layla (always visible, bottom peek) */}
-      <ZitexDuo />
+      <ZitexDuoLauncher />
     </div>
   );
 };

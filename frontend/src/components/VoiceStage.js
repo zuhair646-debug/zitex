@@ -1,0 +1,366 @@
+/**
+ * Voice Stage — Voice-first immersive AI companion overlay.
+ *
+ * Replaces the chat-based Zitex Duo with a true voice conversation experience.
+ *
+ * Design principles:
+ *   - NO TEXT — user speaks, AI speaks back (voice only)
+ *   - Full-body characters enter from screen edges (walk-in from bottom/sides)
+ *   - Transparent backgrounds (chroma-keyed green → made transparent via CSS blend)
+ *   - Characters react to each other (one talks → other listens/nods)
+ *   - Always-on microphone button (tap-to-talk)
+ *   - TTS voice response plays automatically
+ *
+ * Animation states (per character):
+ *   - 'hidden'    — off-screen
+ *   - 'entering'  — animating in from edge
+ *   - 'idle'      — standing, subtle bob
+ *   - 'listening' — focused on user, leaning in
+ *   - 'talking'   — gesturing, mouth sprite swap
+ *   - 'leaving'   — animating out
+ *
+ * Usage:
+ *   <VoiceStage open={true} onClose={() => ...} />
+ */
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Mic, MicOff, X, Volume2, VolumeX } from 'lucide-react';
+import { toast } from 'sonner';
+
+const API = process.env.REACT_APP_BACKEND_URL;
+
+// Detect Speech Recognition availability
+const SR = (typeof window !== 'undefined') && (window.SpeechRecognition || window.webkitSpeechRecognition);
+
+export default function VoiceStage({ open, onClose, initialCharacter = 'zara' }) {
+  const [primary, setPrimary] = useState(initialCharacter);           // 'zara' | 'layla'
+  const [zaraState, setZaraState] = useState('hidden');               // entrance state
+  const [laylaState, setLaylaState] = useState('hidden');
+  const [stage, setStage] = useState('intro');                        // 'intro' | 'idle' | 'listening' | 'thinking' | 'speaking'
+  const [listening, setListening] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [transcriptVisible, setTranscriptVisible] = useState(false);
+  const [lastUserSaid, setLastUserSaid] = useState('');
+  const [lastAIReply, setLastAIReply] = useState('');
+  const [subtitle, setSubtitle] = useState('');
+  const recRef = useRef(null);
+  const audioRef = useRef(null);
+  const sessionRef = useRef(null);
+
+  // ===== Entrance animation =====
+  useEffect(() => {
+    if (!open) {
+      setZaraState('hidden');
+      setLaylaState('hidden');
+      setStage('intro');
+      return;
+    }
+    // Stagger entrance
+    const t1 = setTimeout(() => setZaraState('entering'), 100);
+    const t2 = setTimeout(() => setLaylaState('entering'), 500);
+    const t3 = setTimeout(() => { setZaraState('idle'); setLaylaState('idle'); }, 2500);
+    const t4 = setTimeout(() => { setStage('idle'); setSubtitle('اضغطي المايك وكلّمني 💫'); }, 2800);
+    sessionRef.current = `stage-${Date.now()}`;
+    return () => [t1, t2, t3, t4].forEach(clearTimeout);
+  }, [open]);
+
+  // ===== Cleanup on close =====
+  useEffect(() => {
+    return () => {
+      if (recRef.current) { try { recRef.current.stop(); } catch (_) {} }
+      if (audioRef.current) { try { audioRef.current.pause(); } catch (_) {} }
+    };
+  }, []);
+
+  // ===== Character state based on stage =====
+  useEffect(() => {
+    if (stage === 'idle') {
+      setZaraState('idle'); setLaylaState('idle');
+    } else if (stage === 'listening') {
+      // Primary leans in, secondary watches
+      if (primary === 'zara') { setZaraState('listening'); setLaylaState('idle'); }
+      else { setLaylaState('listening'); setZaraState('idle'); }
+    } else if (stage === 'speaking') {
+      if (primary === 'zara') { setZaraState('talking'); setLaylaState('listening'); }
+      else { setLaylaState('talking'); setZaraState('listening'); }
+    } else if (stage === 'thinking') {
+      if (primary === 'zara') { setZaraState('idle'); setLaylaState('idle'); }
+    }
+  }, [stage, primary]);
+
+  // ===== Start listening =====
+  const startListening = useCallback(() => {
+    if (!SR) {
+      toast.error('المتصفح ما يدعم التعرف الصوتي. جرّب Chrome/Edge/Safari.');
+      return;
+    }
+    if (listening) return;
+    try {
+      const rec = new SR();
+      rec.lang = 'ar-SA';
+      rec.continuous = false;
+      rec.interimResults = true;
+      rec.maxAlternatives = 1;
+
+      rec.onstart = () => {
+        setListening(true);
+        setStage('listening');
+        setSubtitle('🎤 أنا أسمعك...');
+      };
+      rec.onresult = (e) => {
+        const txt = Array.from(e.results).map(r => r[0].transcript).join(' ');
+        setLastUserSaid(txt);
+        if (e.results[e.results.length - 1].isFinal) {
+          handleUserSpeech(txt.trim());
+        }
+      };
+      rec.onerror = (e) => {
+        setListening(false);
+        setStage('idle');
+        if (e.error === 'no-speech') {
+          setSubtitle('ما سمعت شي... جرّب مرة ثانية');
+          setTimeout(() => setSubtitle('اضغطي المايك وكلّمني 💫'), 2000);
+        } else if (e.error === 'not-allowed') {
+          toast.error('محتاجة إذن الميكروفون');
+        }
+      };
+      rec.onend = () => {
+        setListening(false);
+      };
+      rec.start();
+      recRef.current = rec;
+    } catch (e) {
+      toast.error('فشل تشغيل الميكروفون');
+      setListening(false);
+    }
+  }, [listening]);
+
+  const stopListening = useCallback(() => {
+    if (recRef.current) { try { recRef.current.stop(); } catch (_) {} }
+    setListening(false);
+    if (stage === 'listening') setStage('idle');
+  }, [stage]);
+
+  // ===== Send to backend + play TTS =====
+  const handleUserSpeech = async (text) => {
+    if (!text) return;
+    setStage('thinking');
+    setSubtitle('💭 جاري التفكير...');
+    try {
+      const r = await fetch(`${API}/api/avatar/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: text,
+          session_id: sessionRef.current,
+          want_voice: true,
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'فشل');
+      setLastAIReply(d.reply);
+      setSubtitle(d.reply);
+      setStage('speaking');
+
+      // Play audio if available and not muted
+      if (d.audio_url && !muted) {
+        const audio = new Audio(d.audio_url);
+        audio.onended = () => {
+          setStage('idle');
+          setSubtitle(primary === 'zara' ? 'كملي... أنا معاك ✨' : 'كملي... أنا أسمعك 🖤');
+        };
+        audio.onerror = () => {
+          setStage('idle');
+        };
+        audioRef.current = audio;
+        audio.play().catch(() => setStage('idle'));
+      } else {
+        setTimeout(() => setStage('idle'), 4000);
+      }
+    } catch (e) {
+      toast.error(e.message);
+      setStage('idle');
+      setSubtitle('حصل خطأ 😔 جرّب تاني');
+    }
+  };
+
+  const toggleMute = () => {
+    const nextMuted = !muted;
+    setMuted(nextMuted);
+    if (nextMuted && audioRef.current) {
+      try { audioRef.current.pause(); } catch (_) {}
+    }
+  };
+
+  const switchPrimary = () => {
+    setPrimary(p => p === 'zara' ? 'layla' : 'zara');
+    setSubtitle('تحوّلت لرفيقتك الثانية ✨');
+    setTimeout(() => setSubtitle('اضغطي المايك وكلّمني 💫'), 2000);
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] overflow-hidden" data-testid="voice-stage">
+      {/* Background: subtle animated gradient */}
+      <div className="absolute inset-0 bg-gradient-to-b from-[#1a0a2e] via-[#0a0a12] to-[#2a0a1e]">
+        <div className="absolute inset-0 opacity-40">
+          <div className="absolute top-0 left-1/4 w-96 h-96 bg-amber-500/20 rounded-full blur-[120px] animate-pulse" />
+          <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '1s' }} />
+          <div className="absolute top-1/2 left-1/2 w-[600px] h-[600px] -translate-x-1/2 -translate-y-1/2 bg-pink-500/10 rounded-full blur-[150px]" />
+        </div>
+        {/* Starfield overlay */}
+        <div className="absolute inset-0 opacity-60" style={{
+          backgroundImage: 'radial-gradient(1px 1px at 20% 30%, white 50%, transparent), radial-gradient(1px 1px at 50% 70%, white 50%, transparent), radial-gradient(1.5px 1.5px at 80% 20%, white 50%, transparent), radial-gradient(1px 1px at 30% 90%, white 50%, transparent), radial-gradient(1px 1px at 70% 50%, white 50%, transparent)',
+          backgroundSize: '300px 300px',
+        }} />
+      </div>
+
+      {/* Stage floor — subtle reflective ellipse */}
+      <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
+
+      {/* Close button */}
+      <button onClick={onClose} className="absolute top-4 right-4 w-11 h-11 rounded-full bg-white/10 border border-white/20 backdrop-blur-md text-white hover:bg-white/20 z-50 flex items-center justify-center" data-testid="vs-close">
+        <X className="w-5 h-5" />
+      </button>
+
+      {/* Top bar: mute + swap */}
+      <div className="absolute top-4 left-4 flex gap-2 z-50">
+        <button onClick={toggleMute} className="w-11 h-11 rounded-full bg-white/10 border border-white/20 backdrop-blur-md text-white hover:bg-white/20 flex items-center justify-center" data-testid="vs-mute">
+          {muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+        </button>
+        <button onClick={switchPrimary} className="h-11 px-4 rounded-full bg-white/10 border border-white/20 backdrop-blur-md text-white hover:bg-white/20 text-xs font-black flex items-center" data-testid="vs-swap">
+          بدّلي ({primary === 'zara' ? 'إلى ليلى 🖤' : 'إلى زارا 💛'})
+        </button>
+      </div>
+
+      {/* ======= CHARACTERS ======= */}
+      {/* Zara — enters from left */}
+      <Character
+        name="zara"
+        image={`/avatars/zara_${zaraState === 'talking' ? 'talk' : zaraState === 'idle' ? 'idle' : zaraState === 'listening' ? 'idle' : 'wave'}.png`}
+        fallback="/avatars/f1_zara.png"
+        state={zaraState}
+        side="left"
+        isPrimary={primary === 'zara'}
+        dataTestId="vs-zara"
+      />
+
+      {/* Layla — enters from right */}
+      <Character
+        name="layla"
+        image={`/avatars/layla_${laylaState === 'talking' ? 'talk' : laylaState === 'idle' ? 'idle' : laylaState === 'listening' ? 'idle' : 'wave'}.png`}
+        fallback="/avatars/f2_layla.png"
+        state={laylaState}
+        side="right"
+        isPrimary={primary === 'layla'}
+        dataTestId="vs-layla"
+      />
+
+      {/* Subtitle / status bubble */}
+      <div className="absolute bottom-40 left-1/2 -translate-x-1/2 px-6 py-3 max-w-[90%] bg-black/60 backdrop-blur-xl rounded-2xl border border-white/10 text-white text-center min-h-[56px] flex items-center justify-center transition-all" data-testid="vs-subtitle">
+        <div className="text-sm sm:text-base font-bold">{subtitle || '...'}</div>
+      </div>
+
+      {/* ======= MIC BUTTON (center bottom) ======= */}
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 z-40">
+        <button
+          onClick={listening ? stopListening : startListening}
+          disabled={stage === 'thinking' || stage === 'speaking'}
+          className={`relative w-24 h-24 rounded-full flex items-center justify-center transition-all disabled:opacity-40 ${
+            listening
+              ? 'bg-red-500 shadow-[0_0_60px_rgba(239,68,68,0.8)] scale-110'
+              : stage === 'thinking'
+                ? 'bg-purple-500'
+                : stage === 'speaking'
+                  ? 'bg-emerald-500 shadow-[0_0_60px_rgba(16,185,129,0.8)]'
+                  : 'bg-gradient-to-br from-amber-500 to-yellow-500 hover:scale-110 shadow-[0_0_40px_rgba(245,158,11,0.6)]'
+          }`}
+          data-testid="vs-mic-btn"
+        >
+          {listening && <span className="absolute inset-0 rounded-full border-4 border-red-400 animate-ping" />}
+          {stage === 'thinking'
+            ? <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin" />
+            : listening
+              ? <MicOff className="w-10 h-10 text-white" />
+              : <Mic className="w-10 h-10 text-black" />
+          }
+        </button>
+        <div className="text-[11px] text-white/60 font-bold">
+          {listening ? 'تكلّم الآن...' : stage === 'thinking' ? 'جاري التفكير' : stage === 'speaking' ? 'تتكلم معاك...' : 'اضغطي للتحدّث'}
+        </div>
+      </div>
+
+      {/* Transcript toggle (tiny, bottom-right) */}
+      <button onClick={() => setTranscriptVisible(!transcriptVisible)}
+        className="absolute bottom-4 right-4 text-[10px] px-2 py-1 rounded-full bg-white/5 border border-white/10 text-white/50 hover:text-white/80 z-40"
+        data-testid="vs-transcript-toggle">
+        {transcriptVisible ? 'إخفاء النص' : 'عرض النص'}
+      </button>
+
+      {transcriptVisible && (lastUserSaid || lastAIReply) && (
+        <div className="absolute top-20 left-4 right-4 max-w-2xl mx-auto bg-black/70 backdrop-blur-xl rounded-2xl border border-white/10 p-3 text-white text-sm z-40 space-y-2" data-testid="vs-transcript">
+          {lastUserSaid && <div><span className="text-amber-300 font-black">أنت:</span> {lastUserSaid}</div>}
+          {lastAIReply && <div><span className="text-purple-300 font-black">{primary === 'zara' ? 'زارا' : 'ليلى'}:</span> {lastAIReply}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ================== CHARACTER COMPONENT ==================
+function Character({ image, fallback, state, side, isPrimary, dataTestId }) {
+  const [imgSrc, setImgSrc] = useState(image);
+
+  useEffect(() => { setImgSrc(image); }, [image]);
+
+  const offScreenX = side === 'left' ? '-110%' : '110%';
+  const onScreenX = side === 'left' ? '-15%' : '15%';
+  const visible = state !== 'hidden';
+
+  // Transform config per state
+  const stateConfig = {
+    hidden:    { x: offScreenX, y: '20%',  scale: 0.8, opacity: 0,   animClass: '' },
+    entering:  { x: onScreenX,  y: '0%',   scale: 1,   opacity: 1,   animClass: 'char-entering' },
+    idle:      { x: onScreenX,  y: '0%',   scale: isPrimary ? 1.05 : 0.95, opacity: isPrimary ? 1 : 0.75, animClass: 'char-bob' },
+    listening: { x: onScreenX,  y: '-2%',  scale: isPrimary ? 1.1  : 0.95, opacity: 1,   animClass: 'char-lean' },
+    talking:   { x: onScreenX,  y: '0%',   scale: 1.1, opacity: 1,   animClass: 'char-talk' },
+  };
+  const cfg = stateConfig[state] || stateConfig.idle;
+
+  return (
+    <div
+      data-testid={dataTestId}
+      className={`absolute bottom-0 ${side === 'left' ? 'left-0' : 'right-0'} w-1/2 sm:w-2/5 max-w-[500px] h-[85%] pointer-events-none ${cfg.animClass}`}
+      style={{
+        transform: `translate(${cfg.x}, ${cfg.y}) scale(${cfg.scale})`,
+        opacity: cfg.opacity,
+        transition: 'transform 1.2s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.8s ease',
+        transformOrigin: side === 'left' ? 'bottom left' : 'bottom right',
+      }}
+    >
+      <img
+        src={imgSrc}
+        onError={() => { if (fallback && imgSrc !== fallback) setImgSrc(fallback); }}
+        alt=""
+        className="w-full h-full object-contain object-bottom avatar-chroma"
+        draggable={false}
+        style={{
+          // Soft glow around the character
+          filter: isPrimary
+            ? 'drop-shadow(0 0 40px rgba(245,158,11,0.5)) drop-shadow(0 10px 30px rgba(0,0,0,0.5))'
+            : 'drop-shadow(0 10px 30px rgba(0,0,0,0.4))',
+        }}
+      />
+      {/* Indicator dot */}
+      {isPrimary && state !== 'hidden' && state !== 'entering' && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-amber-500/90 text-black text-[10px] font-black px-2 py-0.5 rounded-full">
+          {state === 'listening' && <span className="w-1.5 h-1.5 bg-black rounded-full animate-pulse" />}
+          {state === 'talking' && '🗣'}
+          {state === 'listening' && 'تسمع'}
+          {state === 'talking' && 'تتكلم'}
+          {state === 'idle' && '💫'}
+        </div>
+      )}
+    </div>
+  );
+}
