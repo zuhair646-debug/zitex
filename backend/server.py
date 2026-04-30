@@ -3075,6 +3075,24 @@ try:
 except Exception as _ae:
     logging.getLogger(__name__).error(f"Failed to register avatar module: {_ae}", exc_info=True)
 
+# ============== IMAGE WIZARD (Smart conversational flow for main /chat/image) ==============
+try:
+    from modules.image_wizard import create_image_wizard_router
+    _iw_router = create_image_wizard_router(db, get_current_user)
+    app.include_router(_iw_router)
+    logging.getLogger(__name__).info("Image Wizard module registered")
+except Exception as _iwe:
+    logging.getLogger(__name__).error(f"Failed to register image wizard module: {_iwe}", exc_info=True)
+
+# ============== CHANNEL BRIDGE (Push Zitex-generated assets to owner's client websites) ==============
+try:
+    from modules.bridge import create_bridge_router
+    _br_router = create_bridge_router(db, get_current_user)
+    app.include_router(_br_router)
+    logging.getLogger(__name__).info("Channel Bridge module registered")
+except Exception as _bre:
+    logging.getLogger(__name__).error(f"Failed to register bridge module: {_bre}", exc_info=True)
+
 # ============== VISUAL DESIGNER APIS ==============
 class DesignElement(BaseModel):
     id: str

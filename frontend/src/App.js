@@ -44,6 +44,9 @@ import StudioHub from '@/pages/studio/StudioHub';
 import StudioImage from '@/pages/studio/StudioImage';
 import StudioVideo from '@/pages/studio/StudioVideo';
 import ChatVideo from '@/pages/chat/ChatVideo';
+import ChatImage from '@/pages/chat/ChatImage';
+import AvatarSettings from '@/pages/AvatarSettings';
+import ChannelBridge from '@/pages/ChannelBridge';
 import '@/App.css';
 
 function App() {
@@ -130,7 +133,9 @@ function App() {
           <Route path="/studio/image" element={<ProtectedRoute><StudioImage user={user} /></ProtectedRoute>} />
           <Route path="/studio/video" element={<ProtectedRoute><StudioVideo user={user} /></ProtectedRoute>} />
           <Route path="/chat/video" element={<ProtectedRoute><ChatVideo user={user} /></ProtectedRoute>} />
-          <Route path="/chat/image" element={<ProtectedRoute><AIChat user={user} initialType="image" /></ProtectedRoute>} />
+          <Route path="/chat/image" element={<ProtectedRoute><ChatImage user={user} /></ProtectedRoute>} />
+          <Route path="/dashboard/avatar" element={<ProtectedRoute><AvatarSettings user={user} /></ProtectedRoute>} />
+          <Route path="/dashboard/bridge" element={<ProtectedRoute><ChannelBridge user={user} /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
       <Toaster position="top-center" richColors />

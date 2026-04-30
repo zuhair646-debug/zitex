@@ -2,90 +2,126 @@
 Zitex AI Avatar — premium animated assistant module.
 
 Provides:
-    POST /api/avatar/chat               — chat with avatar (text + voice reply)
-    POST /api/merchant/avatar/enable    — merchant subscribes to add avatar to their site
-    GET  /api/merchant/avatar/{slug}    — public config for a merchant's avatar
-    POST /api/merchant/avatar/{slug}/chat — public visitor chat with merchant's avatar
+    POST /api/avatar/chat                  — chat with Zitex main-site avatar (Zara/Layla)
+    GET  /api/merchant/avatar/pricing      — pricing & trial info
+    GET  /api/merchant/avatar/me           — owner fetches their avatar config
+    POST /api/merchant/avatar/start-trial  — owner starts 14-day free trial (one-time)
+    POST /api/merchant/avatar/subscribe    — owner subscribes (100 points/month)
+    PUT  /api/merchant/avatar/customize    — owner customizes (name/voice/hide) — 30 points/change
+    POST /api/merchant/avatar/hide         — owner hides/shows the avatar on their site
+    GET  /api/merchant/avatar/{slug}       — public config lookup
+    POST /api/merchant/avatar/{slug}/chat  — public visitor chat with merchant's avatar
 
-For the MAIN Zitex site avatar:
-- system message describes Zitex platform capabilities
-- responds about the products/services Zitex offers
-- text + voice (ElevenLabs)
-
-For MERCHANT site avatars:
-- system message includes: shop name, products, pricing, FAQ
-- visitors talk to the avatar to learn about products
-- merchants pay 100 credits/month subscription (renews monthly)
+Pricing model:
+    - 14-day FREE TRIAL (one-time per project) — unlimited avatar use during trial
+    - After trial: 100 points/month to keep avatar active
+    - Each customization (name/voice/hide-toggle): 30 points — but FREE during trial
 """
 from __future__ import annotations
 import os
 import logging
 from datetime import datetime, timezone, timedelta
-from typing import Optional, List, Dict, Any
+from typing import Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
 # ===== Pricing =====
-AVATAR_MONTHLY_COST = 100  # credits per month for merchant subscription
+AVATAR_MONTHLY_COST = 100       # points/month after trial
+AVATAR_CUSTOMIZE_COST = 30      # points per customization (name/voice/hide) after trial
+AVATAR_TRIAL_DAYS = 14          # one-time free trial per project
+
+# ===== Available voices (OpenAI TTS) =====
+AVAILABLE_VOICES = [
+    {"id": "nova",    "label": "نوفا (أنثى دافئة)",     "gender": "female"},
+    {"id": "shimmer", "label": "شيمر (أنثى ناعمة)",      "gender": "female"},
+    {"id": "alloy",   "label": "ألوي (محايد واضح)",      "gender": "neutral"},
+    {"id": "echo",    "label": "إيكو (ذكر هادئ)",        "gender": "male"},
+    {"id": "onyx",    "label": "أونيكس (ذكر عميق)",      "gender": "male"},
+    {"id": "fable",   "label": "فيبل (أنثى حيوية)",      "gender": "female"},
+]
 
 # ===== System messages =====
+# Saudi dialect — natural, friendly, warm
 ZITEX_AVATAR_SYSTEM = """أنت إحدى الشخصيتين (زارا أو ليلى) — مساعدتا منصة Zitex الذكية.
 
-شخصيتك:
-- زارا: ذهبية الشعر، ودودة، حيوية، تستخدم emoji كثير (✨🎨💫), لغة ودودة ('يا حلو' 'يلا')
-- ليلى: سوداء الشعر بذهبي، هادئة أنيقة، ذكية، مستشارة عمل، emoji قليل وأنيق (🖤✨)
+⚠️ مهم جداً: تتكلمين باللهجة السعودية الطبيعية (خليجية حجازية/نجدية) — مو الفصحى.
 
-قد تظهرين مع رفيقتك (أحياناً يتناقشن لحظياً) — اذكري ذلك بشكل طبيعي ('سأسأل ليلى' أو 'زارا راح تحب هذه الفكرة').
+أمثلة على كلامك الصحيح:
+- "هلا والله! وش تبغى اليوم؟" بدلاً من "مرحباً، ماذا تريد؟"
+- "يلا نسوّيها" / "تمام عليك" / "ما عليك زود"
+- "أنا معاك خطوة خطوة" / "ابشر" / "على راسي"
+- "يعطيك العافية" / "الله يسعدك" / "أبدييع"
+- "خلنا نبدأ" / "احكي لي شلون تبغاها"
+- استخدمي "تبي" بدل "تريد"، "ابغى" بدل "أريد"، "شلون" بدل "كيف"، "وش" بدل "ماذا"
+
+شخصيتك:
+- زارا: ذهبية الشعر، ودودة، حيوية، تضحك بسهولة، emoji كثير (✨🎨💫🔥)
+  أسلوبها: "هلا حبيبي 💫 وش عاجبني فيك اليوم؟"، "يا سلام! قولي قولي..."
+- ليلى: سوداء الشعر بذهبي، هادئة أنيقة، ذكية، مستشارة، emoji قليل (🖤✨)
+  أسلوبها: "أهلاً... جاني شي حلو اليوم؟"، "أنا أسمعك، كمّل"
+
+قد تظهرين مع رفيقتك — اذكريها بشكل طبيعي ("بسأل ليلى معاي"، "زارا راح تعجبها الفكرة").
 
 الخدمات الشغّالة على Zitex:
 - مواقع جاهزة (25 تخصص: مطاعم، كافيهات، صالونات، عقارات، أسهم...)
 - إنشاء صور AI (5 نقاط/صورة)
-- إنشاء فيديوهات AI (Sora 2، 8-12 نقاط/ثانية)
+- إنشاء فيديوهات AI (Sora 2، 4-12 نقطة/ثانية)
 - قريباً: تطبيقات موبايل، ألعاب
 
-أسلوب المحادثة المثالي:
-- ردود قصيرة (1-3 جمل) مفيدة جداً
-- إذا المستخدم طلب شيء غامض (مثل "ابغى صورة") اسأليه أسئلة محددة:
-  * أي موضوع؟
-  * الجمهور المستهدف؟
-  * المزاج العام؟
-- لا تطنب في الشرح إلا إذا طُلب
-- إذا احتاج العميل مساعدة عملية، وجّهيه للصفحة المناسبة:
+أسلوب المحادثة:
+- ردود قصيرة جداً (1-3 جمل) — ما تطوّلين
+- لو العميل طلب شي مبهم ("ابغى صورة") اسألي بذكاء:
+  * وش موضوعها؟ لمين؟ شلون جوّها؟
+- وجّهي العميل للصفحة المناسبة بشكل طبيعي:
   * صور → /chat/image
   * فيديو → /chat/video
   * موقع → /websites
-- شجّعي العميل بلطف لإتمام ما يريد
+- شجّعي بلطف مو بإلحاح.
+- استخدمي "دقيقة" أو "ثانية واحدة" بدل "لحظة من فضلك".
 
-اللغة: عربي فقط بلهجة خليجية سعودية ودودة.
+اللغة: سعودي فقط — ممنوع أي كلمة فصحى ثقيلة. كلامك مثل ما يتكلم البنات في تويتر والسناب.
 """
 
 
 def _merchant_system_message(config: Dict[str, Any]) -> str:
     shop_name = config.get("shop_name", "المتجر")
+    avatar_name = config.get("avatar_name", "المساعدة الذكية")
     products = config.get("products_description", "")
     pricing = config.get("pricing_info", "")
     faq = config.get("faq", "")
-    return f"""You are the AI assistant of '{shop_name}' — a friendly knowledgeable assistant.
+    tone = config.get("tone", "saudi_friendly")
 
-ABOUT THE SHOP:
+    tone_block = ""
+    if tone == "saudi_friendly":
+        tone_block = """⚠️ تتكلمين باللهجة السعودية الطبيعية (خليجي):
+- "هلا وغلا!" "وش تبي؟" "ابشر" "على راسي" "يعطيك العافية"
+- استخدمي "تبي/ابغى/شلون/وش" بدل الفصحى
+- emoji قليل لطيف ✨"""
+    elif tone == "formal":
+        tone_block = "أسلوبك: عربي فصيح راقٍ ومحترم."
+    else:
+        tone_block = "أسلوبك: عربي ودود بسيط."
+
+    return f"""أنت {avatar_name} — المساعدة الذكية لمتجر '{shop_name}'.
+
+{tone_block}
+
+عن المتجر:
 {products}
 
-PRICING:
+الأسعار:
 {pricing}
 
-FAQ:
+الأسئلة المتكررة:
 {faq}
 
-PERSONALITY:
-- ودود مهتم بالعميل
+قواعد الكلام:
 - ردود قصيرة (1-3 جمل) مفيدة
-- استخدم emoji قليل
-- إن سُئل عن منتج لا تعرفه: قل بأدب أنه غير متوفر حالياً واقترح بدائل
-- شجّع العميل على إتمام الشراء بأسلوب طبيعي غير مزعج
-
-LANGUAGE: Arabic only.
+- لو سُئلتِ عن منتج مش عندنا: اعتذري بلطف واقترحي بديل
+- شجّعي العميل يكمّل الطلب بدون ضغط
+- ما تعرفين معلومة؟ قولي بصراحة ووجّهيه للرقم/واتساب المتجر.
 """
 
 
@@ -97,14 +133,59 @@ class AvatarChatIn(BaseModel):
     want_voice: bool = True
 
 
-class MerchantAvatarEnableIn(BaseModel):
+class StartTrialIn(BaseModel):
     project_id: str
     shop_name: str
-    products_description: str
+    products_description: str = ""
     pricing_info: Optional[str] = ""
     faq: Optional[str] = ""
-    avatar_style: str = "friendly_arab_woman"  # 'friendly_arab_woman' | 'professional_man' | 'cartoon_pet'
-    voice_id: Optional[str] = None  # ElevenLabs voice id (uses default if None)
+    avatar_name: Optional[str] = "المساعدة"
+    voice_id: Optional[str] = "nova"
+    tone: Optional[str] = "saudi_friendly"  # 'saudi_friendly' | 'formal' | 'casual'
+
+
+class SubscribeIn(BaseModel):
+    project_id: str
+
+
+class CustomizeIn(BaseModel):
+    project_id: str
+    avatar_name: Optional[str] = None
+    voice_id: Optional[str] = None
+    tone: Optional[str] = None
+    products_description: Optional[str] = None
+    pricing_info: Optional[str] = None
+    faq: Optional[str] = None
+
+
+class HideIn(BaseModel):
+    project_id: str
+    hidden: bool
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _is_active(avatar: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Returns {active, reason, status, days_left, expires_at}."""
+    if not avatar:
+        return {"active": False, "status": "none", "reason": "not_enabled"}
+    if avatar.get("hidden"):
+        return {"active": False, "status": "hidden", "reason": "hidden_by_owner"}
+    try:
+        expires_raw = avatar.get("expires_at")
+        if not expires_raw:
+            return {"active": False, "status": "expired", "reason": "no_expiration"}
+        expires = datetime.fromisoformat(str(expires_raw).replace("Z", "+00:00"))
+        now = _now()
+        if expires < now:
+            return {"active": False, "status": "expired", "reason": "expired"}
+        days_left = max(0, (expires - now).days)
+        status = "trial" if avatar.get("on_trial") else "paid"
+        return {"active": True, "status": status, "days_left": days_left, "expires_at": expires.isoformat()}
+    except Exception:
+        return {"active": False, "status": "error", "reason": "bad_date"}
 
 
 def create_avatar_router(db, get_current_user) -> APIRouter:
@@ -115,23 +196,21 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
         emergent_key = os.environ.get("EMERGENT_LLM_KEY")
         if not emergent_key:
-            return "عذراً، خدمة المساعد غير متاحة حالياً."
+            return "معليش، الخدمة مو متاحة حالياً. جرّب بعد شوي."
         chat = LlmChat(api_key=emergent_key, session_id=session_id, system_message=system)
         chat.with_model("anthropic", "claude-sonnet-4-5-20250929")
         response = await chat.send_message(UserMessage(text=user_msg))
         return response
 
-    # ===== Helper: TTS via OpenAI (Emergent LLM Key) =====
+    # ===== Helper: TTS via OpenAI =====
     async def _tts(text: str, voice_id: Optional[str] = None) -> Optional[str]:
-        """Returns a data:audio/mp3;base64,... URL or None on error."""
         try:
             from emergentintegrations.llm.openai import OpenAITextToSpeech
             api_key = os.environ.get("EMERGENT_LLM_KEY", "").strip()
             if not api_key:
                 return None
             tts = OpenAITextToSpeech(api_key=api_key)
-            voice = voice_id or "nova"  # Nova = warm female voice, good for Arabic
-            # Limit to 4096 chars (OpenAI TTS hard cap)
+            voice = voice_id or "nova"
             audio_b64 = await tts.generate_speech_base64(
                 text=text[:4000],
                 model="tts-1",
@@ -144,7 +223,20 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
             logger.warning(f"[AVATAR] TTS failed: {e}")
             return None
 
-    # ===== ZITEX MAIN AVATAR — public, no auth needed =====
+    # ===== Helper: deduct points atomically =====
+    async def _deduct(user_id: str, amount: int, reason: str) -> bool:
+        result = await db.users.update_one(
+            {"id": user_id, "credits": {"$gte": amount}},
+            {"$inc": {"credits": -amount},
+             "$push": {"credit_history": {
+                 "amount": -amount,
+                 "reason": reason,
+                 "timestamp": _now().isoformat(),
+             }}}
+        )
+        return result.modified_count > 0
+
+    # ===== ZITEX MAIN AVATAR (public, no auth) =====
     @router.post("/avatar/chat")
     async def zitex_avatar_chat(payload: AvatarChatIn):
         sid = payload.session_id or "zitex-public"
@@ -152,7 +244,7 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
             text = await _chat_completion(ZITEX_AVATAR_SYSTEM, payload.message, sid)
         except Exception as e:
             logger.exception(f"[AVATAR] Chat failed: {e}")
-            raise HTTPException(500, "فشل المساعد. حاول مرة أخرى.")
+            raise HTTPException(500, "فشل المساعد. حاول مرة ثانية.")
         audio_url = None
         if payload.want_voice:
             audio_url = await _tts(text)
@@ -162,89 +254,256 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
             "user_message": payload.message,
             "assistant_reply": text,
             "had_voice": bool(audio_url),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": _now().isoformat(),
         })
         return {"reply": text, "audio_url": audio_url, "session_id": sid}
 
-    # ===== MERCHANT AVATAR — owner enables it (paid) =====
-    @router.post("/merchant/avatar/enable")
-    async def enable_merchant_avatar(payload: MerchantAvatarEnableIn, user=Depends(get_current_user)):
-        # Verify project ownership
+    # ===== MERCHANT AVATAR — pricing info =====
+    @router.get("/merchant/avatar/pricing")
+    async def avatar_pricing():
+        return {
+            "monthly_cost": AVATAR_MONTHLY_COST,
+            "customize_cost": AVATAR_CUSTOMIZE_COST,
+            "trial_days": AVATAR_TRIAL_DAYS,
+            "available_voices": AVAILABLE_VOICES,
+            "features": [
+                "مساعد ذكاء اصطناعي يرد على زوار متجرك باللهجة السعودية",
+                f"{AVATAR_TRIAL_DAYS} يوم تجربة مجانية (لمرة واحدة فقط)",
+                "تقدر تغيّر اسمه، صوته، ونبرته في أي وقت",
+                "يعرف كل منتجاتك وخدماتك وأسعارك",
+                "يشتغل 24/7 ويرد فوراً",
+            ],
+        }
+
+    # ===== Owner: fetch my avatar config =====
+    @router.get("/merchant/avatar/me")
+    async def my_avatar(project_id: str, user=Depends(get_current_user)):
+        # Support both owner_id (new) and user_id (legacy) fields
         project = await db.website_projects.find_one(
-            {"id": payload.project_id, "owner_id": user["user_id"]},
+            {"id": project_id, "$or": [{"owner_id": user["user_id"]}, {"user_id": user["user_id"]}]},
             {"_id": 0}
         )
         if not project:
-            raise HTTPException(404, "المشروع غير موجود")
-
-        # Atomic deduct subscription cost
-        result = await db.users.update_one(
-            {"id": user["user_id"], "credits": {"$gte": AVATAR_MONTHLY_COST}},
-            {"$inc": {"credits": -AVATAR_MONTHLY_COST},
-             "$push": {"credit_history": {
-                 "amount": -AVATAR_MONTHLY_COST,
-                 "reason": f"avatar_subscription_{payload.project_id[:8]}",
-                 "timestamp": datetime.now(timezone.utc).isoformat(),
-             }}}
+            raise HTTPException(404, "المشروع مش موجود")
+        avatar = await db.merchant_avatars.find_one(
+            {"project_id": project_id},
+            {"_id": 0, "owner_id": 0}
         )
-        if result.modified_count == 0:
-            raise HTTPException(402, f"رصيد غير كافٍ ({AVATAR_MONTHLY_COST} نقاط مطلوبة شهرياً)")
+        status = _is_active(avatar)
+        return {
+            "project_id": project_id,
+            "has_config": avatar is not None,
+            "status": status,
+            "config": avatar or {},
+        }
 
-        expires = datetime.now(timezone.utc) + timedelta(days=30)
-        avatar_config = {
+    # ===== Owner: start 14-day free trial =====
+    @router.post("/merchant/avatar/start-trial")
+    async def start_trial(payload: StartTrialIn, user=Depends(get_current_user)):
+        # Support both owner_id (new) and user_id (legacy) fields
+        project = await db.website_projects.find_one(
+            {"id": payload.project_id, "$or": [{"owner_id": user["user_id"]}, {"user_id": user["user_id"]}]},
+            {"_id": 0}
+        )
+        if not project:
+            raise HTTPException(404, "المشروع مش موجود")
+
+        existing = await db.merchant_avatars.find_one({"project_id": payload.project_id}, {"_id": 0})
+        if existing and existing.get("trial_used"):
+            raise HTTPException(400, "التجربة المجانية مستخدمة — اشترك بالنقاط للتفعيل")
+
+        expires = _now() + timedelta(days=AVATAR_TRIAL_DAYS)
+        config = {
             "project_id": payload.project_id,
             "owner_id": user["user_id"],
             "shop_name": payload.shop_name,
+            "avatar_name": payload.avatar_name or "المساعدة",
             "products_description": payload.products_description,
             "pricing_info": payload.pricing_info or "",
             "faq": payload.faq or "",
-            "avatar_style": payload.avatar_style,
-            "voice_id": payload.voice_id,
+            "voice_id": payload.voice_id or "nova",
+            "tone": payload.tone or "saudi_friendly",
             "active": True,
-            "subscribed_at": datetime.now(timezone.utc).isoformat(),
+            "hidden": False,
+            "on_trial": True,
+            "trial_used": True,
+            "trial_started_at": _now().isoformat(),
+            "subscribed_at": _now().isoformat(),
             "expires_at": expires.isoformat(),
             "monthly_cost": AVATAR_MONTHLY_COST,
         }
-        # Upsert
         await db.merchant_avatars.update_one(
             {"project_id": payload.project_id},
-            {"$set": avatar_config},
+            {"$set": config},
             upsert=True,
         )
         return {
             "ok": True,
-            "active": True,
+            "trial": True,
             "expires_at": expires.isoformat(),
-            "credits_deducted": AVATAR_MONTHLY_COST,
+            "days_left": AVATAR_TRIAL_DAYS,
+            "message": f"🎉 تم تفعيل تجربتك المجانية {AVATAR_TRIAL_DAYS} يوم! استمتع.",
         }
 
+    # ===== Owner: subscribe (paid month) =====
+    @router.post("/merchant/avatar/subscribe")
+    async def subscribe(payload: SubscribeIn, user=Depends(get_current_user)):
+        # Support both owner_id (new) and user_id (legacy) fields
+        project = await db.website_projects.find_one(
+            {"id": payload.project_id, "$or": [{"owner_id": user["user_id"]}, {"user_id": user["user_id"]}]},
+            {"_id": 0}
+        )
+        if not project:
+            raise HTTPException(404, "المشروع مش موجود")
+
+        avatar = await db.merchant_avatars.find_one({"project_id": payload.project_id}, {"_id": 0})
+        if not avatar:
+            raise HTTPException(400, "ابدأ التجربة المجانية أولاً")
+
+        ok = await _deduct(user["user_id"], AVATAR_MONTHLY_COST, f"avatar_subscription_{payload.project_id[:8]}")
+        if not ok:
+            raise HTTPException(402, f"رصيدك ما يكفي — محتاج {AVATAR_MONTHLY_COST} نقطة")
+
+        # Extend 30 days from current expires_at (or now, whichever is later)
+        try:
+            current_expires = datetime.fromisoformat(avatar.get("expires_at", _now().isoformat()).replace("Z", "+00:00"))
+        except Exception:
+            current_expires = _now()
+        base = max(current_expires, _now())
+        new_expires = base + timedelta(days=30)
+
+        await db.merchant_avatars.update_one(
+            {"project_id": payload.project_id},
+            {"$set": {
+                "active": True,
+                "on_trial": False,
+                "expires_at": new_expires.isoformat(),
+                "last_renewed_at": _now().isoformat(),
+            }},
+        )
+        return {
+            "ok": True,
+            "credits_deducted": AVATAR_MONTHLY_COST,
+            "expires_at": new_expires.isoformat(),
+            "message": "تمّ تجديد اشتراكك شهر كامل",
+        }
+
+    # ===== Owner: customize avatar =====
+    @router.put("/merchant/avatar/customize")
+    async def customize(payload: CustomizeIn, user=Depends(get_current_user)):
+        # Support both owner_id (new) and user_id (legacy) fields
+        project = await db.website_projects.find_one(
+            {"id": payload.project_id, "$or": [{"owner_id": user["user_id"]}, {"user_id": user["user_id"]}]},
+            {"_id": 0}
+        )
+        if not project:
+            raise HTTPException(404, "المشروع مش موجود")
+
+        avatar = await db.merchant_avatars.find_one({"project_id": payload.project_id}, {"_id": 0})
+        if not avatar:
+            raise HTTPException(400, "ابدأ التجربة المجانية أو اشترك أولاً")
+
+        status = _is_active(avatar)
+        if not status["active"] and status["status"] != "hidden":
+            raise HTTPException(403, "اشتراكك منتهي — جدّد أولاً")
+
+        # Build update dict
+        updates: Dict[str, Any] = {}
+        charge = False
+        if payload.avatar_name is not None:
+            nm = payload.avatar_name.strip()[:30]
+            if nm and nm != avatar.get("avatar_name"):
+                updates["avatar_name"] = nm
+                charge = True
+        if payload.voice_id is not None and payload.voice_id != avatar.get("voice_id"):
+            if not any(v["id"] == payload.voice_id for v in AVAILABLE_VOICES):
+                raise HTTPException(400, "الصوت المحدد مش صحيح")
+            updates["voice_id"] = payload.voice_id
+            charge = True
+        if payload.tone is not None and payload.tone in ("saudi_friendly", "formal", "casual"):
+            if payload.tone != avatar.get("tone"):
+                updates["tone"] = payload.tone
+                charge = True
+        # Content updates are free always
+        if payload.products_description is not None:
+            updates["products_description"] = payload.products_description[:2000]
+        if payload.pricing_info is not None:
+            updates["pricing_info"] = payload.pricing_info[:1500]
+        if payload.faq is not None:
+            updates["faq"] = payload.faq[:2000]
+
+        if not updates:
+            return {"ok": True, "no_changes": True, "message": "ما فيه شي تغيّر"}
+
+        # Charge if identity fields changed AND not on trial
+        credits_deducted = 0
+        if charge and not avatar.get("on_trial"):
+            ok = await _deduct(user["user_id"], AVATAR_CUSTOMIZE_COST, f"avatar_customize_{payload.project_id[:8]}")
+            if not ok:
+                raise HTTPException(402, f"رصيدك ما يكفي — التخصيص يكلف {AVATAR_CUSTOMIZE_COST} نقطة")
+            credits_deducted = AVATAR_CUSTOMIZE_COST
+
+        updates["updated_at"] = _now().isoformat()
+        await db.merchant_avatars.update_one(
+            {"project_id": payload.project_id},
+            {"$set": updates},
+        )
+        return {
+            "ok": True,
+            "credits_deducted": credits_deducted,
+            "free_on_trial": avatar.get("on_trial", False) and charge,
+            "updated_fields": list(updates.keys()),
+        }
+
+    # ===== Owner: hide/show avatar =====
+    @router.post("/merchant/avatar/hide")
+    async def hide_toggle(payload: HideIn, user=Depends(get_current_user)):
+        # Support both owner_id (new) and user_id (legacy) fields
+        project = await db.website_projects.find_one(
+            {"id": payload.project_id, "$or": [{"owner_id": user["user_id"]}, {"user_id": user["user_id"]}]},
+            {"_id": 0}
+        )
+        if not project:
+            raise HTTPException(404, "المشروع مش موجود")
+        avatar = await db.merchant_avatars.find_one({"project_id": payload.project_id}, {"_id": 0})
+        if not avatar:
+            raise HTTPException(400, "لا يوجد إعداد للمساعد")
+
+        # Free if on trial or already hidden; otherwise charge when toggling on
+        was_hidden = avatar.get("hidden", False)
+        if not payload.hidden and was_hidden and not avatar.get("on_trial"):
+            ok = await _deduct(user["user_id"], AVATAR_CUSTOMIZE_COST, f"avatar_unhide_{payload.project_id[:8]}")
+            if not ok:
+                raise HTTPException(402, f"إعادة الإظهار تكلف {AVATAR_CUSTOMIZE_COST} نقطة")
+
+        await db.merchant_avatars.update_one(
+            {"project_id": payload.project_id},
+            {"$set": {"hidden": payload.hidden, "updated_at": _now().isoformat()}},
+        )
+        return {"ok": True, "hidden": payload.hidden}
+
+    # ===== PUBLIC: get merchant avatar config =====
     @router.get("/merchant/avatar/{slug}")
     async def get_merchant_avatar(slug: str):
         project = await db.website_projects.find_one(
             {"slug": slug}, {"_id": 0, "id": 1, "name": 1}
         )
         if not project:
-            raise HTTPException(404, "متجر غير موجود")
+            raise HTTPException(404, "متجر مش موجود")
         avatar = await db.merchant_avatars.find_one(
-            {"project_id": project["id"], "active": True}, {"_id": 0}
+            {"project_id": project["id"]}, {"_id": 0}
         )
-        if not avatar:
-            return {"enabled": False}
-        # Check expiration
-        try:
-            expires = datetime.fromisoformat(avatar["expires_at"].replace("Z", "+00:00"))
-            if expires < datetime.now(timezone.utc):
-                await db.merchant_avatars.update_one(
-                    {"project_id": project["id"]},
-                    {"$set": {"active": False}}
-                )
-                return {"enabled": False, "reason": "expired"}
-        except Exception:
-            pass
+        status = _is_active(avatar)
+        if not status["active"]:
+            return {"enabled": False, "status": status.get("status")}
         return {
             "enabled": True,
             "shop_name": avatar.get("shop_name"),
-            "avatar_style": avatar.get("avatar_style", "friendly_arab_woman"),
+            "avatar_name": avatar.get("avatar_name", "المساعدة"),
+            "voice_id": avatar.get("voice_id", "nova"),
+            "tone": avatar.get("tone", "saudi_friendly"),
+            "on_trial": avatar.get("on_trial", False),
+            "days_left": status.get("days_left", 0),
         }
 
     @router.post("/merchant/avatar/{slug}/chat")
@@ -253,13 +512,14 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
             {"slug": slug}, {"_id": 0, "id": 1}
         )
         if not project:
-            raise HTTPException(404, "متجر غير موجود")
+            raise HTTPException(404, "متجر مش موجود")
         avatar = await db.merchant_avatars.find_one(
-            {"project_id": project["id"], "active": True}, {"_id": 0}
+            {"project_id": project["id"]}, {"_id": 0}
         )
-        if not avatar:
-            raise HTTPException(403, "المساعد الذكي غير مفعّل لهذا المتجر")
-        sid = payload.session_id or f"shop-{project['id'][:8]}-{datetime.now(timezone.utc).timestamp():.0f}"
+        status = _is_active(avatar)
+        if not status["active"]:
+            raise HTTPException(403, "المساعد مو مفعّل لهالمتجر")
+        sid = payload.session_id or f"shop-{project['id'][:8]}-{_now().timestamp():.0f}"
         system = _merchant_system_message(avatar)
         try:
             text = await _chat_completion(system, payload.message, sid)
@@ -276,7 +536,7 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
             "user_message": payload.message,
             "assistant_reply": text,
             "had_voice": bool(audio_url),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": _now().isoformat(),
         })
         return {"reply": text, "audio_url": audio_url, "session_id": sid}
 

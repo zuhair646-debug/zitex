@@ -15,6 +15,101 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Apr 30, 2026 — PHASE 3/4/5 + AVATAR v2 (Saudi Dialect + Trial/Points) (P0 — COMPLETE ✅)
+
+طلب المستخدم: إكمال كل النقاط المعلّقة + اللهجة السعودية للأفاتار + نظام نقاط (تجربة مجانية ثم بنقاط للتخصيص/الإخفاء).
+
+#### 1) 🤖 Avatar v2 — اللهجة السعودية + نظام التجربة والنقاط
+- **`/app/backend/modules/avatar/__init__.py`** — إعادة كتابة كاملة:
+  - `ZITEX_AVATAR_SYSTEM` يتكلم لهجة سعودية طبيعية (هلا/وش/ابغى/تبي/شلون/يلا/ابشر/على راسي/يعطيك العافية)
+  - زارا (شخصية مرحة) + ليلى (أنيقة هادئة) بطابع خليجي واضح
+- **Pricing model**:
+  - 14 يوم تجربة مجانية (لمرة واحدة لكل مشروع) — كل الميزات مفتوحة
+  - بعد التجربة: 100 نقطة/شهر اشتراك
+  - التخصيص (اسم/صوت/نبرة): 30 نقطة — مجاني خلال التجربة
+  - تحديث المحتوى (وصف/أسعار/FAQ): مجاني دائماً
+- **6 أصوات OpenAI**: nova/shimmer/alloy/echo/onyx/fable
+- **3 نبرات**: saudi_friendly / formal / casual
+- **Endpoints جديدة** (8):
+  - `GET  /api/merchant/avatar/pricing` (public)
+  - `GET  /api/merchant/avatar/me?project_id=` (owner)
+  - `POST /api/merchant/avatar/start-trial`
+  - `POST /api/merchant/avatar/subscribe`
+  - `PUT  /api/merchant/avatar/customize`
+  - `POST /api/merchant/avatar/hide`
+  - `GET  /api/merchant/avatar/{slug}` (public)
+  - `POST /api/merchant/avatar/{slug}/chat` (public)
+- **UI جديدة**: `/app/frontend/src/pages/AvatarSettings.js` — route `/dashboard/avatar`
+  - اختيار المتجر، بنر التسعير، بنر الحالة النشطة (trial/paid مع days_left)
+  - نموذج كامل للتخصيص مع تلميح تكلفة كل تغيير
+  - أزرار اشتراك/تجديد/إخفاء/إظهار
+
+#### 2) 🎨 Phase 4 — Image Chat Wizard
+- **`/app/backend/modules/image_wizard/__init__.py`** (NEW) — يتبع نفس نمط `video_wizard`:
+  - 6 فئات: social_ad / product_shot / banner / portrait / scene / food
+  - كل فئة 4 أسئلة ديناميكية (text + select)
+  - 2 tiers للجودة: standard (5 نقاط) / premium (10 نقاط)
+  - 4 خيارات مقاس: 1:1 / 9:16 / 16:9 / 4:5
+  - توليد عبر Gemini Nano Banana (Emergent LLM Key)
+- **Endpoints** (4):
+  - `GET  /api/wizard/image/categories` (public)
+  - `POST /api/wizard/image/start`
+  - `POST /api/wizard/image/answer`
+  - `POST /api/wizard/image/generate`
+  - `GET  /api/wizard/image/session/{id}`
+- **UI**: `/app/frontend/src/pages/chat/ChatImage.js` — route `/chat/image`
+  - chat-driven experience مشابه لـ ChatVideo مع ألوان بنفسجية/وردية
+
+#### 3) 🌉 Phase 5 — Channel Bridge
+- **`/app/backend/modules/bridge/__init__.py`** (NEW) — نشر أصول Zitex في مواقع العملاء:
+  - `GET  /api/bridge/projects` — قائمة مشاريع المالك
+  - `POST /api/bridge/push-to-story` — نشر كـStory (2 نقطة)
+  - `POST /api/bridge/push-to-banner` — نشر كـBanner slide (2 نقطة)
+  - `GET  /api/bridge/history?project_id=` — سجل النشر
+  - يقبل 3 مصادر: studio / video_wizard / image_wizard
+  - يكتب مباشرة في `site_stories` و `site_banner_slides` بـmark مصدر `zitex_bridge_*`
+- **UI**: `/app/frontend/src/pages/ChannelBridge.js` — route `/dashboard/bridge`
+  - grid عرض كل أصول المالك (صور+فيديوهات) مع زرين Story/Banner لكل أصل
+  - سجل النشر محدّث تلقائياً
+  - يدعم MongoDB `$or` للـproject lookup (owner_id أو user_id)
+
+#### 4) 📋 Phase 3 — Dashboard Integration
+- **`/app/frontend/src/pages/ClientDashboard.js`** — quickActions محدّثة بـ9 أزرار:
+  - طلب موقع، استوديو الصور، استوديو الفيديو، شات الصور، شات الفيديو
+  - مساعدتي الذكية (avatar)، Channel Bridge، طلباتي، مواقعي
+- **`/app/frontend/src/App.js`** — 3 routes جديدة:
+  - `/dashboard/avatar` → AvatarSettings
+  - `/dashboard/bridge` → ChannelBridge
+  - `/chat/image` → ChatImage
+
+#### اختبار E2E ✅ (testing_agent_v3 — iteration 21)
+- **Backend**: 13/13 tests passed (100%)
+  - Saudi dialect verified في ردود /api/avatar/chat (هلا/وش/تبي/ابشر موجودة)
+  - Trial flow end-to-end + rerun rejection
+  - Customize (free on trial, 30 pts after trial)
+  - Hide/show toggle
+  - Image wizard full flow (category → questions → aspect → quality → ready)
+  - Bridge projects list + history
+  - Regression: studio/gallery + auth/me يعملان
+- **Frontend**: 100% — كل الـroutes الجديدة تحمّل بدون أخطاء
+- **Bug fix من testing agent**: دعم `user_id` و `owner_id` في project lookup (مشاريع قديمة تستخدم user_id)
+- **Test file**: `/app/backend/tests/test_phase3_4_5_avatar.py`
+
+#### Files Added
+- `/app/backend/modules/image_wizard/__init__.py` (NEW)
+- `/app/backend/modules/bridge/__init__.py` (NEW)
+- `/app/frontend/src/pages/AvatarSettings.js` (NEW)
+- `/app/frontend/src/pages/ChannelBridge.js` (NEW)
+- `/app/frontend/src/pages/chat/ChatImage.js` (NEW)
+- `/app/backend/tests/test_phase3_4_5_avatar.py` (NEW)
+
+#### Files Modified
+- `/app/backend/modules/avatar/__init__.py` — rewrite كامل
+- `/app/backend/server.py` — تسجيل image_wizard + bridge modules
+- `/app/frontend/src/App.js` — 3 routes
+- `/app/frontend/src/pages/ClientDashboard.js` — quickActions محدّثة
+
+
 
 ### 🆕 Apr 29, 2026 — GOOGLE OAUTH (Emergent-managed) (P0 — COMPLETE ✅)
 
