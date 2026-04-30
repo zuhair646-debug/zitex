@@ -3102,6 +3102,16 @@ try:
 except Exception as _aice:
     logging.getLogger(__name__).error(f"Failed to register AI Core module: {_aice}", exc_info=True)
 
+# ============== COMPANION (Personal mobile AI companion — Zara/Layla as life assistants) ==============
+try:
+    from modules.companion import create_companion_router, start_companion_scheduler
+    _comp_router = create_companion_router(db, get_current_user)
+    app.include_router(_comp_router)
+    start_companion_scheduler(db, app)
+    logging.getLogger(__name__).info("Companion module registered + scheduler armed")
+except Exception as _cme:
+    logging.getLogger(__name__).error(f"Failed to register Companion module: {_cme}", exc_info=True)
+
 # ============== VISUAL DESIGNER APIS ==============
 class DesignElement(BaseModel):
     id: str

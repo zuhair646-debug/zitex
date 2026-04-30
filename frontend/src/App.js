@@ -48,6 +48,7 @@ import ChatImage from '@/pages/chat/ChatImage';
 import AvatarSettings from '@/pages/AvatarSettings';
 import ChannelBridge from '@/pages/ChannelBridge';
 import AdminAICore from '@/pages/AdminAICore';
+import Companion from '@/pages/Companion';
 import '@/App.css';
 
 function App() {
@@ -138,6 +139,7 @@ function App() {
           <Route path="/dashboard/avatar" element={<ProtectedRoute><AvatarSettings user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/bridge" element={<ProtectedRoute><ChannelBridge user={user} /></ProtectedRoute>} />
           <Route path="/admin/ai-core" element={<ProtectedRoute adminOnly><AdminAICore user={user} /></ProtectedRoute>} />
+          <Route path="/companion" element={<ProtectedRoute><Companion user={user} setUser={setUser} /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
       <Toaster position="top-center" richColors />
