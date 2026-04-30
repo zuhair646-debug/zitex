@@ -15,6 +15,74 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Apr 30, 2026 — VOICE STAGE: Voice-First 3D Characters (P0 — COMPLETE ✅)
+
+شكوى المستخدم: "ليش يظهر لي شات لما احاول اضغط على الشخصيات؟ أبغى كلاماً نطقاً، لا كتابة. شخصيات ثلاثية الأبعاد تدخل من حواف الشاشة بدون خلفية."
+
+#### 1) 🎨 Full-Body Transparent Character PNGs
+- **`/app/frontend/public/avatars/zara_*.png` + `layla_*.png`** (NEW):
+  - توليد عبر Gemini Nano Banana بخلفية خضراء #00FF00 (chroma-key)
+  - معالجة بـPython Pillow → إزالة الخضراء → PNG شفاف
+  - 6 وضعيات: zara_idle, zara_wave, zara_talk, layla_idle, layla_wave, layla_talk
+  - حجم كامل من الرأس للقدم، أنمي احترافي
+
+#### 2) 🎙️ Voice Stage (immersive overlay)
+- **`/app/frontend/src/components/VoiceStage.js`** (NEW):
+  - Full-screen overlay (z-100) بخلفية مجرّة/نجوم فاخرة
+  - كلتا الشخصيتين يدخلن من حواف الشاشة (يسار/يمين) بـtransitions cubic-bezier
+  - State machine: hidden → entering → idle → listening → talking
+  - Primary character أكبر وأكثر إضاءة (amber glow) — الثانية تنظر/تتفاعل
+  - **Web Speech API** (`webkitSpeechRecognition` lang=ar-SA) للاستماع
+  - **OpenAI TTS** (عبر /api/avatar/chat?want_voice=true) للرد الصوتي
+  - زر مايك كبير (96x96) في الوسط-أسفل:
+    - أصفر: جاهز
+    - أحمر + ping: يسمع
+    - بنفسجي: يفكر
+    - أخضر: يتكلم
+  - Subtitle bubble يظهر الحالة + الرد النصي
+  - Transcript toggle (اختياري) — العرض النصي مخفي افتراضياً
+  - أزرار: إغلاق / كتم / تبديل الشخصية
+
+#### 3) 🚀 ZitexDuoLauncher (replaces old text-chat ZitexDuo)
+- **`/app/frontend/src/components/ZitexDuoLauncher.js`** (NEW):
+  - شخصيتين صغيرتين تطلان من أسفل زوايا الشاشة (peek animations)
+  - زر CTA مركزي: "اضغط وكلّمني صوتاً ✨"
+  - عند الضغط على أي شخصية → يفتح VoiceStage مع تلك الشخصية كـprimary
+  - VoiceStage يُحمّل بـlazy/Suspense (توفير bundle size)
+
+#### 4) 🎭 Character Animations (App.css)
+- `char-bob-anim`: breathing idle (4s)
+- `char-lean-anim`: listening lean-in (3s)
+- `char-talk-anim`: talking shake (0.6s)
+- Entrance via transform + opacity transitions (1.2s)
+
+#### اختبار E2E ✅ (testing_agent_v3 — iteration 24)
+- **Frontend**: 14/14 tests passed (100%)
+- **Backend**: /api/avatar/chat returns reply + audio_url
+- 24 features verified
+- ✅ كلا الشخصيتين يظهرن على الـlanding بدون خلفية
+- ✅ الضغط يفتح VoiceStage (مو text chat)
+- ✅ كل الأزرار تشتغل (close, mute, swap, mic, transcript toggle)
+- ✅ Entrance animation سلس من الحواف
+- ✅ Mobile viewport (400x800) يعمل تمام
+- 🟢 Zero regressions على باقي الصفحات
+
+#### Files Added
+- `/app/frontend/src/components/VoiceStage.js`
+- `/app/frontend/src/components/ZitexDuoLauncher.js`
+- `/app/frontend/public/avatars/zara_idle.png`, `zara_wave.png`, `zara_talk.png`
+- `/app/frontend/public/avatars/layla_idle.png`, `layla_wave.png`, `layla_talk.png`
+
+#### Files Modified
+- `/app/frontend/src/pages/LandingPage.js` — ZitexDuo → ZitexDuoLauncher
+- `/app/frontend/src/App.css` — new character animation keyframes
+
+#### ⚠️ قيود معروفة
+- Web Speech API يدعمه Chrome/Edge/Safari — Firefox يحتاج fallback (يعرض toast تنبيه)
+- Headless browsers لا يدعمون التعرف الصوتي الحقيقي، بس الـUI يعمل بالضغط
+- يحتاج إذن المايكروفون من المستخدم
+
+
 ### 🆕 Apr 30, 2026 — ZITEX COMPANION: Personal Mobile AI PWA (P0 — COMPLETE ✅)
 
 طلب المستخدم: مساعدة شخصية (Zara/Layla) تعرف حياة المستخدم كاملة، تبادر بالرسائل، تحط منبّهات، تتكلم لهجة سعودية، ويمكن تثبيتها كتطبيق على الجوال.
