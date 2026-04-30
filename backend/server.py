@@ -3093,6 +3093,15 @@ try:
 except Exception as _bre:
     logging.getLogger(__name__).error(f"Failed to register bridge module: {_bre}", exc_info=True)
 
+# ============== AI CORE (Smart intelligence layer: cache + router + caps + cost tracking) ==============
+try:
+    from modules.ai_core import create_ai_core_router
+    _aic_router = create_ai_core_router(db, get_current_user)
+    app.include_router(_aic_router)
+    logging.getLogger(__name__).info("AI Core module registered")
+except Exception as _aice:
+    logging.getLogger(__name__).error(f"Failed to register AI Core module: {_aice}", exc_info=True)
+
 # ============== VISUAL DESIGNER APIS ==============
 class DesignElement(BaseModel):
     id: str

@@ -47,6 +47,7 @@ import ChatVideo from '@/pages/chat/ChatVideo';
 import ChatImage from '@/pages/chat/ChatImage';
 import AvatarSettings from '@/pages/AvatarSettings';
 import ChannelBridge from '@/pages/ChannelBridge';
+import AdminAICore from '@/pages/AdminAICore';
 import '@/App.css';
 
 function App() {
@@ -136,6 +137,7 @@ function App() {
           <Route path="/chat/image" element={<ProtectedRoute><ChatImage user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/avatar" element={<ProtectedRoute><AvatarSettings user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/bridge" element={<ProtectedRoute><ChannelBridge user={user} /></ProtectedRoute>} />
+          <Route path="/admin/ai-core" element={<ProtectedRoute adminOnly><AdminAICore user={user} /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
       <Toaster position="top-center" richColors />
