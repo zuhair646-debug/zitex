@@ -15,6 +15,76 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Apr 30, 2026 — ZITEX COMPANION: Personal Mobile AI PWA (P0 — COMPLETE ✅)
+
+طلب المستخدم: مساعدة شخصية (Zara/Layla) تعرف حياة المستخدم كاملة، تبادر بالرسائل، تحط منبّهات، تتكلم لهجة سعودية، ويمكن تثبيتها كتطبيق على الجوال.
+
+#### 1) 🧠 Companion Module Backend
+- **`/app/backend/modules/companion/__init__.py`** (NEW) — شامل:
+  - **Profile CRUD**: name, age_group, role, wake/sleep times, diet, goals, study_subjects, work_info, interests, family, kids_count, location_city, exam_dates, preferred_avatar (zara/layla), timezone_offset
+  - **Companion Chat**: `POST /api/companion/chat` يحقن كل profile + آخر 15 memory في system prompt + يتكلم لهجة سعودية
+  - **Long-term Memory**: تخزين كل المحادثات (user+assistant) في `companion_memory` (200 max per user, LRU)
+  - **Reminders**: CRUD كامل مع repeat=none/daily/weekly + auto-advance trigger_at عند fire
+  - **Proactive Queue**: محادثات مبادرة من Zara/Layla تُحفظ في `companion_queue` وتُسلَّم لما المستخدم يعمل poll
+  - **Background Scheduler** (كل 15 دقيقة): يمرّ على كل profile ويحدد هل يرسل رسالة مبادرة بناءً على:
+    - وقت الصحوة (morning_wake): يسأل "صباح الخير، شنو فطرت؟"
+    - ساعتين قبل النوم (evening_wind_down): "كيف كان يومك؟"
+    - أوقات الوجبات (meal_reminder): "أكلت شي؟"
+    - قبل الامتحان (pre_exam): "عندك امتحان {subject} بكرا — جاهز؟"
+    - عشوائي في ساعات الصحو (random_checkin): 15% احتمال/دورة
+  - Minimum gap: 2 ساعات بين الرسائل المبادرة
+  - `POST /api/companion/trigger-proactive` — يدوي للاختبار
+
+#### 2) 📱 Mobile-First PWA Frontend
+- **`/app/frontend/src/pages/Companion.js`** (NEW) — route `/companion`
+  - **Onboarding Wizard** (6 خطوات): اختيار الرفيقة → اسم → عمر → وضع → أوقات → معلومات إضافية
+  - **Chat Tab**: بابل شات مع Zara/Layla + رسائل مبادرة ملونة بنفسجي + زر "اهتمي فيّ" يدوي
+  - **Reminders Tab**: إضافة/حذف منبّهات مع datetime picker + repeat
+  - **Profile Tab**: تعديل كل المعلومات + زر مشاركة (Web Share API) + خروج
+  - **Bottom Tab Nav**: محادثة / منبّهات / ملفّي
+  - **Auto-polling**: كل 60 ثانية يجلب `/pending` ويعرض الرسائل المبادرة كـchat bubbles + browser notifications
+- **`/app/frontend/public/manifest-companion.json`** — PWA manifest
+- **`/app/frontend/public/sw-companion.js`** — service worker للـPWA install + notifications
+
+#### 3) 🌐 Browser Notifications
+- طلب الإذن بعد 10 ثواني من دخول الصفحة
+- لو الـtab مخفي والإذن ممنوح → يظهر notification لما تصير رسالة مبادرة
+- Click on notification → يفتح/يركز الـtab
+
+#### 4) Dashboard Integration
+- أُضيف زر "📱 رفيقتي على الجوال" في quickActions لوحة Client Dashboard (مع badge "جديد")
+
+#### اختبار E2E ✅ (testing_agent_v3 — iteration 23)
+- **Backend**: 22/22 tests passed (100%)
+- **Frontend**: 100% — كل الـtabs + onboarding + chat + reminders تعمل
+- 27 feature verified
+- ✅ Saudi dialect verified في ردود chat
+- ✅ Profile merge working (partial updates)
+- ✅ Reminders fire at correct time + auto-advance on daily/weekly repeat
+- ✅ Proactive queue delivered once + marked delivered on poll
+- ✅ Memory log persistent (LRU 200)
+- ✅ PWA manifest + service worker accessible
+- 🟢 Zero regressions
+
+#### Files Added
+- `/app/backend/modules/companion/__init__.py`
+- `/app/frontend/src/pages/Companion.js`
+- `/app/frontend/public/manifest-companion.json`
+- `/app/frontend/public/sw-companion.js`
+
+#### Files Modified
+- `/app/backend/server.py` — registered companion module + scheduler
+- `/app/frontend/src/App.js` — route `/companion`
+- `/app/frontend/src/pages/ClientDashboard.js` — added "رفيقتي على الجوال" quickAction
+
+#### ⚠️ قيود التقنية (معروفة)
+- Web app ما يقدر يفتح الجوال من القفل (iOS/Android يمنعون هذا لأمن المستخدم)
+- Browser notifications تشتغل فقط إذا:
+  - المستخدم وافق على الإذن
+  - التطبيق مفتوح أو PWA مثبّت
+- لوقت-حقيقي 100% موثوق، يحتاج Web Push API (VAPID keys + server push) — **مستقبلي**
+
+
 ### 🆕 Apr 30, 2026 — AI CORE: Smart Cost Protection Layer (P0 — COMPLETE ✅)
 
 طلب المستخدم: تقليل تكاليف الـAPI مع الحماية من المستخدمين اللي يستهلكون فوق اشتراكهم.
