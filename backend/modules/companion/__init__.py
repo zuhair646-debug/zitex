@@ -281,8 +281,6 @@ def create_companion_router(db, get_current_user) -> APIRouter:
         await _save_memory(db, user["user_id"], "user", payload.message, "chat")
         await _save_memory(db, user["user_id"], "assistant", reply, "chat")
 
-        # Extract any new facts (simple heuristic — for now just save as raw)
-        # Update last interaction time
         await db.companion_state.update_one(
             {"user_id": user["user_id"]},
             {"$set": {"last_interaction_at": _now().isoformat()}},
@@ -292,6 +290,58 @@ def create_companion_router(db, get_current_user) -> APIRouter:
         return {
             "reply": reply,
             "from_char": profile.get("preferred_avatar", "zara"),
+        }
+
+    # ===== VOICE CHAT (chat + TTS in one shot) =====
+    @router.post("/voice-chat")
+    async def companion_voice_chat(payload: ChatIn, user=Depends(get_current_user)):
+        profile = await _get_profile(db, user["user_id"])
+        if not profile:
+            raise HTTPException(400, "أنشئ ملفك الشخصي أولاً")
+
+        memory = await _get_recent_memory(db, user["user_id"], limit=15)
+        system = build_companion_system(profile, memory)
+        primary = profile.get("preferred_avatar", "zara")
+
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage
+            emergent_key = os.environ.get("EMERGENT_LLM_KEY")
+            if not emergent_key:
+                raise HTTPException(503, "AI service not configured")
+            chat = LlmChat(
+                api_key=emergent_key,
+                session_id=f"companion-voice-{user['user_id'][:8]}",
+                system_message=system,
+            )
+            chat.with_model("anthropic", "claude-sonnet-4-5-20250929")
+            reply = await chat.send_message(UserMessage(text=payload.message))
+        except Exception as e:
+            logger.exception(f"[COMPANION-VOICE] Chat failed: {e}")
+            raise HTTPException(500, "حصل خطأ")
+
+        # TTS
+        audio_url = None
+        try:
+            from emergentintegrations.llm.openai import OpenAITextToSpeech
+            api_key = os.environ.get("EMERGENT_LLM_KEY", "").strip()
+            if api_key:
+                tts = OpenAITextToSpeech(api_key=api_key)
+                voice = "shimmer" if primary == "zara" else "nova"
+                audio_b64 = await tts.generate_speech_base64(
+                    text=reply[:4000], model="tts-1", voice=voice
+                )
+                if audio_b64:
+                    audio_url = f"data:audio/mp3;base64,{audio_b64}"
+        except Exception as e:
+            logger.warning(f"[COMPANION-VOICE] TTS failed: {e}")
+
+        await _save_memory(db, user["user_id"], "user", payload.message, "voice")
+        await _save_memory(db, user["user_id"], "assistant", reply, "voice")
+
+        return {
+            "reply": reply,
+            "audio_url": audio_url,
+            "from_char": primary,
         }
 
     # ===== MEMORY =====

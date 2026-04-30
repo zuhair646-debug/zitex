@@ -94,7 +94,12 @@ export default function ZitexDuoLauncher() {
 
       {open && (
         <Suspense fallback={<div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center text-white">جاري التحميل...</div>}>
-          <VoiceStage open={open} onClose={() => setOpen(false)} initialCharacter={initial} />
+          <VoiceStage
+            open={open}
+            onClose={() => setOpen(false)}
+            initialCharacter={initial}
+            onSignupNeeded={() => { setOpen(false); window.location.href = '/register'; }}
+          />
         </Suspense>
       )}
     </>

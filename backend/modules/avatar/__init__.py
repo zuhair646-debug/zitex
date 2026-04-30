@@ -131,6 +131,9 @@ class AvatarChatIn(BaseModel):
     message: str = Field(..., min_length=1, max_length=500)
     session_id: Optional[str] = None
     want_voice: bool = True
+    primary: Optional[str] = "zara"  # 'zara' | 'layla'
+    anon_id: Optional[str] = None    # for unauthenticated trial counter
+    dual_banter: bool = True         # include a short secondary-character reply
 
 
 class StartTrialIn(BaseModel):
@@ -236,27 +239,112 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
         )
         return result.modified_count > 0
 
+    # Banter prompts (secondary character reacts to primary's reply)
+    ZARA_BANTER_PROMPT = (
+        "أنتِ زارا — حماسية مرحة ذهبية الشعر. رفيقتك ليلى قالت للمستخدم شي — "
+        "أضيفي تعليق/ردة فعل قصيرة جداً (جملة واحدة، 3-8 كلمات) باللهجة السعودية. "
+        "ممكن: تأييد ('الله أوه عجبتني!')، تعليق مرح ('يا ستّي!')، ملاحظة ('بس لا تنسيه...'). "
+        "لا تعيدي كلام ليلى — فقط تعليق قصير spontanious. emoji واحد كحد أقصى."
+    )
+    LAYLA_BANTER_PROMPT = (
+        "أنتِ ليلى — أنيقة هادئة بشعر أسود. رفيقتك زارا قالت للمستخدم شي — "
+        "أضيفي تعليق/ردة فعل قصيرة جداً (جملة واحدة، 3-8 كلمات) باللهجة السعودية. "
+        "ممكن: تأييد هادئ ('صح كلامها')، إضافة رزينة ('وأنا أقترح أيضاً...')، ملاحظة حكيمة. "
+        "لا تعيدي كلام زارا — فقط تعليق قصير أنيق. emoji واحد كحد أقصى."
+    )
+
+    ANON_FREE_LIMIT = 5
+
+    async def _check_anon_usage(anon_id: Optional[str]) -> Dict[str, Any]:
+        """Returns usage info for anonymous users. None means unlimited (authenticated)."""
+        if not anon_id:
+            return {"count": 0, "limit": ANON_FREE_LIMIT, "remaining": ANON_FREE_LIMIT, "blocked": False}
+        doc = await db.avatar_anon_usage.find_one({"anon_id": anon_id}, {"_id": 0})
+        count = (doc or {}).get("count", 0)
+        blocked = count >= ANON_FREE_LIMIT
+        return {"count": count, "limit": ANON_FREE_LIMIT, "remaining": max(0, ANON_FREE_LIMIT - count), "blocked": blocked}
+
+    async def _inc_anon_usage(anon_id: str):
+        await db.avatar_anon_usage.update_one(
+            {"anon_id": anon_id},
+            {"$inc": {"count": 1}, "$set": {"last_at": _now().isoformat()}},
+            upsert=True,
+        )
+
     # ===== ZITEX MAIN AVATAR (public, no auth) =====
     @router.post("/avatar/chat")
     async def zitex_avatar_chat(payload: AvatarChatIn):
         sid = payload.session_id or "zitex-public"
+        primary = payload.primary or "zara"
+        secondary = "layla" if primary == "zara" else "zara"
+
+        # Anon free-trial enforcement
+        usage = await _check_anon_usage(payload.anon_id)
+        if usage["blocked"]:
+            raise HTTPException(403, f"انتهت المحادثات المجانية ({ANON_FREE_LIMIT}). سجّل حسابك لتكمل ✨")
+
         try:
             text = await _chat_completion(ZITEX_AVATAR_SYSTEM, payload.message, sid)
         except Exception as e:
             logger.exception(f"[AVATAR] Chat failed: {e}")
             raise HTTPException(500, "فشل المساعد. حاول مرة ثانية.")
+
         audio_url = None
         if payload.want_voice:
-            audio_url = await _tts(text)
+            # Primary voice: Zara = shimmer (playful), Layla = nova (elegant)
+            primary_voice = "shimmer" if primary == "zara" else "nova"
+            audio_url = await _tts(text, primary_voice)
+
+        # Dual banter — secondary character adds a short reaction
+        banter_text = None
+        banter_audio = None
+        if payload.dual_banter and len(text) < 600:
+            try:
+                banter_sys = ZARA_BANTER_PROMPT if secondary == "zara" else LAYLA_BANTER_PROMPT
+                banter_ctx = f"ليلى قالت: '{text}'" if secondary == "zara" else f"زارا قالت: '{text}'"
+                banter_text = await _chat_completion(banter_sys, banter_ctx, f"{sid}-banter")
+                if banter_text and payload.want_voice:
+                    sec_voice = "shimmer" if secondary == "zara" else "nova"
+                    banter_audio = await _tts(banter_text, sec_voice)
+            except Exception as e:
+                logger.warning(f"[AVATAR] Banter generation failed: {e}")
+                banter_text = None
+
+        # Track anon usage
+        if payload.anon_id:
+            await _inc_anon_usage(payload.anon_id)
+            usage = await _check_anon_usage(payload.anon_id)
+
         await db.avatar_conversations.insert_one({
             "site": "zitex",
             "session_id": sid,
             "user_message": payload.message,
             "assistant_reply": text,
+            "primary": primary,
+            "banter_reply": banter_text,
             "had_voice": bool(audio_url),
+            "anon_id": payload.anon_id,
             "timestamp": _now().isoformat(),
         })
-        return {"reply": text, "audio_url": audio_url, "session_id": sid}
+        return {
+            "reply": text,
+            "audio_url": audio_url,
+            "session_id": sid,
+            "primary": primary,
+            "secondary": secondary,
+            "banter": {
+                "text": banter_text,
+                "audio_url": banter_audio,
+                "from_char": secondary,
+            } if banter_text else None,
+            "anon_usage": usage,
+        }
+
+    # ===== ANON USAGE STATUS =====
+    @router.get("/avatar/anon-usage")
+    async def anon_usage_status(anon_id: str):
+        usage = await _check_anon_usage(anon_id)
+        return usage
 
     # ===== MERCHANT AVATAR — pricing info =====
     @router.get("/merchant/avatar/pricing")

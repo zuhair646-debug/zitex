@@ -12,10 +12,12 @@
  *   - Shows browser notification when page is focused (if permission granted)
  *   - PWA install prompt banner
  */
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Send, Loader2, User, MessageCircle, Bell, Plus, Trash2, Settings, LogOut, Share2 } from 'lucide-react';
+import { Send, Loader2, User, MessageCircle, Bell, Plus, Trash2, Settings, LogOut, Share2, Mic } from 'lucide-react';
 import { toast } from 'sonner';
+
+const VoiceStage = lazy(() => import('@/components/VoiceStage'));
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const POLL_INTERVAL = 60_000; // 1 min
@@ -48,6 +50,7 @@ export default function Companion() {
   const [reminderForm, setReminderForm] = useState({ title: '', body: '', trigger_at: '', repeat: 'none' });
   const [onboardingStep, setOnboardingStep] = useState(0);
   const [installPromptShown, setInstallPromptShown] = useState(false);
+  const [voiceOpen, setVoiceOpen] = useState(false);
   const scrollRef = useRef(null);
   const deferredPromptRef = useRef(null);
 
@@ -258,6 +261,9 @@ export default function Companion() {
         <button onClick={triggerProactive} className="text-xs px-3 py-1.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-400/30 font-bold" data-testid="trigger-proactive-btn">
           اهتمي فيّ ✨
         </button>
+        <button onClick={() => setVoiceOpen(true)} className="text-xs px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-500 text-black font-black flex items-center gap-1" data-testid="companion-voice-btn">
+          <Mic className="w-3.5 h-3.5" /> صوت
+        </button>
       </div>
 
       {/* Content area */}
@@ -366,6 +372,18 @@ export default function Companion() {
           <User className="w-5 h-5" /> ملفّي
         </button>
       </div>
+
+      {/* Voice Stage overlay (companion mode) */}
+      {voiceOpen && (
+        <Suspense fallback={<div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center text-white">جاري التحميل...</div>}>
+          <VoiceStage
+            open={voiceOpen}
+            onClose={() => setVoiceOpen(false)}
+            initialCharacter={profile.preferred_avatar || 'zara'}
+            mode="companion"
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
