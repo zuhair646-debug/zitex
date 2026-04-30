@@ -15,6 +15,63 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Apr 30, 2026 — VOICE STAGE v2: Banter + Lip-Sync + Anon Trial + Companion Mode (P0 — COMPLETE ✅)
+
+طلب المستخدم: 4 إضافات دفعة واحدة:
+1. تفاعل متبادل بين الشخصيتين (زارا تقول → ليلى ترد)
+2. lip-sync بسيط (تبديل صور الفم)
+3. VoiceStage داخل /companion
+4. أول 5 محادثات مجانية للزوار غير المسجّلين
+
+#### 1) 🎭 Dual Banter (Backend)
+- **`/app/backend/modules/avatar/__init__.py`**:
+  - أُضيف لـ`AvatarChatIn`: `primary`, `anon_id`, `dual_banter` (default true)
+  - بعد رد الشخصية الأساسية → استدعاء LLM ثاني بـsystem prompt قصير للشخصية الثانوية تردّ بـ3-8 كلمات
+  - أصوات منفصلة: زارا = `shimmer` (مرحة)، ليلى = `nova` (أنيقة)
+  - الـresponse يرجع: `{reply, audio_url, primary, secondary, banter:{text, audio_url, from_char}, anon_usage}`
+
+#### 2) 👄 Lip-Sync (Frontend)
+- **`/app/frontend/src/components/VoiceStage.js`**:
+  - `lipSyncIntervalRef` يبدأ عند `audio.onplay` بـ`setInterval(140ms)` — يبدّل بين `_idle.png` و `_talk.png`
+  - `pickImage()` يختار الصورة حسب `lipSyncTick % 2`
+  - يتوقف عند `onended` أو `onerror`
+
+#### 3) 🆓 Anon Trial Counter (Backend + UI)
+- Collection جديد: `avatar_anon_usage` keyed by `anon_id` (UUID مولّد client-side في localStorage)
+- `_check_anon_usage` + `_inc_anon_usage` helpers
+- `GET /api/avatar/anon-usage?anon_id=X` — public status
+- 5 محادثات مجانية → بعدها `403 'انتهت المحادثات المجانية'`
+- UI: badge أعلى الشاشة في VoiceStage (أخضر/كهرماني/أحمر حسب المتبقي)
+- عند الحظر → يفتح `/register` تلقائياً
+
+#### 4) 📱 Companion Voice Mode
+- **`/app/backend/modules/companion/__init__.py`**: endpoint جديد `POST /api/companion/voice-chat` يجمع chat + TTS في طلب واحد، يستخدم `preferred_avatar` لاختيار الصوت
+- **`/app/frontend/src/pages/Companion.js`**: زر "🎤 صوت" في top bar يفتح VoiceStage بـ`mode="companion"`
+- في companion mode: لا swap button (الشخصية محددة)، يستخدم endpoint الصحيح، الذاكرة تُحفظ في `companion_memory`
+
+#### 5) 🚨 Smart Sign-up Hook
+- لما الـanon يصل للحد → `onSignupNeeded` يقفل VoiceStage ويوجّه للـ`/register`
+- "هوك" تسويقي: المستخدم يجرّب 5 مرات، يدمن، ثم يضطر يسجّل
+
+#### اختبار E2E ✅ (testing_agent_v3 — iteration 25)
+- **Backend**: 13/13 tests passed (100%)
+- **Frontend**: 15/15 tests passed (100%)
+- 15 features verified
+- ✅ Banter يعمل (ليلى ترد بـ"صباح النور 🌸 كيف يومك؟" بعد زارا)
+- ✅ Anon counter: 5/5 → 4/5 → ... → 0/5 + block
+- ✅ Companion voice-chat returns audio_url
+- ✅ Mode prop يخفي swap button
+- ✅ Lip-sync image swap files موجودة (zara_idle/talk, layla_idle/talk)
+- 🟢 Zero regressions
+
+#### Files Modified
+- `/app/backend/modules/avatar/__init__.py` — primary/anon_id/dual_banter + anon-usage endpoint
+- `/app/backend/modules/companion/__init__.py` — voice-chat endpoint
+- `/app/frontend/src/components/VoiceStage.js` — lip-sync + banter playback + anon counter + mode prop
+- `/app/frontend/src/components/ZitexDuoLauncher.js` — onSignupNeeded prop wiring
+- `/app/frontend/src/pages/Companion.js` — voice button + Suspense-loaded VoiceStage
+
+
 ### 🆕 Apr 30, 2026 — VOICE STAGE: Voice-First 3D Characters (P0 — COMPLETE ✅)
 
 شكوى المستخدم: "ليش يظهر لي شات لما احاول اضغط على الشخصيات؟ أبغى كلاماً نطقاً، لا كتابة. شخصيات ثلاثية الأبعاد تدخل من حواف الشاشة بدون خلفية."
